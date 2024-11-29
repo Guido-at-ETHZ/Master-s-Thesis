@@ -2,6 +2,8 @@
 
 Master's Thesis by Guido Putignano (ETH Zurich)
 
+![Endothelial System with Control](docs/figures/endothelial-system.svg)
+
 ## Project Overview
 This repository contains the code and documentation for optimizing endothelialisation in Ventricular Assist Devices (VADs) using Model Predictive Control (MPC).
 

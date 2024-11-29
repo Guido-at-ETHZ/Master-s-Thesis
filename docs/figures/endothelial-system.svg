@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 400">
+  <!-- Background -->
+  <rect width="800" height="400" fill="white"/>
+  
+  <!-- Surface/substrate -->
+  <rect x="50" y="250" width="700" height="50" fill="#f0f0f0" stroke="#666666" stroke-width="1"/>
+  
+  <!-- Endothelial cells -->
+  <path d="M 100,240 L 150,230 L 200,240 L 200,250 L 150,260 L 100,250 Z" fill="#b3d9ff" stroke="#4d94ff" stroke-width="1"/>
+  <path d="M 190,240 L 240,230 L 290,240 L 290,250 L 240,260 L 190,250 Z" fill="#b3d9ff" stroke="#4d94ff" stroke-width="1"/>
+  <path d="M 280,240 L 330,230 L 380,240 L 380,250 L 330,260 L 280,250 Z" fill="#b3d9ff" stroke="#4d94ff" stroke-width="1"/>
+  <path d="M 370,240 L 420,230 L 470,240 L 470,250 L 420,260 L 370,250 Z" fill="#b3d9ff" stroke="#4d94ff" stroke-width="1"/>
+  <path d="M 460,240 L 510,230 L 560,240 L 560,250 L 510,260 L 460,250 Z" fill="#b3d9ff" stroke="#4d94ff" stroke-width="1"/>
+  <path d="M 550,240 L 600,230 L 650,240 L 650,250 L 600,260 L 550,250 Z" fill="#b3d9ff" stroke="#4d94ff" stroke-width="1"/>
+  
+  <!-- Nuclei -->
+  <ellipse cx="150" cy="245" rx="10" ry="6" fill="#4d94ff" opacity="0.5"/>
+  <ellipse cx="240" cy="245" rx="10" ry="6" fill="#4d94ff" opacity="0.5"/>
+  <ellipse cx="330" cy="245" rx="10" ry="6" fill="#4d94ff" opacity="0.5"/>
+  <ellipse cx="420" cy="245" rx="10" ry="6" fill="#4d94ff" opacity="0.5"/>
+  <ellipse cx="510" cy="245" rx="10" ry="6" fill="#4d94ff" opacity="0.5"/>
+  <ellipse cx="600" cy="245" rx="10" ry="6" fill="#4d94ff" opacity="0.5"/>
+  
+  <!-- Shear stress arrows -->
+  <g stroke="#ff6b6b" stroke-width="2">
+    <path d="M 100,200 L 700,200" stroke-dasharray="10,5"/>
+    <path d="M 690,195 L 700,200 L 690,205" fill="none"/>
+    <!-- Multiple small arrows indicating flow -->
+    <path d="M 200,195 L 200,205" />
+    <path d="M 300,195 L 300,205" />
+    <path d="M 400,195 L 400,205" />
+    <path d="M 500,195 L 500,205" />
+    <path d="M 600,195 L 600,205" />
+  </g>
+  
+  <!-- Control feedback representation - updated to measurement and feedback arrows -->
+  <g stroke="#666" stroke-width="1">
+    <!-- Measurement arrows going up -->
+    <path d="M 150,230 L 150,170" stroke-dasharray="3,3"/>
+    <path d="M 350,230 L 350,170" stroke-dasharray="3,3"/>
+    <path d="M 550,230 L 550,170" stroke-dasharray="3,3"/>
+    <!-- Feedback circles at measurement points -->
+    <circle cx="150" cy="170" r="3" fill="#666"/>
+    <circle cx="350" cy="170" r="3" fill="#666"/>
+    <circle cx="550" cy="170" r="3" fill="#666"/>
+    <!-- Small horizontal lines connecting measurements -->
+    <path d="M 150,170 L 350,170" stroke-dasharray="2,2"/>
+    <path d="M 350,170 L 550,170" stroke-dasharray="2,2"/>
+  </g>
+  
+  <!-- Modeling equations -->
+  <g font-family="Arial" font-size="14" fill="#666">
+    <text x="100" y="150">τ = μ(∂u/∂y)</text>
+    <text x="250" y="150">∂c/∂t = D∇²c</text>
+    <text x="450" y="150">F = f(σ,ε)</text>
+  </g>
+</svg>
