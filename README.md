@@ -17,9 +17,9 @@ This repository contains the code and documentation for optimizing endothelialis
 - `docs/`: Documentation and thesis-related files
   - `figures/`: Thesis figures and diagrams
   - `meetings/`: Meeting notes and discussions
-    - `supervisor/`: Supervisor meeting notes
-    - `lab_group/`: Lab group meeting notes
-    - `collaborators/`: Notes from collaborator meetings
+    - `supervisors/`: Supervisor meeting notes
+      - `Anna/`: Meetings with Anna Scampicchio
+      - `Costanza/`: Meetings with Costanza Giampietro
 - `experiments/`: Experimental protocols and results
 - `models/`: Implementation of various models
   - `cell_cloning/`: Cell proliferation model
