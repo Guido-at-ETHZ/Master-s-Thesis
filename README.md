@@ -13,8 +13,8 @@ This repository contains the code and documentation for optimizing endothelialis
   - `control/`: MPC implementation and control algorithms
   - `utils/`: Utility functions and helper scripts
 - `data/`: Data files
-  - `raw/`: Raw experimental data and images
-  - `processed/`: Processed data files
+  - `previous/`: Raw experimental data and images from previous group work
+  - `generated/`: Raw experimental data and images from thesis work
   - `external/`: External data from referenced papers
 - `docs/`: Documentation and thesis-related files
   - `figures/`: Thesis figures and diagrams

@@ -1,0 +1,169 @@
+ ├─   ├─   ├─  renaming
+ ├─   ├─   ├─   ├─  wetransfer_images-nafsika-3_2024-11-24_2112 2
+ ├─   ├─   ├─   ├─   ├─  .DS_Store
+ ├─   ├─   ├─   ├─   ├─  experiment data.txt
+ ├─   ├─   ├─   ├─  Static-A-2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq011.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq010.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq012.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq006.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq007.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_40x_L2RA_FlatA_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_40x_L2RA_FlatA_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_40x_L2RA_FlatA_seq007.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_40x_L2RA_FlatA_seq006.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_40x_L2RA_FlatA_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_40x_L2RA_FlatA_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq009.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_20dec21_20xA_L2RA_FlatA_seq008.nd2
+ ├─   ├─   ├─   ├─  flow3_1.4Pa_18h
+ ├─   ├─   ├─   ├─   ├─  .DS_Store
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_05mar19_20x_L2RA_Topoa_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Topo_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Topo_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_05mar19_20x_L2RA_Topoa_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Flat_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Trans_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Topo_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Flat_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_05mar19_20x_L2RA_Topoa_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_05mar19_20x_L2RA_Topoa_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Trans_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Topo_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Topo_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Flat_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_05mar19_20x_L2RA_Topoa_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Flat_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Trans_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Flat_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Topo_seq006.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_U_05mar19_20x_L2R_Trans_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_05mar19_20x_L2RA_Flat_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_05mar19_20x_L2RA_Flat_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_05mar19_20x_L2RA_Flat_seq001.nd2
+ ├─   ├─   ├─   ├─  rename-script-flow3_1.4Pa_18h.py
+ ├─   ├─   ├─   ├─  1.4Pa-A-2
+ ├─   ├─   ├─   ├─   ├─  .DS_Store
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq008.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq009.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq018.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq016.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq017.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq015.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq014.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq010.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq011.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq007.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq013.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq012.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_20xA_L2RA_FlatA_seq006.nd2
+ ├─   ├─   ├─   ├─  flow5_8pa_5h
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Topo_seq015.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Flat_seq011.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Topo_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_03apr19_40x_R2L_R2l_flat_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Flat_seq010.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Topo_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Flat_seq012.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Topo_seq016.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Flat_seq013.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Topo_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Topo_seq007.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Flat_seq017.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_03apr19_40x_R2L_R2l_topo_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_03apr19_40x_R2L_R2l_flat_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Topo_seq006.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Flat_seq014.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Topo_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_03apr19_40x_R2L_R2l_topo_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Topo_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_40x_R2L_Flat_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_40x_R2L_Flat_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_40x_R2L_Flat_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_40x_R2L_Topo_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_40x_R2L_Flat_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_40x_R2L_Topo_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Topo_seq008.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Flat_seq018.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_03apr19_20x_L2RA_Flat_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_03apr19_20x_L2RA_Flat_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_03apr19_20x_L2RA_Flat_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_03apr19_20x_L2RA_Topo_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_03apr19_20x_L2RA_Topo_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  8Pa-1.4Pa_U_03apr19_20x_R2L_Flat_seq009.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_U_03apr19_20x_L2RA_Topo_seq001.nd2
+ ├─   ├─   ├─   ├─  .DS_Store
+ ├─   ├─   ├─   ├─  rename-script_Static-A-2.py
+ ├─   ├─   ├─   ├─  Static-A-1
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_40x_L2RA_FlatA_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_40x_L2RA_FlatA_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_40x_L2RA_FlatA_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_40x_L2RA_FlatA_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq008.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq009.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_40x_L2RA_FlatA_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq007.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq006.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq010.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq011.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  0Pa_A1_19dec21_20xA_L2RA_FlatA_seq003.nd2
+ ├─   ├─   ├─   ├─  1.4Pa-A-1
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_40x_L2RA_FlatA_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq014.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq015.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_40x_L2RA_FlatA_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_40x_L2RA_FlatA_seq001.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq016.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_40x_L2RA_FlatA_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq012.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq006.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq007.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq013.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_40x_L2RA_FlatA_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq011.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq010.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_40x_L2RA_FlatA_seq006.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq009.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_19dec21_20xA_L2RA_FlatA_seq008.nd2
+ ├─   ├─   ├─   ├─  rename-script-flow5_8pa_5h.py
+ ├─   ├─   ├─   ├─  rename-script-1.4Pa-A-1.py
+ ├─   ├─   ├─   ├─  Xi Flow
+ ├─   ├─   ├─   ├─   ├─  .DS_Store
+ ├─   ├─   ├─   ├─  1.4Pa-A-2_40x
+ ├─   ├─   ├─   ├─   ├─  .DS_Store
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_40x_L2RA_FlatA_seq004.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_40x_L2RA_FlatA_seq005.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_40x_L2RA_FlatA_seq007.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_40x_L2RA_FlatA_seq006.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_40x_L2RA_FlatA_seq002.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_40x_L2RA_FlatA_seq003.nd2
+ ├─   ├─   ├─   ├─   ├─  1.4Pa_A1_20dec21_40x_L2RA_FlatA_seq001.nd2
+ ├─   ├─   ├─   ├─  rename-script-Static-A-1.py
+ ├─   ├─   ├─   ├─  .idea
+ ├─   ├─   ├─   ├─   ├─  inspectionProfiles
+ ├─   ├─   ├─   ├─   ├─   ├─  profiles_settings.xml
+ ├─   ├─   ├─   ├─   ├─   ├─  Project_Default.xml
+ ├─   ├─   ├─   ├─   ├─  .gitignore
+ ├─   ├─   ├─   ├─   ├─  workspace.xml
+ ├─   ├─   ├─   ├─   ├─  modules.xml
+ ├─   ├─   ├─   ├─   ├─  renaming.iml
+ ├─   ├─   ├─   ├─   ├─  misc.xml
