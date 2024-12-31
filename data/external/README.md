@@ -70,3 +70,15 @@ with limited cell orientation
 
 Coherent cell polarity was established within 2–4 hours, while cell shape changes and collective alignment progressed more slowly, stabilizing after 6–8 hours. Under low wall shear stress (WSS, 1.4 Pa), cells elongated along the flow direction, whereas high WSS (8 Pa) induced faster remodeling, leading to perpendicular alignment. Despite these differences in orientation, both states maintained consistent planar cell polarity, with the Golgi positioned upstream of the nucleus, demonstrating robust organization under varying flow conditions
 
+It's possible to measure the relative strain energy given by the system, so that you can measure the speed of response of it. In this way, it may be interesting to understand the behaviour. T = 8h/7h.
+So the maximum is after 4h. 
+
+Senescent endothelial cells fail to change shape in response to flow and generate monolayers where the cell aspect ratio
+is unaﬀected, while the cell orientation remains randomly distributed despite the exposure to WSS
+
+The model prediction was experimentally verified exposing endothelial monolayers, featuring precisely controlled ratios of young and senescent cells, to flow generating a WSS of 1.4 Pa. The average cell orientation along the direction of
+flow was gradually lost in monolayers featuring 0, 30, 70, and 100% of senescent endothelial cells (≈21°,31°,37°,and47°,respectively).
+
+Senescence reduces angle of change on a linear model.
+
+![IMG_3595.jpg](..%2F..%2F..%2F..%2FDownloads%2FIMG_3595.jpg)
