@@ -39,6 +39,8 @@ Pre-conditioning can be useful to have a higher Pressure as alighnemt could also
 
 [^3] Robotti, F., Franco, D., Bänninger, L., Wyler, J., Starck, C. T., Falk, V., ... & Ferrari, A. (2014). The influence of surface micro-structure on endothelialization under supraphysiological wall shear stress. Biomaterials, 35(30), 8479-8486. 
 
+![master's thesis pictures.jpg](..%2F..%2Fdocs%2Ffigures%2Fmaster%27s%20thesis%20pictures.jpg)
+
 ## A free-form patterning method enabling endothelialization under dynamic flow
 
 Endothelial Cell Response to Wall Shear Stress (WSS)
