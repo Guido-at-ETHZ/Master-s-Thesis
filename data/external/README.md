@@ -81,4 +81,4 @@ flow was gradually lost in monolayers featuring 0, 30, 70, and 100% of senescent
 
 Senescence reduces angle of change on a linear model.
 
-![IMG_3595.jpg](..%2F..%2F..%2F..%2FDownloads%2FIMG_3595.jpg)
+![IMG_3595.jpg](../../docs/figures/IMG_3595.jpg)
