@@ -252,3 +252,18 @@ G-proteins16–19, mechanosensitive enzymes20 and cilia
 
 Multiple cell types have different values for the way they would rotate and evolve based on the shear stress.
 
+## Cooperative Effects of Matrix Stiffness and Fluid Shear Stress on Endothelial Cell Behavior
+
+Evidence is now emerging that
+changes in vessel stiffness that occur with age, metabolic
+disorders, and atherosclerosis can promote an atheroscle-
+rotic phenotype in the cells within the vessel wall (6–9).
+Increased matrix stiffness from 2.5 to 10 kPa (mimicking
+age-related stiffening of the EC matrix) induces increased
+endothelium permeability and leukocyte transmigration,
+both of which are hallmarks of atherosclerosis progression
+
+Laminar arterial-level shear stress (10–30 dyn/cm2) is
+associated with an atheroprotective EC phenotype and causes
+ECs to align and elongate in the flow direction
+
