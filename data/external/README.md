@@ -144,6 +144,8 @@ Natural "braking" system limits displacement
 If you would like to have an example of how the system would evolve, you can find a nice animation here. However, with the time there should be a process of actin production based on the condition of shear stress
 [endothelial-flow-response.tsx](..%2F..%2Fdocs%2Ffigures%2Fendothelial-flow-response.tsx)
 
+Consider that there may not be a proper threashold 
+
 ## Mechanism of endothelial cell shape change and cytoskeletal remodeling in response to fluid shear stress
 
 Based on the biomechanical principles described in the paper and general cell mechanics, this time asymmetry would likely be present in both scenarios (X to 0 and X to X/2), but for different reasons:
@@ -267,3 +269,40 @@ Laminar arterial-level shear stress (10–30 dyn/cm2) is
 associated with an atheroprotective EC phenotype and causes
 ECs to align and elongate in the flow direction
 
+## Mechanotransduction and endothelial cell homeostasis: the wisdom of the cell
+
+The results, together with the data in the literature, have led to the formulation of the
+hypothesis that the feedback control of intracellular mechanics
+and signaling in response to the externally imposed stresses
+serves to maintain homeostasis at the cellular level, which is
+required for normal endothelial functions and protection
+against pathophysiological changes such as atherosclerosis.
+
+
+## A mechanosensory complex that mediates the endothelial cell response to fluid shear stress
+
+Fluid shear stress triggers the conformational activation of integ-
+rins, which mediates both the alignment of endothelial cells in
+laminar shear and the activation of NF-kB in response to changes
+in shear2–4. We have identified a mechanosensory complex comprised
+of PECAM-1 (which activates Src), VE-cadherin (which functions as
+an adaptor) and VEGFR2 (which activates PI(3)K). PI(3)K most
+probably leads to integrin activation through a conserved pathway
+shared with other cell types
+
+There's a mention that mechanical forces can increase actin production by 20% in "healthy" cells
+
+![IMG_3609.jpg](..%2F..%2Fdocs%2Ffigures%2FIMG_3609.jpg)
+
+Here there is the fold induction over control together with a differnce with time (early moments)
+
+![IMG_3610.jpg](..%2F..%2Fdocs%2Ffigures%2FIMG_3610.jpg)
+
+## The Molecular Organization of Endothelial Cell to Cell Junctions: Differential Association of Plakoglobin,/3-catenin, and ot-catenin with Vascular Endothelial Cadherin (VE-cadherin)
+
+VE-cadherin, ot-catenin, and /3-catenin are already associated with each other at
+early stages of intercellular adhesion and become
+readily organized at nascent cell contacts.
+
+
+There was a paper sharing that 3.5 Pa could be an ideal value for cells.
