@@ -1,0 +1,60 @@
+<svg viewBox="0 0 800 400" xmlns="http://www.w3.org/2000/svg">
+    <!-- External Factors Group -->
+    <g transform="translate(50,50)">
+        <!-- Main Group Background -->
+        <rect x="0" y="0" width="280" height="300" rx="10" fill="#FFE4E1" opacity="0.3"/>
+        <text x="20" y="35" font-size="14" font-weight="bold">External Factors</text>
+        
+        <!-- Senescence Related -->
+        <rect x="15" y="50" width="250" height="80" rx="5" fill="#FFB6C1" opacity="0.3"/>
+        <text x="25" y="75" font-size="14" font-weight="bold">Senescence Related</text>
+        <text x="35" y="95" font-size="12">• Replicative Stress</text>
+        <text x="35" y="115" font-size="12">• Oxidative Stress</text>
+        
+        <!-- Mechanical Factors -->
+        <rect x="15" y="140" width="250" height="80" rx="5" fill="#E6E6FA" opacity="0.4"/>
+        <text x="25" y="165" font-size="14" font-weight="bold">Mechanical Factors</text>
+        <text x="35" y="185" font-size="12">• Shear Stress</text>
+        <text x="35" y="205" font-size="12">• Strain Stress</text>
+        
+        <!-- Other Factors -->
+        <rect x="15" y="230" width="250" height="60" rx="5" fill="#F0F8FF" opacity="0.3"/>
+        <text x="35" y="260" font-size="12">• Substrate</text>
+        <text x="35" y="280" font-size="12">• External Factors</text>
+    </g>
+
+    <!-- Central Cell -->
+    <g transform="translate(400,170)">
+        <circle cx="0" cy="0" r="45" fill="#87CEEB" opacity="0.4"/>
+        <text x="0" y="-5" font-size="12" font-weight="bold" text-anchor="middle">Endothelial</text>
+        <text x="0" y="10" font-size="12" font-weight="bold" text-anchor="middle">Cell</text>
+    </g>
+
+    <!-- Measured States -->
+    <g transform="translate(570,50)">
+        <rect x="0" y="0" width="180" height="300" rx="10" fill="#F0FFF0" opacity="0.3"/>
+        <text x="20" y="35" font-size="14" font-weight="bold">Measured States</text>
+        
+        <rect x="20" y="60" width="140" height="50" rx="5" fill="#90EE90" opacity="0.4"/>
+        <text x="30" y="90" font-size="14">Actin</text>
+        
+        <rect x="20" y="130" width="140" height="50" rx="5" fill="#90EE90" opacity="0.4"/>
+        <text x="30" y="160" font-size="14">Cadherins</text>
+        
+        <rect x="20" y="200" width="140" height="50" rx="5" fill="#90EE90" opacity="0.4"/>
+        <text x="30" y="230" font-size="14">DAPI</text>
+    </g>
+
+    <!-- Connector Lines -->
+    <g stroke="#666" stroke-width="1">
+        <!-- Lines from External Factors to Cell -->
+        <line x1="330" y1="90" x2="365" y2="170" />
+        <line x1="330" y1="170" x2="365" y2="170" />
+        <line x1="330" y1="250" x2="365" y2="170" />
+        
+        <!-- Lines from Cell to Measured States -->
+        <line x1="435" y1="170" x2="570" y2="85" />
+        <line x1="435" y1="170" x2="570" y2="155" />
+        <line x1="435" y1="170" x2="570" y2="225" />
+    </g>
+</svg>
