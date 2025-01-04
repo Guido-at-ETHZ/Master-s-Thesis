@@ -306,3 +306,68 @@ readily organized at nascent cell contacts.
 
 
 There was a paper sharing that 3.5 Pa could be an ideal value for cells.
+
+## NMR-based metabonomic analysis of HUVEC cells during replicative senescence
+
+### 1. Passage Number (P)
+- This represents how many times the cells have been transferred ("passaged") to new culture dishes
+- When cells reach a certain density in their dish, they need to be split and transferred to new dishes - this is one passage
+- The passage number simply counts these transfers (P3 means cells have been passaged 3 times)
+
+### 2. Population Doubling Level (PDL)
+- This measures how many times the cell population has actually doubled
+- It's calculated based on the cell counts before and after each passage
+- It's a more precise measure of cellular age than passage number
+- In this study, they found that by:
+  - P3, cells had undergone 4 population doublings
+  - P6, cells had undergone 15 population doublings
+  - P10, cells had undergone 31 population doublings
+  - P14, cells had undergone 46 population doublings
+  - P18, cells had undergone 61 population doublings
+
+So while P6 represents the 6th time the cells were transferred to new dishes, during those 6 passages the cell population had actually doubled 15 times. The difference occurs because multiple population doublings can happen between passages, depending on the split ratio and growth conditions.
+
+This distinction is important because PDL is generally considered a more accurate measure of cellular aging than passage number, since it directly reflects how many times the cells have divided.
+
+P10 appeared to be a  turning point during the progression of HUVECs  senescence.
+
+The P3 and P6 groups were somewhat partially overlapped, the P10
+and P14 groups were closer to each other, and the P18
+group was clearly separated from the other four groups
+
+From table 1C 
+
+| PDL (population doubling level) | Phase | Percentage ± Error (%) |
+|---------------------------------|-------|-------------------------|
+| 4                               | P3    | 9% ± 0.2%              |
+| 15                              | P6    | 20% ± 0.4%             |
+| 31                              | P10   | 45% ± 0.5%             |
+| 46                              | P14   | 65% ± 0.3%             |
+| 61                              | P18   | 91% ± 0.3%             |
+
+
+![Screenshot 2025-01-04 at 13.46.05.png](..%2F..%2Fdocs%2Ffigures%2FScreenshot%202025-01-04%20at%2013.46.05.png)
+
+Young cells (early passages) divide approximately every 16-17 hours 
+
+Senescent cells (later passages) take much longer, around 35-36 hours per division
+
+![Screenshot 2025-01-04 at 14.14.19.png](..%2F..%2Fdocs%2Ffigures%2FScreenshot%202025-01-04%20at%2014.14.19.png)
+
+## Passage Number-Induced Replicative Senescence Modulates the Endothelial Cell Response to Protein-Bound Uremic Toxins
+
+
+- **Figure A**: Growth curve displaying cumulative population doublings (CPDs) on the Y-axis of HUVECs undergoing replicative senescence, with cell passages represented on the X-axis.
+- **Figure B**: Representative images and quantification of Senescence-Associated β-Galactosidase (SA β-Gal) staining. Young HUVECs (control) show SA β-Gal positivity below 10%, while senescent HUVECs exhibit SA β-Gal positivity exceeding 80%.
+
+![Screenshot 2025-01-04 at 13.57.50.png](..%2F..%2Fdocs%2Ffigures%2FScreenshot%202025-01-04%20at%2013.57.50.png)
+
+## Premature senescence of endothelial cells upon chronic exposure to TNFα can be prevented by N-acetyl cysteine and plumericin
+From the paper it's possible to see that after 6 days with a quantity of 10 ng/ml of TNFα, the cells start to show signs of senescence.
+
+![tileshop (2).jpeg](..%2F..%2Fdocs%2Ffigures%2Ftileshop%20%282%29.jpeg)
+
+## TNFα‐senescence initiates a STAT‐dependent positive feedback loop, leading to a sustained interferon signature, DNA damage, and cytokine secretion
+
+
+![IMG_3614.jpg](..%2F..%2Fdocs%2Ffigures%2FIMG_3614.jpg)
