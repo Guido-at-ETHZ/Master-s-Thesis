@@ -23,23 +23,36 @@ x2 = np.array([31, 46, 61])  # PDL values
 y2 = np.array([0.45, 0.65, 0.91])  # Percentage values
 y2_err = np.array([0.005, 0.003, 0.003])
 
-# Fit sigmoid for first set of points with better initial guesses
+# Third set of points (control data converted from days to PDL)
+x3 = np.array([8.7, 23.3, 29.1, 35.2])  # Time converted to PDL
+y3 = np.array([0.01, 0.04, 0.17, 0.30])  # Converting percentages to decimal
+y3_err = np.array([0.015, 0.020, 0.015, 0.015])  # Standard deviations in decimal
+
+# Fit sigmoid for first set of points
 popt1, pcov1 = curve_fit(logistic, x1, y1,
-                        p0=[0.5, 0.05, 20],  # Initial guess for [L, k, x0]
+                        p0=[0.5, 0.05, 20],
                         sigma=y1_err,
                         absolute_sigma=True,
-                        bounds=([0, 0, 0], [2, 1, 100]))  # Add bounds to prevent unrealistic values
+                        bounds=([0, 0, 0], [2, 1, 100]))
 
-# Fit sigmoid for second set of points with better initial guesses
+# Fit sigmoid for second set of points
 popt2, pcov2 = curve_fit(logistic, x2, y2,
-                        p0=[1.0, 0.05, 50],  # Initial guess for [L, k, x0]
+                        p0=[1.0, 0.05, 50],
                         sigma=y2_err,
                         absolute_sigma=True,
-                        bounds=([0, 0, 0], [5, 1, 200]))  # Add bounds to prevent unrealistic values
+                        bounds=([0, 0, 0], [5, 1, 200]))
+
+# Fit sigmoid for third set of points (control)
+popt3, pcov3 = curve_fit(logistic, x3, y3,
+                        p0=[0.5, 0.05, 25],
+                        sigma=y3_err,
+                        absolute_sigma=True,
+                        bounds=([0, 0, 0], [2, 1, 100]))
 
 # Generate smooth curves for plotting
 x1_smooth = np.linspace(0, 40, 100)
 x2_smooth = np.linspace(25, 65, 100)
+x3_smooth = np.linspace(0, 40, 100)
 
 plt.figure(figsize=(10, 6))
 
@@ -51,12 +64,18 @@ plt.plot(x1_smooth, logistic(x1_smooth, *popt1)*100, 'r-', label='First Sigmoid 
 plt.errorbar(x2, y2*100, yerr=y2_err*100, fmt='bo', label='Second Set Data Points')
 plt.plot(x2_smooth, logistic(x2_smooth, *popt2)*100, 'b-', label='Second Sigmoid Fit')
 
+# Third sigmoid (control)
+plt.errorbar(x3, y3*100, yerr=y3_err*100, fmt='gs', label='Control Data Points')
+plt.plot(x3_smooth, logistic(x3_smooth, *popt3)*100, 'g-', label='Control Sigmoid Fit')
+
 plt.xlabel('Population Doubling Level (PDL)')
 plt.ylabel('Percentage (%)')
 plt.title('Sigmoid Fits with Measurement Errors')
 plt.legend()
 plt.grid(True)
+plt.savefig('sigmoid_plot.png', dpi=300, bbox_inches='tight')
 plt.ylim(0, 100)
+
 plt.show()
 
 # Print fit parameters with their uncertainties
@@ -71,12 +90,6 @@ print_fit_params(popt1, pcov1, ['L', 'k', 'x0'])
 print("\nSecond Sigmoid Fit Parameters:")
 print_fit_params(popt2, pcov2, ['L', 'k', 'x0'])
 
-# Modified goodness of fit calculation
-def reduced_chi_squared(y_obs, y_pred, y_err, num_params):
-    chi_sq = np.sum(((y_obs - y_pred) / y_err)**2)
-    dof = max(len(y_obs) - num_params, 1)  # Ensure denominator is at least 1
-    return chi_sq / dof
+print("\nControl Sigmoid Fit Parameters:")
+print_fit_params(popt3, pcov3, ['L', 'k', 'x0'])
 
-print("\nReduced Chi-Squared:")
-print(f"First Sigmoid: {reduced_chi_squared(y1, logistic(x1, *popt1), y1_err, 3):.4f}")
-print(f"Second Sigmoid: {reduced_chi_squared(y2, logistic(x2, *popt2), y2_err, 3):.4f}")
