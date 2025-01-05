@@ -367,7 +367,26 @@ From the paper it's possible to see that after 6 days with a quantity of 10 ng/m
 
 ![tileshop (2).jpeg](..%2F..%2Fdocs%2Ffigures%2Ftileshop%20%282%29.jpeg)
 
+Percentage of senescent cells due to TNFα = % TNFα - % Control
+Assuming the values from plot e are approximately:
+
+Control: ~5%
+TNFα: ~60%
+The difference would be:
+
+60% - 5% = 55%
+Thus, around 55% of the cells could potentially undergo senescence as a result of TNFα treatment, accounting for the removal of the baseline control percentage.
+
 ## TNFα‐senescence initiates a STAT‐dependent positive feedback loop, leading to a sustained interferon signature, DNA damage, and cytokine secretion
+
+| Time (days) | Control (Mean ± SD) | TNFα 5ng/ml (Mean ± SD) | TNFα - Control (Mean ± SD) |
+|-------------|---------------------|-------------------------|----------------------------|
+| 6           | 1.0 ± 1.5           | 10.0 ± 2.0              | 9.0 ± 2.0                  |
+| 16          | 4.0 ± 2.0           | 28.0 ± 4.0              | 24.0 ± 4.0                 |
+| 20          | 17.0 ± 1.5          | 55.0 ± 3.0              | 28.0 ± 3.0                 |
+| 26          | 30.0 ± 1.5          | 58.0 ± 4.5              | 28.0 ± 4.5                 |
 
 
 ![IMG_3614.jpg](..%2F..%2Fdocs%2Ffigures%2FIMG_3614.jpg)
+
+
