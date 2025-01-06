@@ -531,9 +531,140 @@ This can be important as a difference like that would distrupt the orientation
 
 ## Fluid shear stress on endothelial cells modulates mechanical tension across VE-cadherin and PECAM-1
 
+Note: beta catenin is not fundamental for mechanotrasduction
+
 Surprisingly, we observed a rapid increase in FRET, indicating a decrease in force, that was evident at 30 seconds, the earliest time point we could measure, and persisted for at least 30 minutes
 Onset of shear stress triggered a rapid decrease in both traction forces and cell-cell forces by round 25%
 
 ![Screenshot 2025-01-06 at 07.20.17.png](..%2F..%2Fdocs%2Ffigures%2FScreenshot%202025-01-06%20at%2007.20.17.png)
 
+
+**Initial State:**
+
+- VE-cadherin is connected to actin via: VE-cadherin → β-catenin → α-catenin → actin
+- This connection maintains normal tension across cell-cell junctions
+- Actin stress fibers are present
+- PECAM-1 has low tension
+
+**When Flow is Applied:**
+
+- Actin stress fibers remain present (don't disappear)
+- The cadherin-actin connection remains intact
+- BUT overall cellular tension decreases by ~25% (both cell-cell and traction forces)
+- VE-cadherin experiences less tension
+- PECAM-1 gains tension through a new connection to vimentin
+
+**Key Mechanisms:**
+
+- The tension decrease isn't from breaking cadherin-actin connections (proven by the direct α-catenin linkage experiment)
+- Instead, there's a broader cytoskeletal reorganization where:
+  * Forces are redistributed
+  * PECAM-1 becomes mechanically engaged through vimentin
+  * Overall cellular contractility decreases
+  * But actin structures remain present
+
+So rather than a simple detachment model, it's a complex reorganization of force transmission pathways within the cell, while maintaining structural connections.
+
+This suggests there's an upstream mechanosensor that triggers this reorganization, though the paper doesn't identify what it is.
+
+
+In cells lacking VE-cadherin (VE-cad -/-):
+- PECAM-1 couldn't respond normally to flow
+- No mechanical response was observed
+- The force-sensing was impaired
+
+Only when VE-cadherin was restored (VE-cad RC):
+- The mechanical response to flow was restored
+- PECAM-1 could respond to force again
+
+## VE-Cadherin Phosphorylation Regulates Endothelial Fluid Shear Stress Responses through the Polarity Protein LGN
+
+**Initial State:**
+- VE-cadherin is a protein found in blood vessel cells (endothelial cells)
+- Normally, a protein called p120ctn is bound to VE-cadherin at position Y658
+
+**When Blood Flow (Shear Stress) Occurs:**
+- A small portion of VE-cadherin gets a phosphate group added at position Y658 (phosphorylation)
+- This is like adding a small chemical "tag" to that specific spot
+- Within 2 minutes of flow, there is decreased tension across VE-cadherin molecules (shown by increased FRET)
+
+**This Causes a Chain of Events:**
+- The phosphate addition causes p120ctn to detach from VE-cadherin
+- Once p120ctn detaches, a different protein called LGN can bind to VE-cadherin
+- This switch in binding partners (from p120ctn to LGN) is crucial
+
+**End Result:**
+- This process allows the cell to detect and respond to blood flow
+- The cell can then adjust its behavior accordingly
+- This is essential for proper blood vessel function
+- Since only a small portion of VE-cadherin is modified, cells likely maintain their connections
+
+This rapid response (within 2 minutes) suggests this is one of the early mechanisms by which cells sense and begin to respond to blood flow.
+
+The paper mentions these are physiologically relevant pressures, with:
+
+Higher shear stress (15 dynes/cm2 = 1.5 Pa) being typical in arteries
+Lower shear stress (1 ± 3 dynes/cm2 = 0.1 ± 0.3 Pa) being typical in veins and areas of disturbed flow
+
+Oscillatory flow isn't ideal given it doesn't activate mechanotrasduction but it would increase inflammation
+Low or oscillatory flow activates the inflammatory transcription factor NF-kB and induces expression of fibronectin and the leukocyte recruitment genes ICAM1 and VCAM1. These events result in a 'primed' state, in which ECs are more sensitive to other inflammatory mediators, such as oxidized low-density lipoprotein (LDL), and cytokines that promote atherosclerosis
+
+## Notes Aside
+Actin may change the location with a higher shear stress from the center to more the periphery of the cell
+
+## Transient and Steady-State Effects of Shear Stress on Endothelial Cell Adherens Junctions
+
+Note: It's not HUVEC
+
+0 HOURS (STATIC/BASELINE)
+- Cells have cuboidal, cobblestone morphology
+- Continuous, linear staining of adhesion proteins around cell periphery
+- F-actin forms dense peripheral band at cell borders
+- All proteins show intense peripheral staining:
+  * VE-cadherin
+  * α-catenin
+  * β-catenin
+  * plakoglobin
+
+8.5 HOURS
+- First observable morphological changes
+- Gaps form between cells  
+- F-actin peripheral band becomes less prominent
+- More randomly distributed stress fibers appear
+- Adhesion protein staining becomes punctate
+- Protein level changes:
+  * VE-cadherin: decreases
+  * α-catenin: decreases
+  * β-catenin: increases  
+  * plakoglobin: decreases and shows nuclear localization
+
+24 HOURS
+- Cells are elongated and aligned with flow direction
+- Cells are continuously apposed to each other
+- Long, thick stress fibers run length of cells
+- Protein localization:
+  * VE-cadherin: forms "dashes" at stress fiber ends
+  * α-catenin: forms "dashes" at stress fiber ends
+  * β-catenin: forms "dashes" at stress fiber ends
+  * plakoglobin: not detectable
+- All protein levels upregulated except plakoglobin
+
+48 HOURS  
+- Cell morphology similar to 24 hours
+- Stress fibers visible both above and below nucleus
+- All adhesion proteins localize to adherens plaques (including plakoglobin)
+- Protein levels:
+  * VE-cadherin: remains elevated
+  * α-catenin: remains elevated
+  * β-catenin: remains elevated
+  * plakoglobin: returns to junctions but below control levels
+
+Figure 3 and Figure 4 which show Western blot analysis, VE-cadherin levels are significantly higher after 48 hours of shear stress compared to static (0 hour) conditions
+
+![fig3,4.jpg](..%2F..%2Fdocs%2Ffigures%2Ffig3%2C4.jpg)
+
+## Under pressure: altered endothelial flow response.
+0.5 Pa 
+
+![Screenshot 2025-01-06 at 09.30.16.png](..%2F..%2Fdocs%2Ffigures%2FScreenshot%202025-01-06%20at%2009.30.16.png)
 
