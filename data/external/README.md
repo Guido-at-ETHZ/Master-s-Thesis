@@ -491,3 +491,49 @@ If we can consider delays
 - **Gamma Actin:** `56.3 + 900 + 300 + 180 + 93.75 + 1200 + 1500 + 300 = 4530s (75.5 min)`
 - **Difference:** ~600 seconds (10 minutes)
   - Mainly due to differences in co-translational folding and CCT/TRiC cycles
+
+
+## Piezo1 acts upstream of TRPV4 to induce pathological changes in endothelial cells due to shear stress
+
+Subjecting HUVEC monolayers to 12 dyne/cm2 for 10 min
+reduced VE-cadherin at AJs and decreased the apparent width
+of individual cells.
+
+![Screenshot 2025-01-06 at 06.16.30.png](..%2F..%2Fdocs%2Ffigures%2FScreenshot%202025-01-06%20at%2006.16.30.png)
+
+
+The plot describes how shear stress and the induced activation of a channel would influence the force. 
+![Screenshot 2025-01-06 at 06.19.20.png](..%2F..%2Fdocs%2Ffigures%2FScreenshot%202025-01-06%20at%2006.19.20.png)
+
+- F₀: The baseline/initial fluorescence intensity before stimulation
+- ΔF: The change in fluorescence from baseline (F - F₀)
+- ΔF/F₀: The normalized change in fluorescence expressed as a percentage
+
+In this case there is hte description of how would calcium change based on the different pressure levels
+![Screenshot 2025-01-06 at 06.23.22.png](..%2F..%2Fdocs%2Ffigures%2FScreenshot%202025-01-06%20at%2006.23.22.png)
+
+
+We observed that high shear stress
+(25 dyne/cm2 for 10 min) disrupted the orientation of Factin in HUVECs in contrast to lower shear force (4 dyne/
+cm2 for 10 min) (Fig. 7, A–B). High shear stress triggered
+the formation of F-actin bundles indicative of fiber polymerization (Fig. 7, A–B). The F-actin intensity frequency
+distribution predicted that high shear stress caused F-actin
+fibers to translocate from the perinuclear region of the cell
+to the periphery where a high density of uneven clusters
+appeared (Fig. 7, A–D)
+
+![Screenshot 2025-01-06 at 06.29.49.png](..%2F..%2Fdocs%2Ffigures%2FScreenshot%202025-01-06%20at%2006.29.49.png)
+
+We observed that high shear stress (25 dyne/cm2 for 10 min) disrupted the orientation of Factin in HUVECs in contrast to lower shear force (4 dyne/cm2 for 10 min) (Fig. 7, A–B). High shear stress triggered  the formation of F-actin bundles indicative of fiber polymerization (Fig. 7, A–B). The F-actin intensity frequency  distribution predicted that high shear stress caused F-actin  fibers to translocate from the perinuclear region of the cell  to the periphery where a high density of uneven clusters  appeared (Fig. 7, A–D).
+
+This can be important as a difference like that would distrupt the orientation
+
+
+## Fluid shear stress on endothelial cells modulates mechanical tension across VE-cadherin and PECAM-1
+
+Surprisingly, we observed a rapid increase in FRET, indicating a decrease in force, that was evident at 30 seconds, the earliest time point we could measure, and persisted for at least 30 minutes
+Onset of shear stress triggered a rapid decrease in both traction forces and cell-cell forces by round 25%
+
+![Screenshot 2025-01-06 at 07.20.17.png](..%2F..%2Fdocs%2Ffigures%2FScreenshot%202025-01-06%20at%2007.20.17.png)
+
+
