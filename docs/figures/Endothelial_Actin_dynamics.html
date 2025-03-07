@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>First Order System Step Response</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+
+        .controls {
+            margin-bottom: 20px;
+        }
+
+        .control-group {
+            margin: 10px 0;
+        }
+
+        label {
+            display: inline-block;
+            width: 120px;
+        }
+
+        canvas {
+            border: 1px solid #ccc;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>First Order System Step Response</h1>
+    
+    <div class="controls">
+        <div class="control-group">
+            <label>Time Constant (τ):</label>
+            <input type="range" id="tau" min="0.1" max="5" step="0.1" value="1">
+            <span id="tauValue">1.0</span>
+        </div>
+        
+        <div class="control-group">
+            <label>Target Value:</label>
+            <input type="range" id="target" min="0" max="2" step="0.1" value="1">
+            <span id="targetValue">1.0</span>
+        </div>
+        
+        <button onclick="resetSimulation()">Reset</button>
+    </div>
+    
+    <canvas id="plot" width="800" height="400"></canvas>
+
+    <script>
+        const canvas = document.getElementById('plot');
+        const ctx = canvas.getContext('2d');
+        let data = [];
+        let currentTime = 0;
+        let stepStartTime = 0;
+        let stepStartValue = 0;
+        let animationId;
+
+        // Parameters
+        let tau = 1;
+        let targetValue = 1;
+
+        // Update parameters from controls
+        document.getElementById('tau').addEventListener('input', (e) => {
+            tau = parseFloat(e.target.value);
+            document.getElementById('tauValue').textContent = tau.toFixed(1);
+        });
+
+        document.getElementById('target').addEventListener('input', (e) => {
+            targetValue = parseFloat(e.target.value);
+            document.getElementById('targetValue').textContent = targetValue.toFixed(1);
+            stepStartTime = currentTime;
+            stepStartValue = data.length > 0 ? data[data.length - 1].value : 0;
+        });
+
+        function resetSimulation() {
+            cancelAnimationFrame(animationId);
+            data = [];
+            currentTime = 0;
+            stepStartTime = 0;
+            stepStartValue = 0;
+            drawPlot();
+            startSimulation();
+        }
+
+        function drawPlot() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Draw grid
+            ctx.strokeStyle = '#eee';
+            ctx.beginPath();
+            for(let i = 0; i <= 10; i++) {
+                let x = (i/10) * canvas.width;
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, canvas.height);
+                let y = (i/10) * canvas.height;
+                ctx.moveTo(0, y);
+                ctx.lineTo(canvas.width, y);
+            }
+            ctx.stroke();
+
+            // Draw axes
+            ctx.strokeStyle = '#000';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height);
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.moveTo(0, 0);
+            ctx.lineTo(0, canvas.height);
+            ctx.stroke();
+
+            // Draw data
+            if (data.length > 1) {
+                ctx.strokeStyle = '#2196F3';
+                ctx.beginPath();
+                ctx.moveTo(0, canvas.height);
+                
+                const timeScale = canvas.width / 10;  // 10 seconds total
+                const valueScale = canvas.height / 2;  // max value is 2
+                
+                data.forEach((point) => {
+                    const x = point.time * timeScale;
+                    const y = canvas.height - (point.value * valueScale);
+                    ctx.lineTo(x, y);
+                });
+                
+                ctx.stroke();
+            }
+
+            // Draw labels
+            ctx.fillStyle = '#000';
+            ctx.font = '12px Arial';
+            ctx.fillText('Time (s)', canvas.width - 40, canvas.height - 10);
+            ctx.save();
+            ctx.translate(20, canvas.height/2);
+            ctx.rotate(-Math.PI/2);
+            ctx.fillText('Output', 0, 0);
+            ctx.restore();
+        }
+
+        function updateSimulation() {
+            currentTime += 0.05;
+            const elapsedTime = currentTime - stepStartTime;
+            
+            // Calculate first order response
+            const currentValue = stepStartValue + 
+                (targetValue - stepStartValue) * (1 - Math.exp(-elapsedTime/tau));
+            
+            data.push({
+                time: currentTime,
+                value: currentValue
+            });
+
+            // Keep only last 10 seconds of data
+            while (data.length > 0 && data[0].time < currentTime - 10) {
+                data.shift();
+            }
+
+            drawPlot();
+            animationId = requestAnimationFrame(updateSimulation);
+        }
+
+        function startSimulation() {
+            updateSimulation();
+        }
+
+        // Start the simulation
+        startSimulation();
+    </script>
+</body>
+</html>
