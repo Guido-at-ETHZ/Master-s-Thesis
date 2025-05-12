@@ -1,0 +1,97 @@
+<svg viewBox="0 0 800 600" xmlns="http://www.w3.org/2000/svg">
+  <!-- Plain background -->
+  <defs>
+  </defs>
+  <rect width="800" height="600" fill="white"/>
+
+  <!-- Title -->
+  <text x="400" y="35" font-family="Arial" font-size="24" text-anchor="middle" font-weight="bold" fill="#333">Temporal Dynamics Model of Endothelial Mechanotransduction</text>
+
+  <!-- Model Components -->
+  <g transform="translate(50, 80)">
+    <!-- Differential Equation Section -->
+    <rect x="0" y="0" width="700" height="100" rx="10" ry="10" fill="#e6f2ff" stroke="#0066cc" stroke-width="2"/>
+    <text x="20" y="30" font-family="Arial" font-size="18" font-weight="bold" fill="#0066cc">Core Differential Equation</text>
+    <text x="350" y="70" font-family="Arial" font-size="24" text-anchor="middle" font-style="italic" fill="#333">
+      dy/dt = (A<tspan baseline-shift="sub" font-size="18">max</tspan>(P) - y)/τ
+    </text>
+
+    <!-- Amax Function Section -->
+    <rect x="0" y="120" width="330" height="160" rx="10" ry="10" fill="#e6ffe6" stroke="#009933" stroke-width="2"/>
+    <text x="20" y="150" font-family="Arial" font-size="18" font-weight="bold" fill="#009933">Maximum Response Function</text>
+    <text x="20" y="180" font-family="Arial" font-size="14" fill="#333">
+      Known pressure values: Map lookup
+    </text>
+    <text x="20" y="210" font-family="Arial" font-size="14" fill="#333">
+      Other values: Linear interpolation
+    </text>
+    <text x="20" y="240" font-family="Arial" font-size="16" font-style="italic" fill="#333">
+      A<tspan baseline-shift="sub" font-size="12">max</tspan>(P) = max(1, m·P + c)
+    </text>
+    <text x="20" y="270" font-family="Arial" font-size="12" fill="#666">
+      Ensures biologically realistic response bounds
+    </text>
+
+    <!-- Time Constant Section -->
+    <rect x="370" y="120" width="330" height="160" rx="10" ry="10" fill="#fff2e6" stroke="#ff9933" stroke-width="2"/>
+    <text x="390" y="150" font-family="Arial" font-size="18" font-weight="bold" fill="#ff9933">Time Constant Scaling</text>
+    <text x="390" y="180" font-family="Arial" font-size="14" fill="#333">
+      Scales with maximum response
+    </text>
+    <text x="390" y="210" font-family="Arial" font-size="14" fill="#333">
+      Power law relationship
+    </text>
+    <text x="380" y="240" font-family="Arial" font-size="16" font-style="italic" fill="#333">
+      τ(A<tspan baseline-shift="sub" font-size="12">max</tspan>) = τ<tspan baseline-shift="sub" font-size="12">base</tspan> · (A<tspan baseline-shift="sub" font-size="12">max</tspan>/A<tspan baseline-shift="sub" font-size="12">ref</tspan>)<tspan baseline-shift="super" font-size="12">λ</tspan>
+    </text>
+    <text x="380" y="270" font-family="Arial" font-size="12" fill="#666">
+      Captures adaptation rate dependence on stimulus strength
+    </text>
+
+    <!-- System Response Graph -->
+    <rect x="0" y="300" width="700" height="180" rx="10" ry="10" fill="#f8f8f8" stroke="#666666" stroke-width="2"/>
+
+    <!-- Graph Title -->
+    <text x="350" y="325" font-family="Arial" font-size="18" font-weight="bold" text-anchor="middle" fill="#666">System Response Dynamics</text>
+
+    <!-- Coordinate System -->
+    <line x1="70" y1="440" x2="630" y2="440" stroke="#333" stroke-width="2"/>
+    <line x1="70" y1="440" x2="70" y2="340" stroke="#333" stroke-width="2"/>
+
+    <!-- Axis Labels -->
+    <text x="350" y="460" font-family="Arial" font-size="14" text-anchor="middle" fill="#444">Time</text>
+    <text x="55" y="400" font-family="Arial" font-size="14" text-anchor="middle" transform="rotate(-90, 30, 390)" fill="#444">Response y(t)</text>
+
+    <!-- Pressure Step Annotation -->
+    <path d="M 100,440 L 100,340 L 130,340 L 130,440"
+          fill="#ddd" fill-opacity="0.3" stroke="#666" stroke-width="1" stroke-dasharray="5,3"/>
+    <text x="115" y="335" font-family="Arial" font-size="12" text-anchor="middle" fill="#666">Pressure Step</text>
+
+    <!-- Response Curves -->
+    <!-- Step Response Curve (High Amax = 3.5) -->
+    <path d="M 70,440 L 130,440 Q 140,440 140,430 C 140,370 150,360 250,360 C 350,360 360,360 630,360"
+          fill="none" stroke="#0066cc" stroke-width="3"/>
+
+    <!-- Step Response Curve (Medium Amax = 2.5) -->
+    <path d="M 70,440 L 150,440 Q 160,440 160,430 C 160,395 170,390 250,390 C 350,390 360,390 630,390"
+          fill="none" stroke="#009933" stroke-width="3"/>
+
+    <!-- Step Response Curve (Low Amax = 1.5) -->
+    <path d="M 70,440 L 170,440 Q 180,440 180,430 C 180,420 190,415 250,415 C 350,415 360,415 630,415"
+          fill="none" stroke="#ff9933" stroke-width="3"/>
+
+    <!-- Amax Values - Attached to the end of each curve -->
+    <text x="635" y="363" font-family="Arial" font-size="12" fill="#0066cc">Amax = 3.5</text>
+    <text x="635" y="393" font-family="Arial" font-size="12" fill="#009933">Amax = 2.5</text>
+    <text x="635" y="418" font-family="Arial" font-size="12" fill="#ff9933">Amax = 1.5</text>
+  </g>
+
+  <!-- Key Parameters Box -->
+  <rect x="50" y="500" width="700" height="70" rx="10" ry="10" fill="#f2f2f2" stroke="#666666" stroke-width="1"/>
+  <text x="55" y="525" font-family="Arial" font-size="12" fill="#333">
+    <tspan font-weight="bold">Key Parameters:</tspan> y(t) = Cell response, P = Pressure/Wall Shear Stress, τ = Time constant, Amax = Maximum response level
+  </text>
+  <text x="55" y="555" font-family="Arial" font-size="12" fill="#666">
+    Higher Amax values result in slower adaptation rates and greater steady-state responses, different mechanotransduction dynamics
+  </text>
+</svg>
