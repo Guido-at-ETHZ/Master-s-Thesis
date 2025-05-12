@@ -20,16 +20,16 @@ markers = {15: 's', 25: 'o', 45: '^'}
 
 # Define a hybrid model for A_max calculation (uses map if P is known, else linear)
 def calculate_A_max_hybrid(P, slope, intercept, a_max_map_ref):
-    """
-    Calculates A_max based on pressure P.
-    For P values in a_max_map_ref, it uses the corresponding mapped value.
-    Otherwise, it uses linear interpolation/extrapolation.
-    Ensures A_max is at least 1.
-    """
     if P in a_max_map_ref:
         return a_max_map_ref[P]
     else:
         return max(1, slope * P + intercept)
+
+
+# Define a strictly linear model for A_max calculation
+def calculate_A_max_strictly_linear(P, slope, intercept,
+                                    dummy_map_arg=None):  # Added dummy_map_arg for consistent signature
+    return max(1, slope * P + intercept)
 
 
 # Calculate the linear model parameters for A_max based on the provided map
@@ -39,92 +39,102 @@ slope_fit, intercept_fit = np.polyfit(P_known, A_max_known, 1)
 print(f"Linear A_max model (fit to all known points): A_max = {slope_fit:.4f} * P + {intercept_fit:.4f}")
 
 
-# Define the second-order system model
-def second_order_model(y, t, P_val, omega_n, zeta, slope_param, intercept_param, a_max_calc_func, a_max_map_ref):
+# --- Second-Order System Model ---
+def model_core_logic_second_order(S, t, P_val,
+                                  omega_n_base, omega_n_sf,  # Natural frequency base and scaling factor
+                                  zeta_base, zeta_sf,  # Damping ratio base and scaling factor
+                                  slope_param, intercept_param,
+                                  a_max_calc_func, a_max_map_ref,
+                                  ref_A_max_for_scaling=1.0):  # Reference A_max for scaling omega_n and zeta
     """
-    Second-order ODE model represented as two first-order ODEs:
-    y[0] = position, y[1] = velocity
-
-    d²y/dt² + 2*zeta*omega_n*dy/dt + omega_n²*y = omega_n²*A_max
-
-    Converted to:
-    dy[0]/dt = y[1]
-    dy[1]/dt = omega_n²*A_max - omega_n²*y[0] - 2*zeta*omega_n*y[1]
+    Core ODE model logic for a second-order system:
+    dS[0]/dt = S[1]  (dy/dt = y_dot)
+    dS[1]/dt = omega_n^2 * A_max - 2*zeta*omega_n*S[1] - omega_n^2*S[0]
+    A_max is determined by P using the provided a_max_calc_func.
+    omega_n and zeta can scale with A_max.
+    S = [y, y_dot]
     """
-    # Get A_max based on pressure
+    y, y_dot = S
     A_max = a_max_calc_func(P_val, slope_param, intercept_param, a_max_map_ref)
 
-    # Extract position and velocity
-    position, velocity = y
+    # Calculate omega_n and zeta, potentially scaled by A_max
+    # Ensure A_max for scaling is positive; if A_max is 0 or negative, use base values.
+    current_A_max_for_scaling = A_max
+    if current_A_max_for_scaling <= 0:  # Avoid issues with log or power of non-positive A_max
+        omega_n = omega_n_base
+        zeta = zeta_base
+    else:
+        omega_n = omega_n_base * (current_A_max_for_scaling / ref_A_max_for_scaling) ** omega_n_sf
+        zeta = zeta_base * (current_A_max_for_scaling / ref_A_max_for_scaling) ** zeta_sf
 
-    # Calculate derivatives
-    dposition_dt = velocity
-    dvelocity_dt = omega_n ** 2 * A_max - omega_n ** 2 * position - 2 * zeta * omega_n * velocity
+    # Ensure omega_n and zeta are physically meaningful
+    omega_n = max(1e-6, omega_n)  # Must be positive
+    zeta = max(1e-6, zeta)  # Must be positive (though can be interesting if slightly negative for instability)
 
-    return [dposition_dt, dvelocity_dt]
+    # Second-order system equations
+    # dS[0]/dt = y_dot
+    # dS[1]/dt = d(y_dot)/dt = omega_n^2 * (A_max - y) - 2 * zeta * omega_n * y_dot
+    dydt = y_dot
+    dy_dot_dt = (omega_n ** 2 * A_max) - (2 * zeta * omega_n * y_dot) - (omega_n ** 2 * y)
+
+    return [dydt, dy_dot_dt]
 
 
-# Function to calculate the sum of squared errors
-def objective_function(params, current_P_values, current_y0, current_exp_data, current_slope,
-                       current_intercept, current_a_max_map_ref):
-    omega_n, zeta = params
+# Function to calculate the sum of squared errors for the second-order model
+def objective_function_second_order(params, current_P_values, current_y0_scalar, current_exp_data,
+                                    current_slope, current_intercept, current_a_max_map_ref):
+    omega_n_base, omega_n_sf, zeta_base, zeta_sf = params
     total_error = 0
+    initial_dy0 = 0.0  # Assuming system starts with zero derivative
 
     for P_val_opt in current_P_values:
         t_exp = current_exp_data[P_val_opt]['t']
         y_exp = current_exp_data[P_val_opt]['y']
 
-        # Initial conditions for second-order system: [position, velocity]
-        initial_conditions = [current_y0, 0.0]  # Starting position y0, zero initial velocity
+        # Initial conditions for the second-order system: [y(0), dy/dt(0)]
+        S0 = [current_y0_scalar, initial_dy0]
 
-        # Solve ODE system
-        solution = odeint(second_order_model, initial_conditions, t_exp,
-                          args=(P_val_opt, omega_n, zeta, current_slope, current_intercept,
+        # Optimization uses the hybrid A_max model
+        solution = odeint(model_core_logic_second_order, S0, t_exp,
+                          args=(P_val_opt, omega_n_base, omega_n_sf, zeta_base, zeta_sf,
+                                current_slope, current_intercept,
                                 calculate_A_max_hybrid, current_a_max_map_ref))
-
-        # Extract position values (first column of solution)
-        y_model = solution[:, 0]
-
-        # Calculate error
+        y_model = solution[:, 0]  # We only care about y (the first state variable) for error calculation
         error = np.sum((y_model - y_exp) ** 2)
         total_error += error
-
     return total_error
 
 
-# Initial parameter guess and bounds
-# omega_n (natural frequency), zeta (damping ratio)
-initial_params = [1.0, 0.7]  # Common starting values
-bounds = [(0.1, 10.0), (0.01, 2.0)]  # omega_n > 0, 0 < zeta < 2 (covers under, critical, and over-damping)
+# Initial parameter guess and bounds for the second-order model
+# params = [omega_n_base, omega_n_sf, zeta_base, zeta_sf]
+initial_params_second_order = [1.5, 0.1, 0.8, 0.1]  # Initial guesses
+bounds_second_order = [
+    (0.01, 10.0),  # omega_n_base (natural frequency)
+    (-1.0, 1.0),  # omega_n_sf (scaling factor for omega_n)
+    (0.05, 5.0),  # zeta_base (damping ratio) - allow underdamped to very overdamped
+    (-1.0, 1.0)  # zeta_sf (scaling factor for zeta)
+]
 
-# Optimize the parameters
-result = minimize(
-    objective_function,
-    initial_params,
+print("\nStarting optimization for Second-Order Model...")
+# Optimize the parameters for the second-order model
+result_second_order = minimize(
+    objective_function_second_order,
+    initial_params_second_order,
     args=(P_values, y0, exp_data, slope_fit, intercept_fit, A_max_map),
-    method='L-BFGS-B',
-    bounds=bounds
+    method='L-BFGS-B',  # or 'SLSQP' or other bounded methods
+    bounds=bounds_second_order
 )
-omega_n_opt, zeta_opt = result.x
+omega_n_base_opt, omega_n_sf_opt, zeta_base_opt, zeta_sf_opt = result_second_order.x
 
-print("\nOptimized Parameters (Second-Order System):")
-print(f"omega_n (natural frequency) = {omega_n_opt:.4f}")
-print(f"zeta (damping ratio) = {zeta_opt:.4f}")
-print(f"Final SSE = {result.fun:.4f}")
-
-# Classify the system based on damping ratio
-if zeta_opt < 1.0:
-    system_type = "Underdamped (oscillatory response)"
-    td = np.pi / (omega_n_opt * np.sqrt(1 - zeta_opt ** 2))  # Damped period
-    print(f"Damped period = {td:.4f}")
-elif zeta_opt == 1.0:
-    system_type = "Critically damped"
-elif zeta_opt > 1.0:
-    system_type = "Overdamped"
-print(f"System type: {system_type}")
+print("\nOptimized Parameters (Second-Order Model, Hybrid A_max for fitting):")
+print(f"omega_n_base = {omega_n_base_opt:.4f}")
+print(f"omega_n_scaling_factor = {omega_n_sf_opt:.4f}")
+print(f"zeta_base = {zeta_base_opt:.4f}")
+print(f"zeta_scaling_factor = {zeta_sf_opt:.4f}")
+print(f"Final SSE = {result_second_order.fun:.4f}")
 
 # --- Plotting Section ---
-t_plot = np.linspace(0, 8, 100)
+t_plot = np.linspace(0, 8, 200)  # More points for smoother curves
 original_P_values_plot = P_values
 new_P_values_plot = [5, 10, 20, 30, 35, 40, 50, 60, 75]
 all_P_values_for_plotting = np.unique(np.concatenate((original_P_values_plot, new_P_values_plot)))
@@ -142,8 +152,9 @@ for i, P_val_new in enumerate(new_P_values_plot):
     all_plot_colors[P_val_new] = cmap_colors[i]
     all_plot_markers[P_val_new] = 'x'
 
-# Plot 1: Second-Order System Response Comparison
+# Plot 1: Time-Response Comparison (Second-Order Model)
 plt.figure(figsize=(14, 9))
+initial_dy0_plot = 0.0  # Derivative at t=0 for plotting
 
 # Plot experimental data
 for P_val_exp in original_P_values_plot:
@@ -154,231 +165,181 @@ for P_val_exp in original_P_values_plot:
             s=120, zorder=10, label=f'Data P={P_val_exp}'
         )
 
-# Plot second-order model solutions
+# Plot second-order model solutions (optimized using hybrid A_max)
 for P_val_model in all_P_values_for_plotting:
-    initial_state = [y0, 0.0]  # Position y0, zero initial velocity
-    solution = odeint(second_order_model, initial_state, t_plot,
-                      args=(P_val_model, omega_n_opt, zeta_opt, slope_fit, intercept_fit,
-                            calculate_A_max_hybrid, A_max_map))
-
-    y_position = solution[:, 0]  # Extract position (first column)
-
+    S0_plot = [y0, initial_dy0_plot]
+    solution_so_hybrid_A_max = odeint(model_core_logic_second_order, S0_plot, t_plot,
+                                      args=(P_val_model, omega_n_base_opt, omega_n_sf_opt,
+                                            zeta_base_opt, zeta_sf_opt,
+                                            slope_fit, intercept_fit,
+                                            calculate_A_max_hybrid, A_max_map))
     linestyle = '--' if P_val_model in new_P_values_plot else '-'
-    label = f'Model P={P_val_model} (Second-Order)'
+    label = f'Model P={P_val_model} (2nd Order, Hybrid A_max)'
     if P_val_model in new_P_values_plot: label += ' Pred.'
-
-    plt.plot(t_plot, y_position, color=all_plot_colors.get(P_val_model, 'gray'),
+    plt.plot(t_plot, solution_so_hybrid_A_max[:, 0], color=all_plot_colors.get(P_val_model, 'gray'),
              linestyle=linestyle, label=label, linewidth=2, zorder=5)
+
+# Plot second-order model solutions using strictly linear A_max for comparison
+P_values_for_strict_linear_A_max_comparison = sorted(list(original_P_values_plot))
+for P_val_strict_comp in P_values_for_strict_linear_A_max_comparison:
+    S0_plot = [y0, initial_dy0_plot]
+    solution_so_strict_linear_A_max = odeint(model_core_logic_second_order, S0_plot, t_plot,
+                                             args=(P_val_strict_comp, omega_n_base_opt, omega_n_sf_opt,
+                                                   zeta_base_opt, zeta_sf_opt,
+                                                   slope_fit, intercept_fit,
+                                                   calculate_A_max_strictly_linear,
+                                                   A_max_map))  # A_max_map is dummy here
+    plt.plot(t_plot, solution_so_strict_linear_A_max[:, 0],
+             color=all_plot_colors.get(P_val_strict_comp, 'cyan'),
+             linestyle=':', linewidth=2.5, alpha=0.9,
+             label=f'Model P={P_val_strict_comp} (2nd Order, Strictly Linear A_max)')
 
 plt.xlabel('Time', fontsize=14)
 plt.ylabel('Response (y)', fontsize=14)
-plt.title(f'Second-Order System Response (ωn={omega_n_opt:.2f}, ζ={zeta_opt:.2f})', fontsize=16)
+plt.title('Second-Order System Response Model Comparison', fontsize=16)
 plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
 plt.legend(bbox_to_anchor=(1.03, 1), loc='upper left', borderaxespad=0.)
 plt.tight_layout(rect=[0, 0, 0.80, 1])
 plt.show()
 
-# Plot 2: Steady-state (A_max) vs Pressure
+# Plot 2: Steady-state (A_max) vs Pressure (This plot remains the same as it's about A_max definition)
 plt.figure(figsize=(10, 6))
 P_range_plot_ax = np.linspace(min(0, min(all_P_values_for_plotting) * 0.8), max(all_P_values_for_plotting) * 1.1, 200)
-
 A_max_hybrid_curve = [calculate_A_max_hybrid(P_val_calc, slope_fit, intercept_fit, A_max_map) for P_val_calc in
                       P_range_plot_ax]
 plt.plot(P_range_plot_ax, A_max_hybrid_curve, 'm-', linewidth=2,
-         label='Effective $A_{max}(P)$ (Hybrid Model)', zorder=5)
-
+         label='Effective $A_{max}(P)$ (Hybrid: Map then Linear)', zorder=5)
+A_max_strictly_linear_curve = [calculate_A_max_strictly_linear(P_val_calc, slope_fit, intercept_fit) for P_val_calc in
+                               P_range_plot_ax]
+plt.plot(P_range_plot_ax, A_max_strictly_linear_curve, 'g--', linewidth=2, label='Strictly Linear $A_{max}(P)$ Fit',
+         zorder=3)
 plt.scatter(P_known, A_max_known, color='red', s=100, zorder=10, label='Input $A_{max}$ points (from map)')
-
 plt.xlabel('Pressure (P)', fontsize=14)
 plt.ylabel('Steady-State Response ($A_{max}$)', fontsize=14)
-plt.title('$A_{max}$ vs. Pressure', fontsize=16)
+plt.title('$A_{max}$ vs. Pressure: Model Comparison', fontsize=16)
 plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
 plt.legend()
 plt.tight_layout()
 plt.show()
 
-# Plot 3: First-Order vs Second-Order System Comparison
-plt.figure(figsize=(14, 8))
-
-
-# Function to represent the original first-order model for comparison
-def first_order_model_for_comparison(y, t, P_val, tau_base, scaling_factor, slope_param, intercept_param,
-                                     a_max_calc_func, a_max_map_ref):
-    A_max = a_max_calc_func(P_val, slope_param, intercept_param, a_max_map_ref)
-    if A_max <= 0:
-        tau = tau_base
-    else:
-        tau = tau_base * (A_max / 1.0) ** scaling_factor
-    dydt = (A_max - y) / tau
-    return dydt
-
-
-# Use the parameters from your first-order model for comparison
-# These values are taken from your original code output
-tau_base_orig = 0.5  # Example value - replace with your actual optimized value
-scaling_factor_orig = 0.8  # Example value - replace with your actual optimized value
-
-# Plot for a few key pressure values to compare first vs second order
-key_pressures = [15, 25, 45]  # Original experimental pressures
-
-for P_val in key_pressures:
-    # Second-order model solution
-    initial_state_2nd = [y0, 0.0]
-    solution_2nd = odeint(second_order_model, initial_state_2nd, t_plot,
-                          args=(P_val, omega_n_opt, zeta_opt, slope_fit, intercept_fit,
-                                calculate_A_max_hybrid, A_max_map))
-    y_position_2nd = solution_2nd[:, 0]
-
-    # First-order model solution
-    solution_1st = odeint(first_order_model_for_comparison, y0, t_plot,
-                          args=(P_val, tau_base_orig, scaling_factor_orig, slope_fit, intercept_fit,
-                                calculate_A_max_hybrid, A_max_map))
-
-    # Plot both models
-    plt.plot(t_plot, y_position_2nd,
-             color=all_plot_colors.get(P_val, 'black'),
-             linestyle='-',
-             linewidth=2.5,
-             label=f'Second-Order P={P_val}')
-
-    plt.plot(t_plot, solution_1st,
-             color=all_plot_colors.get(P_val, 'black'),
-             linestyle=':',
-             linewidth=2,
-             label=f'First-Order P={P_val}')
-
-    # Plot experimental data if available
-    if P_val in exp_data:
-        plt.scatter(
-            exp_data[P_val]['t'], exp_data[P_val]['y'],
-            color=all_plot_colors.get(P_val, 'black'),
-            marker=all_plot_markers.get(P_val, '.'),
-            s=120, zorder=10,
-            label=f'Data P={P_val}'
-        )
-
-plt.xlabel('Time', fontsize=14)
-plt.ylabel('Response (y)', fontsize=14)
-plt.title('First-Order vs Second-Order System Comparison', fontsize=16)
-plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
-plt.legend()
-plt.tight_layout()
-plt.show()
-
-# Plot 4: Step Response Characteristics
+# Plot 3: Effective Omega_n and Zeta vs A_max
 plt.figure(figsize=(12, 8))
+calculated_A_max_values_plot = []
+calculated_omega_n_values_plot = []
+calculated_zeta_values_plot = []
+p_values_for_params_plot_sorted = sorted(list(all_P_values_for_plotting))
+ref_A_max_for_scaling = 1.0  # As used in the model
 
-# Generate step response for P=25 (middle value)
-P_step = 25
-initial_state = [y0, 0.0]
-solution_step = odeint(second_order_model, initial_state, t_plot,
-                       args=(P_step, omega_n_opt, zeta_opt, slope_fit, intercept_fit,
-                             calculate_A_max_hybrid, A_max_map))
-y_position_step = solution_step[:, 0]
-y_velocity_step = solution_step[:, 1]
+for P_val_param in p_values_for_params_plot_sorted:
+    A_max_val = calculate_A_max_hybrid(P_val_param, slope_fit, intercept_fit, A_max_map)
+    calculated_A_max_values_plot.append(A_max_val)
 
-# Calculate A_max for this pressure
-A_max_step = calculate_A_max_hybrid(P_step, slope_fit, intercept_fit, A_max_map)
+    current_A_max_for_scaling = A_max_val
+    if current_A_max_for_scaling <= 0:
+        omega_n_val_calc = omega_n_base_opt
+        zeta_val_calc = zeta_base_opt
+    else:
+        omega_n_val_calc = omega_n_base_opt * (current_A_max_for_scaling / ref_A_max_for_scaling) ** omega_n_sf_opt
+        zeta_val_calc = zeta_base_opt * (current_A_max_for_scaling / ref_A_max_for_scaling) ** zeta_sf_opt
 
-plt.plot(t_plot, y_position_step, 'b-', linewidth=3, label='Position (y)')
-plt.plot(t_plot, y_velocity_step, 'r--', linewidth=2, label='Velocity (dy/dt)')
-plt.axhline(y=A_max_step, color='k', linestyle=':', label=f'Steady-State (A_max={A_max_step:.2f})')
+    omega_n_val_calc = max(1e-6, omega_n_val_calc)
+    zeta_val_calc = max(1e-6, zeta_val_calc)
+    calculated_omega_n_values_plot.append(omega_n_val_calc)
+    calculated_zeta_values_plot.append(zeta_val_calc)
 
-# Mark key response characteristics (if underdamped)
-if zeta_opt < 1.0:
-    # Find first peak (if it exists)
-    peak_indices = []
-    for i in range(1, len(t_plot) - 1):
-        if y_velocity_step[i - 1] > 0 and y_velocity_step[i + 1] < 0:
-            peak_indices.append(i)
+fig, ax1 = plt.subplots(figsize=(12, 8))
+scatter_plot_colors_params = [all_plot_colors.get(P_val_p_c, 'grey') for P_val_p_c in p_values_for_params_plot_sorted]
 
-    if peak_indices:
-        first_peak_idx = peak_indices[0]
-        first_peak_time = t_plot[first_peak_idx]
-        first_peak_value = y_position_step[first_peak_idx]
+# Plot Omega_n
+color = 'tab:red'
+ax1.set_xlabel('Steady-State Value ($A_{max}$ from Hybrid Model)', fontsize=14)
+ax1.set_ylabel('Natural Frequency ($\\omega_n$)', color=color, fontsize=14)
+ax1.scatter(calculated_A_max_values_plot, calculated_omega_n_values_plot, c=scatter_plot_colors_params, s=100,
+            alpha=0.8, zorder=5, marker='o')
+ax1.tick_params(axis='y', labelcolor=color)
+# Add annotations for P values for omega_n
+for i, P_val_annot in enumerate(p_values_for_params_plot_sorted):
+    ax1.annotate(f'P={P_val_annot}', (calculated_A_max_values_plot[i], calculated_omega_n_values_plot[i]),
+                 xytext=(5, -10), textcoords='offset points', color=color)
 
-        # Mark peak time and overshoot
-        overshoot_percent = (first_peak_value - A_max_step) / (A_max_step - y0) * 100
-        plt.scatter(first_peak_time, first_peak_value, color='g', s=100, zorder=10)
-        plt.annotate(f'Peak Time={first_peak_time:.2f}s\nOvershoot={overshoot_percent:.1f}%',
-                     (first_peak_time, first_peak_value), xytext=(10, -30),
-                     textcoords='offset points', arrowprops=dict(arrowstyle='->'))
+# Create a second y-axis for Zeta
+ax2 = ax1.twinx()
+color = 'tab:blue'
+ax2.set_ylabel('Damping Ratio ($\\zeta$)', color=color, fontsize=14)
+ax2.scatter(calculated_A_max_values_plot, calculated_zeta_values_plot, c=scatter_plot_colors_params, s=100, alpha=0.8,
+            zorder=5, marker='^')
+ax2.tick_params(axis='y', labelcolor=color)
+# Add annotations for P values for zeta
+for i, P_val_annot in enumerate(p_values_for_params_plot_sorted):
+    ax2.annotate(f'P={P_val_annot}', (calculated_A_max_values_plot[i], calculated_zeta_values_plot[i]),
+                 xytext=(5, 10), textcoords='offset points', color=color)
 
-# Calculate rise time (10% to 90% of final value)
-rise_start = y0 + 0.1 * (A_max_step - y0)
-rise_end = y0 + 0.9 * (A_max_step - y0)
+# Plot curves for omega_n and zeta if A_max varies continuously
+min_A_max_p = min(m for m in calculated_A_max_values_plot if m > 0) if any(
+    m > 0 for m in calculated_A_max_values_plot) else 0.1
+max_A_max_p = max(calculated_A_max_values_plot) if calculated_A_max_values_plot else 1.0
+A_max_range_for_curve = np.linspace(max(0.01, min_A_max_p * 0.9), max_A_max_p * 1.1, 100)  # Ensure positive for scaling
 
-# Find times when response crosses these values
-rise_start_idx = np.where(y_position_step >= rise_start)[0][0]
-rise_end_idx = np.where(y_position_step >= rise_end)[0][0]
+omega_n_curve_vals = [
+    omega_n_base_opt * (ss_val / ref_A_max_for_scaling) ** omega_n_sf_opt if ss_val > 0 else omega_n_base_opt for ss_val
+    in A_max_range_for_curve]
+zeta_curve_vals = [zeta_base_opt * (ss_val / ref_A_max_for_scaling) ** zeta_sf_opt if ss_val > 0 else zeta_base_opt for
+                   ss_val in A_max_range_for_curve]
+omega_n_curve_vals = [max(1e-6, val) for val in omega_n_curve_vals]
+zeta_curve_vals = [max(1e-6, val) for val in zeta_curve_vals]
 
-rise_start_time = t_plot[rise_start_idx]
-rise_end_time = t_plot[rise_end_idx]
-rise_time = rise_end_time - rise_start_time
+ax1.plot(A_max_range_for_curve, omega_n_curve_vals, color='tab:red', linestyle='--',
+         label=f'$\\omega_n = {omega_n_base_opt:.2f} \\times (A_{{max}}/{ref_A_max_for_scaling})^{{{omega_n_sf_opt:.2f}}}$')
+ax2.plot(A_max_range_for_curve, zeta_curve_vals, color='tab:blue', linestyle=':',
+         label=f'$\\zeta = {zeta_base_opt:.2f} \\times (A_{{max}}/{ref_A_max_for_scaling})^{{{zeta_sf_opt:.2f}}}$')
 
-# Mark rise time
-plt.plot([rise_start_time, rise_end_time], [rise_start, rise_end], 'g-', linewidth=2)
-plt.annotate(f'Rise Time={rise_time:.2f}s',
-             ((rise_start_time + rise_end_time) / 2, (rise_start + rise_end) / 2),
-             xytext=(30, 0), textcoords='offset points', arrowprops=dict(arrowstyle='->'))
-
-plt.xlabel('Time', fontsize=14)
-plt.ylabel('Response', fontsize=14)
-plt.title(f'Second-Order Step Response (P={P_step}, ωn={omega_n_opt:.2f}, ζ={zeta_opt:.2f})', fontsize=16)
-plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
-plt.legend()
-plt.tight_layout()
+fig.suptitle('Second-Order Parameters $\\omega_n$ and $\\zeta$ vs. $A_{max}$ (Hybrid Model)', fontsize=16)
+ax1.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
+fig.legend(loc='upper center', bbox_to_anchor=(0.5, -0.05), ncol=2)  # Combined legend
+fig.tight_layout(rect=[0, 0.03, 1, 0.95])  # Adjust layout to make space for title and legend
 plt.show()
 
-# Print predicted steady-state values and response characteristics
-print("\nPredicted values and step response characteristics (Second-Order Model):")
-print("-" * 115)
-print(
-    f"{'Pressure':^10} | {'A_max (Hybrid)':^15} | {'ωn':^10} | {'ζ':^10} | {'Rise Time (10-90%)':^20} | {'Settling Time (95%)':^20} | {'Overshoot (%)':^15}")
-print("-" * 115)
-
+# Print predicted values for Second-Order Hybrid A_max model
+print("\nPredicted values (Second-Order Model, Hybrid A_max - used for fitting):")
+print("-" * 105)
+print(f"{'Pressure':^10} | {'A_max (Hybrid)':^18} | {'Omega_n (ωn)':^18} | {'Zeta (ζ)':^15} | {'Comment':^30}")
+print("-" * 105)
 for P_val_table in sorted(list(all_P_values_for_plotting)):
     A_max_val_table = calculate_A_max_hybrid(P_val_table, slope_fit, intercept_fit, A_max_map)
 
-    # Calculate step response
-    initial_state_table = [y0, 0.0]
-    t_table = np.linspace(0, 20, 500)  # Longer time for settling time calculation
-    solution_table = odeint(second_order_model, initial_state_table, t_table,
-                            args=(P_val_table, omega_n_opt, zeta_opt, slope_fit, intercept_fit,
-                                  calculate_A_max_hybrid, A_max_map))
-    y_position_table = solution_table[:, 0]
+    current_A_max_for_scaling_table = A_max_val_table
+    if current_A_max_for_scaling_table <= 0:
+        omega_n_table = omega_n_base_opt
+        zeta_table = zeta_base_opt
+    else:
+        omega_n_table = omega_n_base_opt * (current_A_max_for_scaling_table / ref_A_max_for_scaling) ** omega_n_sf_opt
+        zeta_table = zeta_base_opt * (current_A_max_for_scaling_table / ref_A_max_for_scaling) ** zeta_sf_opt
 
-    # Calculate rise time (10% to 90%)
-    rise_start_table = y0 + 0.1 * (A_max_val_table - y0)
-    rise_end_table = y0 + 0.9 * (A_max_val_table - y0)
+    omega_n_table = max(1e-6, omega_n_table)
+    zeta_table = max(1e-6, zeta_table)
 
-    try:
-        rise_start_idx_table = np.where(y_position_table >= rise_start_table)[0][0]
-        rise_end_idx_table = np.where(y_position_table >= rise_end_table)[0][0]
-        rise_time_table = t_table[rise_end_idx_table] - t_table[rise_start_idx_table]
-    except IndexError:
-        rise_time_table = np.nan
+    comment = ""
+    if zeta_table < 1:
+        comment = "Underdamped (overshoot likely)"
+    elif zeta_table == 1:
+        comment = "Critically damped"
+    else:
+        comment = "Overdamped (no overshoot)"
 
-    # Calculate settling time (95% of final value)
-    settling_band = 0.05 * (A_max_val_table - y0)
-    settling_min = A_max_val_table - settling_band
-    settling_max = A_max_val_table + settling_band
+    print(
+        f"{P_val_table:^10.1f} | {A_max_val_table:^18.3f} | {omega_n_table:^18.3f} | {zeta_table:^15.3f} | {comment:^30}")
+print("-" * 105)
 
-    # Find when the response permanently enters the settling band
-    settling_time = np.nan
-    for i in range(len(t_table) - 1, 0, -1):
-        if not (settling_min <= y_position_table[i] <= settling_max):
-            settling_time = t_table[i + 1] if i + 1 < len(t_table) else np.nan
-            break
+# Note: Plot 4 for "Time to 95% of Steady State" is more complex for a second-order system
+# as it depends on both omega_n and zeta, and doesn't have a simple analytical formula like -tau*ln(0.05).
+# It would require finding the time by checking the simulation or using approximations.
+# For simplicity, I'm omitting the direct adaptation of Plot 4.
+# You can infer steepness from omega_n and overshoot characteristics from zeta.
 
-    # Calculate overshoot
-    overshoot = 0.0
-    if zeta_opt < 1.0:  # Underdamped systems can have overshoot
-        max_response = np.max(y_position_table)
-        if max_response > A_max_val_table:
-            overshoot = (max_response - A_max_val_table) / (A_max_val_table - y0) * 100
-
-    print(f"{P_val_table:^10.1f} | {A_max_val_table:^15.3f} | {omega_n_opt:^10.3f} | {zeta_opt:^10.3f} | "
-          f"{rise_time_table:^20.3f} | {settling_time:^20.3f} | {overshoot:^15.2f}")
-
-print("-" * 115)
+print("\nConsiderations for Second-Order Model:")
+print("1. Steepness (Rise Time): Primarily influenced by omega_n. Higher omega_n generally leads to a faster rise.")
+print("2. Overshoot/Oscillations: Determined by zeta. zeta < 1 implies overshoot.")
+print(
+    "3. The experimental data for P=15 and P=25 shows non-monotonic behavior that might be challenging for a standard LTI second-order system to capture perfectly if A_max is a simple step target.")
+print(
+    "4. The 'Time to 95%' plot is not directly translated as it's more complex for second-order systems. Analyze omega_n for speed and zeta for shape.")
