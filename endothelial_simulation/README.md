@@ -127,3 +127,4 @@ The simulation produces various visualizations to analyze cellular responses:
 - Matplotlib
 - Pandas
 - Multiprocessing (for parallel parameter studies)
+- ffmpeg-python>=0.2.0
