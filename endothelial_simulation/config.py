@@ -68,10 +68,10 @@ class SimulationConfig:
         self.enable_senescence = True
 
         # Enable/disable senolytic effects (drugs that target senescent cells)
-        self.enable_senolytics = True
+        self.enable_senolytics = False
 
         # Enable/disable stem cell input
-        self.enable_stem_cells = True
+        self.enable_stem_cells = False
 
         # ----------------
         # Visualization settings
@@ -180,5 +180,5 @@ def create_spatial_only_config():
 def create_full_config():
     """Create a configuration with all components enabled."""
     config = SimulationConfig()
-    config.enable_all()
+    #config.enable_all()
     return config
