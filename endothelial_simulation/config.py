@@ -12,6 +12,31 @@ class SimulationConfig:
 
     def __init__(self):
         """Initialize configuration with default values."""
+        # ---------------
+        # temporary fix
+        # ----------------
+        # ----------------
+        # Temporal dynamics parameters
+        # ----------------
+        self.known_pressures = [15, 25, 45]
+        self.known_A_max = {15: 1.5, 25: 3.7, 45: 5.3}
+        self.initial_response = 1.0
+        self.tau_base = 30.0
+        self.lambda_scale = 0.8
+
+        # ----------------
+        # Population dynamics parameters
+        # ----------------
+        self.max_divisions = 15
+        self.proliferation_rate = 0.0006
+        self.carrying_capacity = 3000
+        self.death_rate_healthy = 0.0001
+        self.death_rate_senescent_tel = 0.00033
+        self.death_rate_senescent_stress = 0.00042
+        self.senescence_induction_factor = 0.0000008
+        self.senolytic_concentration = 5.0
+        self.senolytic_efficacy_tel = 1.0
+        self.senolytic_efficacy_stress = 1.2
         # ----------------
         # Simulation settings
         # ----------------
