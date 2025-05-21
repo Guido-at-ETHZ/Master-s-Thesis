@@ -4,11 +4,11 @@ Main simulator class for endothelial cell mechanotransduction.
 import numpy as np
 import time
 import os
-from .cell import Cell
-from .grid import Grid
-from ..models.temporal_dynamics import TemporalDynamicsModel
-from ..models.population_dynamics import PopulationDynamicsModel
-from ..models.spatial_properties import SpatialPropertiesModel
+from endothelial_simulation.core.cell import Cell
+from endothelial_simulation.core.grid import Grid
+from endothelial_simulation.models.temporal_dynamics import TemporalDynamicsModel
+from endothelial_simulation.models.population_dynamics import PopulationDynamicsModel
+from endothelial_simulation.models.spatial_properties import SpatialPropertiesModel
 
 
 class Simulator:
