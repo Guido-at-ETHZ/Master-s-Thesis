@@ -86,10 +86,10 @@ class SimulationConfig:
         self.plot_directory = "results"
 
         # Whether to create animations
-        self.create_animations = True
+        self.create_animations = False
 
         # Whether to save detailed metrics to CSV
-        self.save_metrics = True
+        self.save_metrics = False
 
         # Time units label for plot titles and axes
         self.time_unit = "minutes"

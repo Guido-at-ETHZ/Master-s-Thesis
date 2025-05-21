@@ -9,6 +9,9 @@ from endothelial_simulation.core.grid import Grid
 from endothelial_simulation.models.temporal_dynamics import TemporalDynamicsModel
 from endothelial_simulation.models.population_dynamics import PopulationDynamicsModel
 from endothelial_simulation.models.spatial_properties import SpatialPropertiesModel
+# Add imports for animation
+from endothelial_simulation.visualization import Plotter
+from endothelial_simulation.visualization.animations import create_detailed_cell_animation, create_metrics_animation
 
 
 class Simulator:
@@ -55,6 +58,11 @@ class Simulator:
             'value': 0.0,  # Current value
             'params': {}  # Pattern-specific parameters
         }
+
+        # Animation settings
+        self.record_frames = config.create_animations
+        self.frame_data = []
+        self.record_interval = 10  # Record every 10th frame
 
     def initialize(self, cell_count=None):
         """
@@ -214,6 +222,30 @@ class Simulator:
         if self.step_count % self.config.plot_interval == 0:
             self._record_state()
 
+        # Record frame data if animation is enabled
+        if self.record_frames and self.step_count % self.record_interval == 0:
+            # Collect cell data for this frame
+            cells_data = []
+
+            for cell_id, cell in self.grid.cells.items():
+                cells_data.append({
+                    'cell_id': cell_id,
+                    'position': cell.position,
+                    'orientation': cell.orientation,
+                    'aspect_ratio': cell.aspect_ratio,
+                    'area': cell.area,
+                    'is_senescent': cell.is_senescent,
+                    'senescence_cause': cell.senescence_cause
+                })
+
+            # Store frame data
+            self.frame_data.append({
+                'time': self.time,
+                'input_value': self.input_pattern['value'],
+                'cell_count': len(self.grid.cells),
+                'cells': cells_data
+            })
+
         return {
             'time': self.time,
             'step_count': self.step_count,
@@ -261,13 +293,51 @@ class Simulator:
 
         print(f"Simulation completed in {total_time:.1f} seconds")
 
+        # Create animations if enabled
+        if self.record_frames and self.frame_data:
+            print("Creating animations...")
+
+            # Create plotter
+            plotter = Plotter(self.config)
+
+            # Generate animation filenames based on input pattern
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            pattern_type = self.input_pattern['type']
+            pattern_value = self.input_pattern['value']
+
+            # Create detailed cell animation
+            cell_animation_path = os.path.join(
+                self.config.plot_directory,
+                f"cell_animation_{pattern_type}_{pattern_value}_{timestamp}.mp4"
+            )
+            create_detailed_cell_animation(
+                plotter,
+                self.frame_data,
+                self,
+                save_path=cell_animation_path
+            )
+            print(f"Cell animation created: {cell_animation_path}")
+
+            # Create metrics animation
+            metrics_animation_path = os.path.join(
+                self.config.plot_directory,
+                f"metrics_animation_{pattern_type}_{pattern_value}_{timestamp}.mp4"
+            )
+            create_metrics_animation(
+                plotter,
+                self,
+                save_path=metrics_animation_path
+            )
+            print(f"Metrics animation created: {metrics_animation_path}")
+
         # Return results
         return {
             'duration': duration,
             'steps': num_steps,
             'final_time': self.time,
             'execution_time': total_time,
-            'history': self.history
+            'history': self.history,
+            'animations_created': self.record_frames and len(self.frame_data) > 0
         }
 
     def _apply_shear_stress(self, shear_stress, duration):
