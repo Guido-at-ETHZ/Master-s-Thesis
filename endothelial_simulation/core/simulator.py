@@ -4,6 +4,7 @@ Main simulator class for endothelial cell mechanotransduction.
 import numpy as np
 import time
 import os
+import random
 from endothelial_simulation.core.cell import Cell
 from endothelial_simulation.core.grid import Grid
 from endothelial_simulation.models.temporal_dynamics import TemporalDynamicsModel
@@ -395,9 +396,78 @@ class Simulator:
             # Execute actions
             self._execute_population_actions(actions)
 
-    # Also, in the _record_state method, add morphometry metrics:
-    # Find the section "# Add spatial statistics if available"
-    # And add these additional metrics:
+    def _execute_population_actions(self, actions):
+        """
+        Execute population actions returned by the population dynamics model.
+
+        Parameters:
+            actions: Dictionary with 'births', 'deaths', and 'senescence' actions
+        """
+        # Process birth actions
+        for birth_action in actions.get('births', []):
+            if birth_action['type'] == 'healthy':
+                # Create a new healthy cell
+                divisions = birth_action.get('divisions', 0)
+                self.grid.add_cell(
+                    position=None,  # Random position
+                    divisions=divisions,
+                    is_senescent=False,
+                    senescence_cause=None
+                )
+            elif birth_action['type'] == 'senescent':
+                # Create a new senescent cell
+                cause = birth_action.get('cause', 'stress')
+                divisions = self.config.max_divisions if cause == 'telomere' else 0
+                self.grid.add_cell(
+                    position=None,  # Random position
+                    divisions=divisions,
+                    is_senescent=True,
+                    senescence_cause=cause
+                )
+
+        # Process death actions
+        for death_action in actions.get('deaths', []):
+            death_type = death_action['type']
+            count = death_action['count']
+
+            # Find cells to remove based on type
+            candidates = []
+
+            if death_type == 'healthy':
+                target_divisions = death_action.get('divisions', 0)
+                candidates = [
+                    cell_id for cell_id, cell in self.grid.cells.items()
+                    if not cell.is_senescent and cell.divisions == target_divisions
+                ]
+            elif death_type == 'senescent':
+                target_cause = death_action.get('cause', 'stress')
+                candidates = [
+                    cell_id for cell_id, cell in self.grid.cells.items()
+                    if cell.is_senescent and cell.senescence_cause == target_cause
+                ]
+
+            # Remove random cells from candidates (up to count)
+            cells_to_remove = random.sample(candidates, min(count, len(candidates)))
+
+            for cell_id in cells_to_remove:
+                self.grid.remove_cell(cell_id)
+
+        # Process senescence actions (cells changing from healthy to senescent)
+        for senescence_action in actions.get('senescence', []):
+            # Find healthy cells to make senescent
+            healthy_cells = [
+                cell_id for cell_id, cell in self.grid.cells.items()
+                if not cell.is_senescent
+            ]
+
+            if healthy_cells:
+                # Select a random healthy cell
+                cell_id = random.choice(healthy_cells)
+                cell = self.grid.cells[cell_id]
+
+                # Make it senescent
+                cause = senescence_action.get('cause', 'stress')
+                cell.induce_senescence(cause)
 
     def _record_state(self):
         """

@@ -86,10 +86,10 @@ class SimulationConfig:
         self.plot_directory = "results"
 
         # Whether to create animations
-        self.create_animations = False
+        self.create_animations = True
 
         # Whether to save detailed metrics to CSV
-        self.save_metrics = False
+        self.save_metrics = True
 
         # Time units label for plot titles and axes
         self.time_unit = "minutes"
@@ -180,5 +180,5 @@ def create_spatial_only_config():
 def create_full_config():
     """Create a configuration with all components enabled."""
     config = SimulationConfig()
-    #config.enable_all()
+    config.enable_all()
     return config
