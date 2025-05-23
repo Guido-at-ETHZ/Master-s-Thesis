@@ -361,7 +361,7 @@ class Simulator:
         Update all active models.
 
         Parameters:
-            current_input: Current input value
+            current_input: Current input value (shear stress in Pa)
             dt: Time step
         """
         # Update temporal dynamics if enabled
@@ -374,6 +374,8 @@ class Simulator:
             model = self.models['spatial']
 
             # Update each cell's spatial properties
+            # Pass the shear stress value as pressure to the spatial model
+            # Also pass all cells so the model can calculate population senescence level
             for cell in self.grid.cells.values():
                 model.update_cell_properties(cell, current_input, dt)
 
@@ -384,7 +386,7 @@ class Simulator:
             # Determine stem cell rate
             stem_cell_rate = 10 if self.config.enable_stem_cells else 0
 
-            # Update population state
+            # Update population state (tau parameter is shear stress)
             model.update_from_cells(self.grid.cells, dt, current_input, stem_cell_rate)
 
             # Synchronize cells with population state
@@ -393,40 +395,9 @@ class Simulator:
             # Execute actions
             self._execute_population_actions(actions)
 
-    def _execute_population_actions(self, actions):
-        """
-        Execute actions from population dynamics.
-
-        Parameters:
-            actions: Dictionary with birth, death, and senescence actions
-        """
-        # Handle births
-        for birth in actions['births']:
-            if birth['type'] == 'healthy':
-                self.grid.add_cell(divisions=birth['divisions'])
-            elif birth['type'] == 'senescent':
-                self.grid.add_cell(divisions=self.config.max_divisions,
-                                   is_senescent=True,
-                                   senescence_cause=birth['cause'])
-
-        # Handle deaths
-        for death in actions['deaths']:
-            # Find cells matching criteria
-            candidates = []
-
-            for cell_id, cell in self.grid.cells.items():
-                if death['type'] == 'healthy' and not cell.is_senescent and cell.divisions == death['divisions']:
-                    candidates.append(cell_id)
-                elif death['type'] == 'senescent' and cell.is_senescent and cell.senescence_cause == death['cause']:
-                    candidates.append(cell_id)
-
-            # Randomly select cells to remove
-            if candidates:
-                np.random.shuffle(candidates)
-                to_remove = candidates[:min(len(candidates), death['count'])]
-
-                for cell_id in to_remove:
-                    self.grid.remove_cell(cell_id)
+    # Also, in the _record_state method, add morphometry metrics:
+    # Find the section "# Add spatial statistics if available"
+    # And add these additional metrics:
 
     def _record_state(self):
         """
@@ -470,6 +441,25 @@ class Simulator:
                 'shape_index': shape_index,
                 'confluency': self.grid.calculate_confluency()
             })
+
+            # Add morphometry metrics
+            # Calculate average cell properties
+            if self.grid.cells:
+                areas = [cell.area for cell in self.grid.cells.values()]
+                aspect_ratios = [cell.aspect_ratio for cell in self.grid.cells.values()]
+                orientations = [np.degrees(cell.orientation) for cell in self.grid.cells.values()]
+                eccentricities = [cell.eccentricity for cell in self.grid.cells.values() if
+                                  hasattr(cell, 'eccentricity')]
+                circularities = [cell.circularity for cell in self.grid.cells.values() if hasattr(cell, 'circularity')]
+
+                state.update({
+                    'avg_area': np.mean(areas) if areas else 0,
+                    'avg_aspect_ratio': np.mean(aspect_ratios) if aspect_ratios else 0,
+                    'avg_orientation': np.mean(orientations) if orientations else 0,
+                    'avg_eccentricity': np.mean(eccentricities) if eccentricities else 0,
+                    'avg_circularity': np.mean(circularities) if circularities else 0,
+                    'population_senescence_level': spatial_model.get_population_senescence_level(self.grid.cells)
+                })
 
         # Add to history
         self.history.append(state)

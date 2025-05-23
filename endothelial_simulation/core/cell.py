@@ -32,6 +32,8 @@ class Cell:
         self.aspect_ratio = 1.0  # Ratio of major axis to minor axis
         self.area = 100.0  # Cell area in square pixels
         self.perimeter = 0.0
+        self.eccentricity = 0.8  # Default eccentricity
+        self.circularity = 0.5   # Default circularity
 
         # Cell state properties
         self.age = 0.0  # Time since creation or last division
@@ -48,7 +50,7 @@ class Cell:
         self.local_shear_stress = 0.0  # Local wall shear stress experienced by this cell
         self.stress_exposure_time = 0.0  # Cumulative time exposed to high stress
 
-    def update_shape(self, orientation, aspect_ratio, area):
+    def update_shape(self, orientation, aspect_ratio, area, eccentricity=None, circularity=None):
         """
         Update the cell shape properties.
 
@@ -56,6 +58,8 @@ class Cell:
             orientation: Angle in radians
             aspect_ratio: Ratio of major axis to minor axis
             area: Cell area in square pixels
+            eccentricity: Cell eccentricity (optional)
+            circularity: Cell circularity (optional)
         """
         self.orientation = orientation
         self.aspect_ratio = aspect_ratio
@@ -68,6 +72,12 @@ class Cell:
         # Ramanujan's approximation for ellipse perimeter
         h = ((a - b) / (a + b)) ** 2
         self.perimeter = np.pi * (a + b) * (1 + (3 * h) / (10 + np.sqrt(4 - 3 * h)))
+
+        # Update eccentricity and circularity if provided
+        if eccentricity is not None:
+            self.eccentricity = eccentricity
+        if circularity is not None:
+            self.circularity = circularity
 
     def update_response(self, new_response):
         """
@@ -203,6 +213,8 @@ class Cell:
             'aspect_ratio': self.aspect_ratio,
             'area': self.area,
             'perimeter': self.perimeter,
+            'eccentricity': self.eccentricity,
+            'circularity': self.circularity,
             'age': self.age,
             'adhesion_strength': self.adhesion_strength,
             'response': self.response,

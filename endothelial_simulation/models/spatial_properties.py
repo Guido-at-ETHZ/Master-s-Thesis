@@ -1,5 +1,6 @@
 """
 Spatial properties model for endothelial cell mechanotransduction.
+Updated to include senescence and pressure-dependent morphometry.
 """
 import numpy as np
 
@@ -8,8 +9,8 @@ class SpatialPropertiesModel:
     """
     Model for spatial arrangement and morphological adaptations of endothelial cells.
 
-    This model calculates how mechanical forces influence cell orientation, aspect ratio,
-    and other geometric properties.
+    This model calculates how mechanical forces and senescence influence cell orientation,
+    aspect ratio, area, and other geometric properties.
     """
 
     def __init__(self, config):
@@ -21,160 +22,278 @@ class SpatialPropertiesModel:
         """
         self.config = config
 
-    def calculate_optimal_orientation(self, shear_stress, is_senescent=False):
+        # Define pressure points for interpolation
+        self.pressure_points = [0.0, 1.4]  # Pa
+
+        # Normal cell parameters at different pressures
+        self.normal_params = {
+            'area': {0.0: 500, 1.4: 1000},  # pixels
+            'aspect_ratio': {0.0: 1.803642, 1.4: 1.669303},
+            'eccentricity': {0.0: 0.8322278133, 1.4: 0.8007098915},
+            'circularity': {0.0: 0.4634693156, 1.4: 0.4579688549}
+        }
+
+        # Senescent cell parameters (constant, no pressure dependence)
+        self.senescent_params = {
+            'area': 2000,  # pixels
+            'orientation': 45,  # degrees
+            # For senescent cells, we need to infer reasonable values for these
+            # Based on the pattern, senescent cells are larger and more circular
+            'aspect_ratio': 1.4,  # Less elongated than normal cells
+            'eccentricity': 0.7,  # Less eccentric (more circular)
+            'circularity': 0.6   # More circular
+        }
+
+    def get_population_senescence_level(self, cells):
         """
-        Calculate the optimal cell orientation under given shear stress.
+        Calculate the senescence level of the population.
 
         Parameters:
-            shear_stress: Magnitude of wall shear stress (Pa)
-            is_senescent: Whether the cell is senescent
+            cells: Dictionary of Cell objects
 
         Returns:
-            Optimal orientation angle in radians (0 = aligned with flow)
+            Senescence level as a percentage (0-100)
         """
-        # Orientation is primarily determined by flow direction (0 radians = aligned with flow)
-        # Orientation approaches 0 (aligned with flow) as shear stress increases
+        if not cells:
+            return 0.0
 
-        # Baseline random orientation if no flow
-        if shear_stress < 0.2:
-            return np.random.uniform(-np.pi / 2, np.pi / 2)
+        total_cells = len(cells)
+        senescent_cells = sum(1 for cell in cells.values() if cell.is_senescent)
 
-        # Senescent cells have impaired ability to align with flow
-        if is_senescent:
-            # More random orientation even under flow
-            max_deviation = max(0.2, np.exp(-0.2 * shear_stress)) * np.pi / 2
-            return np.random.uniform(-max_deviation, max_deviation)
+        return (senescent_cells / total_cells) * 100
 
-        # For healthy cells, orientation becomes more aligned with flow as shear stress increases
-        # Small random deviation that decreases with increasing shear stress
-        max_deviation = np.exp(-0.5 * shear_stress) * np.pi / 4
-        return np.random.uniform(-max_deviation, max_deviation)
-
-    def calculate_optimal_aspect_ratio(self, shear_stress, orientation, is_senescent=False):
+    def interpolate_pressure_effect(self, param_name, pressure):
         """
-        Calculate the optimal cell aspect ratio under given conditions.
+        Linearly interpolate parameter value based on pressure.
 
         Parameters:
-            shear_stress: Magnitude of wall shear stress (Pa)
-            orientation: Cell orientation in radians
-            is_senescent: Whether the cell is senescent
+            param_name: Name of the parameter to interpolate
+            pressure: Applied pressure in Pa
 
         Returns:
-            Optimal aspect ratio (ratio of major axis to minor axis)
+            Interpolated parameter value
         """
-        # Base aspect ratio (no shear stress)
-        base_aspect_ratio = 1.2
+        if param_name not in self.normal_params:
+            raise ValueError(f"Unknown parameter: {param_name}")
 
-        # Senescent cells have impaired ability to elongate
-        if is_senescent:
-            max_aspect_ratio = 1.5
-            shear_effect = 0.3 * (1 - np.exp(-0.1 * shear_stress))
-            return base_aspect_ratio + shear_effect
+        # Get values at known pressure points
+        values = self.normal_params[param_name]
+        p0, p1 = self.pressure_points
+        v0, v1 = values[p0], values[p1]
 
-        # Maximum aspect ratio under high shear stress
-        max_aspect_ratio = 4.0
+        # Linear interpolation
+        if pressure <= p0:
+            return v0
+        elif pressure >= p1:
+            return v1
+        else:
+            # Linear interpolation formula
+            return v0 + (v1 - v0) * (pressure - p0) / (p1 - p0)
 
-        # Effect of shear stress on aspect ratio
-        # Saturating function: approaches max_aspect_ratio as shear stress increases
-        shear_effect = (max_aspect_ratio - base_aspect_ratio) * (1 - np.exp(-0.2 * shear_stress))
-
-        # Effect of orientation on aspect ratio
-        # Cells tend to be more elongated when aligned with flow (orientation ≈ 0)
-        # or perpendicular to flow (orientation ≈ π/2)
-        orientation_factor = np.cos(2 * orientation) ** 2
-
-        # Combine effects
-        aspect_ratio = base_aspect_ratio + shear_effect * orientation_factor
-
-        return aspect_ratio
-
-    def calculate_optimal_area(self, shear_stress, aspect_ratio, is_senescent=False):
+    def calculate_cell_orientation(self, senescence_level, pressure, is_senescent):
         """
-        Calculate the optimal cell area under given conditions.
+        Calculate cell orientation based on senescence level and pressure.
 
         Parameters:
-            shear_stress: Magnitude of wall shear stress (Pa)
+            senescence_level: Population senescence level (0-100%)
+            pressure: Applied pressure in Pa
+            is_senescent: Whether the individual cell is senescent
+
+        Returns:
+            Orientation in radians
+        """
+        # Baseline orientation formula (in degrees)
+        baseline_orientation_deg = 0.2250 * senescence_level + 22.5000
+
+        if is_senescent:
+            # Senescent cells have fixed orientation (no mechanoadaptation)
+            orientation_deg = 45.0  # As per specification
+        else:
+            # Normal cells: orientation depends on pressure
+            # At 0 Pa: use baseline formula
+            # At 1.4 Pa: cells align more with flow (lower angle)
+
+            if pressure <= 0:
+                orientation_deg = baseline_orientation_deg
+            else:
+                # Normal cells adapt under pressure
+                # Interpolate between baseline and more aligned state
+                # At 1.4 Pa, normal cells become more aligned
+                aligned_orientation = baseline_orientation_deg * 0.7  # 30% more aligned
+
+                # Linear interpolation based on pressure
+                factor = min(pressure / 1.4, 1.0)
+                orientation_deg = baseline_orientation_deg * (1 - factor) + aligned_orientation * factor
+
+        # Convert to radians
+        return np.radians(orientation_deg)
+
+    def calculate_cell_area(self, pressure, is_senescent, senescence_level=None):
+        """
+        Calculate cell area based on pressure and senescence state.
+
+        Parameters:
+            pressure: Applied pressure in Pa
+            is_senescent: Whether the individual cell is senescent
+            senescence_level: Population senescence level (0-100%) for partial senescence
+
+        Returns:
+            Cell area in pixels
+        """
+        if is_senescent:
+            # Senescent cells have fixed area (no mechanoadaptation)
+            return self.senescent_params['area']
+        else:
+            # Normal cells: area depends on pressure
+            return self.interpolate_pressure_effect('area', pressure)
+
+    def calculate_cell_aspect_ratio(self, pressure, is_senescent):
+        """
+        Calculate cell aspect ratio based on pressure and senescence state.
+
+        Parameters:
+            pressure: Applied pressure in Pa
+            is_senescent: Whether the individual cell is senescent
+
+        Returns:
+            Aspect ratio (major axis / minor axis)
+        """
+        if is_senescent:
+            # Senescent cells have fixed aspect ratio
+            return self.senescent_params['aspect_ratio']
+        else:
+            # Normal cells: aspect ratio depends on pressure
+            return self.interpolate_pressure_effect('aspect_ratio', pressure)
+
+    def calculate_cell_eccentricity(self, pressure, is_senescent):
+        """
+        Calculate cell eccentricity based on pressure and senescence state.
+
+        Parameters:
+            pressure: Applied pressure in Pa
+            is_senescent: Whether the individual cell is senescent
+
+        Returns:
+            Eccentricity value
+        """
+        if is_senescent:
+            return self.senescent_params['eccentricity']
+        else:
+            return self.interpolate_pressure_effect('eccentricity', pressure)
+
+    def calculate_cell_circularity(self, pressure, is_senescent):
+        """
+        Calculate cell circularity based on pressure and senescence state.
+
+        Parameters:
+            pressure: Applied pressure in Pa
+            is_senescent: Whether the individual cell is senescent
+
+        Returns:
+            Circularity value
+        """
+        if is_senescent:
+            return self.senescent_params['circularity']
+        else:
+            return self.interpolate_pressure_effect('circularity', pressure)
+
+    def calculate_cell_perimeter(self, area, aspect_ratio):
+        """
+        Calculate cell perimeter based on area and aspect ratio.
+
+        Parameters:
+            area: Cell area in pixels
             aspect_ratio: Cell aspect ratio
-            is_senescent: Whether the cell is senescent
 
         Returns:
-            Optimal cell area in square pixels
+            Cell perimeter in pixels
         """
-        # Base area for a healthy cell
-        base_area = 100.0  # square pixels
+        # Model cell as an ellipse
+        # Area = π * a * b, where a is semi-major axis, b is semi-minor axis
+        # aspect_ratio = a / b
 
-        # Senescent cells are significantly larger
-        if is_senescent:
-            # Senescent cells are 2-3x larger than healthy cells
-            return base_area * np.random.uniform(2.0, 3.0)
+        # From area and aspect ratio, calculate semi-axes
+        b = np.sqrt(area / (np.pi * aspect_ratio))
+        a = aspect_ratio * b
 
-        # Effect of shear stress on area
-        # Cells tend to become slightly smaller under high shear stress
-        shear_factor = max(0.8, 1.0 - 0.01 * shear_stress)
+        # Use Ramanujan's approximation for ellipse perimeter
+        h = ((a - b) / (a + b)) ** 2
+        perimeter = np.pi * (a + b) * (1 + (3 * h) / (10 + np.sqrt(4 - 3 * h)))
 
-        # Effect of aspect ratio on area
-        # More elongated cells tend to have slightly larger area
-        elongation_factor = 1.0 + 0.05 * (aspect_ratio - 1.0)
+        return perimeter
 
-        # Combine effects with some random variation
-        area = base_area * shear_factor * elongation_factor * np.random.uniform(0.9, 1.1)
-
-        return area
-
-    def calculate_optimal_properties(self, shear_stress, is_senescent=False):
+    def calculate_optimal_properties(self, pressure, is_senescent, cells=None):
         """
         Calculate all optimal cell properties under given conditions.
 
         Parameters:
-            shear_stress: Magnitude of wall shear stress (Pa)
+            pressure: Applied pressure in Pa
             is_senescent: Whether the cell is senescent
+            cells: Dictionary of all cells (for population senescence level)
 
         Returns:
             Dictionary of optimal property values
         """
-        # Calculate orientation first
-        orientation = self.calculate_optimal_orientation(shear_stress, is_senescent)
+        # Get population senescence level if cells provided
+        senescence_level = self.get_population_senescence_level(cells) if cells else 0
 
-        # Calculate aspect ratio based on orientation
-        aspect_ratio = self.calculate_optimal_aspect_ratio(shear_stress, orientation, is_senescent)
+        # Calculate orientation
+        orientation = self.calculate_cell_orientation(senescence_level, pressure, is_senescent)
 
-        # Calculate area based on aspect ratio
-        area = self.calculate_optimal_area(shear_stress, aspect_ratio, is_senescent)
+        # Calculate other properties
+        area = self.calculate_cell_area(pressure, is_senescent, senescence_level)
+        aspect_ratio = self.calculate_cell_aspect_ratio(pressure, is_senescent)
+        eccentricity = self.calculate_cell_eccentricity(pressure, is_senescent)
+        circularity = self.calculate_cell_circularity(pressure, is_senescent)
 
         # Calculate perimeter based on area and aspect ratio
-        # Approximation for ellipse perimeter
-        a = np.sqrt(area * aspect_ratio)  # Semi-major axis
-        b = area / a  # Semi-minor axis
+        perimeter = self.calculate_cell_perimeter(area, aspect_ratio)
 
-        # Ramanujan's approximation for ellipse perimeter
-        h = ((a - b) / (a + b)) ** 2
-        perimeter = np.pi * (a + b) * (1 + (3 * h) / (10 + np.sqrt(4 - 3 * h)))
+        # Add some random variation for biological realism
+        if not is_senescent:
+            # Normal cells have more variation
+            area *= np.random.uniform(0.9, 1.1)
+            aspect_ratio *= np.random.uniform(0.95, 1.05)
+        else:
+            # Senescent cells have less variation
+            area *= np.random.uniform(0.95, 1.05)
+            aspect_ratio *= np.random.uniform(0.98, 1.02)
 
         return {
             'orientation': orientation,
             'aspect_ratio': aspect_ratio,
             'area': area,
-            'perimeter': perimeter
+            'perimeter': perimeter,
+            'eccentricity': eccentricity,
+            'circularity': circularity
         }
 
-    def update_cell_properties(self, cell, shear_stress, dt, adaptation_rate=0.2):
+    def update_cell_properties(self, cell, pressure, dt, adaptation_rate=0.2):
         """
-        Update a cell's spatial properties based on shear stress.
+        Update a cell's spatial properties based on pressure.
 
         Parameters:
             cell: Cell object to update
-            shear_stress: Magnitude of wall shear stress (Pa)
+            pressure: Applied pressure in Pa
             dt: Time step
             adaptation_rate: Rate at which properties adapt to optimal values
 
         Returns:
             Dictionary of updated property values
         """
-        # Calculate optimal properties
-        optimal = self.calculate_optimal_properties(shear_stress, cell.is_senescent)
+        # Get all cells from the grid (assuming cell has access to grid through some mechanism)
+        # For now, we'll calculate properties without population context
+        # In practice, you'd pass the cells dictionary here
 
-        # For each property, move current value toward optimal value
-        # Use exponential approach: change is proportional to distance from optimal
+        # Calculate optimal properties
+        optimal = self.calculate_optimal_properties(pressure, cell.is_senescent)
+
+        # For senescent cells with mechanoadaptation inhibited,
+        # properties change more slowly or not at all
+        if cell.is_senescent:
+            adaptation_rate *= 0.1  # 90% reduction in adaptation rate
+
+        # Current properties
         current_properties = {
             'orientation': cell.orientation,
             'aspect_ratio': cell.aspect_ratio,
@@ -183,10 +302,11 @@ class SpatialPropertiesModel:
 
         updated_properties = {}
 
+        # Update each property with adaptation
         for prop, current in current_properties.items():
             optimal_value = optimal[prop]
 
-            # For orientation, handle circular/angular nature
+            # For orientation, handle circular nature
             if prop == 'orientation':
                 # Calculate difference accounting for circular nature of angles
                 diff = optimal_value - current
@@ -203,11 +323,19 @@ class SpatialPropertiesModel:
                 diff = optimal_value - current
                 updated_properties[prop] = current + adaptation_rate * diff * dt
 
-        # Calculate updated perimeter based on area and aspect ratio
-        a = np.sqrt(updated_properties['area'] * updated_properties['aspect_ratio'])
-        b = updated_properties['area'] / a
-        h = ((a - b) / (a + b)) ** 2
-        updated_properties['perimeter'] = np.pi * (a + b) * (1 + (3 * h) / (10 + np.sqrt(4 - 3 * h)))
+        # Ensure positive values for size-related properties
+        updated_properties['area'] = max(100, updated_properties['area'])
+        updated_properties['aspect_ratio'] = max(1.0, updated_properties['aspect_ratio'])
+
+        # Recalculate perimeter based on updated area and aspect ratio
+        updated_properties['perimeter'] = self.calculate_cell_perimeter(
+            updated_properties['area'],
+            updated_properties['aspect_ratio']
+        )
+
+        # Update eccentricity and circularity
+        updated_properties['eccentricity'] = optimal['eccentricity']
+        updated_properties['circularity'] = optimal['circularity']
 
         # Update cell properties
         cell.update_shape(
@@ -218,25 +346,9 @@ class SpatialPropertiesModel:
 
         return updated_properties
 
-    def calculate_elongation_index(self, aspect_ratio):
-        """
-        Calculate the elongation index from aspect ratio.
-
-        Elongation index = (L-W)/(L+W) where L is length and W is width.
-
-        Parameters:
-            aspect_ratio: Ratio of major axis to minor axis
-
-        Returns:
-            Elongation index (0-1)
-        """
-        return (aspect_ratio - 1) / (aspect_ratio + 1)
-
     def calculate_alignment_index(self, cells, flow_direction=0):
         """
         Calculate the alignment index for a collection of cells.
-
-        Alignment index is a measure of how well cells are aligned with the flow direction.
 
         Parameters:
             cells: Dictionary or list of Cell objects
@@ -313,3 +425,43 @@ class SpatialPropertiesModel:
             return shape_sum / cell_count
         else:
             return 0
+
+    def calculate_population_averaged_property(self, cells, pressure, property_name):
+        """
+        Calculate population-averaged property considering partial senescence.
+
+        This implements the linear combination formula for the population:
+        Value_population = (S/100) * Value_senescent + (1 - S/100) * Value_normal(P)
+
+        Parameters:
+            cells: Dictionary of Cell objects
+            pressure: Applied pressure in Pa
+            property_name: Name of the property to calculate
+
+        Returns:
+            Population-averaged property value
+        """
+        if not cells:
+            return 0
+
+        senescence_level = self.get_population_senescence_level(cells)
+        S = senescence_level / 100  # Convert to fraction
+
+        # Get values for normal and senescent cells
+        if property_name == 'area':
+            value_normal = self.interpolate_pressure_effect('area', pressure)
+            value_senescent = self.senescent_params['area']
+        elif property_name == 'aspect_ratio':
+            value_normal = self.interpolate_pressure_effect('aspect_ratio', pressure)
+            value_senescent = self.senescent_params['aspect_ratio']
+        elif property_name == 'eccentricity':
+            value_normal = self.interpolate_pressure_effect('eccentricity', pressure)
+            value_senescent = self.senescent_params['eccentricity']
+        elif property_name == 'circularity':
+            value_normal = self.interpolate_pressure_effect('circularity', pressure)
+            value_senescent = self.senescent_params['circularity']
+        else:
+            raise ValueError(f"Unknown property: {property_name}")
+
+        # Linear combination
+        return S * value_senescent + (1 - S) * value_normal
