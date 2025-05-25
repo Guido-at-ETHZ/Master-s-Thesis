@@ -1,5 +1,5 @@
 """
-Main simulator class for endothelial cell mechanotransduction.
+Main simulator class for endothelial cell mechanotransduction with mosaic structure.
 """
 import numpy as np
 import time
@@ -10,14 +10,14 @@ from endothelial_simulation.core.grid import Grid
 from endothelial_simulation.models.temporal_dynamics import TemporalDynamicsModel
 from endothelial_simulation.models.population_dynamics import PopulationDynamicsModel
 from endothelial_simulation.models.spatial_properties import SpatialPropertiesModel
-# Add imports for animation
 from endothelial_simulation.visualization import Plotter
 from endothelial_simulation.visualization.animations import create_detailed_cell_animation, create_metrics_animation
 
 
 class Simulator:
     """
-    Main simulator class that integrates different model components and handles time evolution.
+    Main simulator class that integrates different model components and handles time evolution
+    with mosaic cell structure.
     """
 
     def __init__(self, config):
@@ -29,7 +29,7 @@ class Simulator:
         """
         self.config = config
 
-        # Create grid for spatial representation
+        # Create grid for spatial representation with mosaic structure
         self.grid = Grid(
             width=config.grid_size[0],
             height=config.grid_size[1],
@@ -55,40 +55,51 @@ class Simulator:
 
         # Input pattern information
         self.input_pattern = {
-            'type': 'constant',  # 'constant', 'step', 'ramp', 'oscillatory'
-            'value': 0.0,  # Current value
-            'params': {}  # Pattern-specific parameters
+            'type': 'constant',
+            'value': 0.0,
+            'params': {}
         }
 
         # Animation settings
         self.record_frames = config.create_animations
         self.frame_data = []
-        self.record_interval = 10  # Record every 10th frame
+        self.record_interval = 10
+
+        # Mosaic-specific parameters
+        self.tessellation_update_interval = 5  # Update tessellation every N steps
+        self.position_optimization_interval = 20  # Optimize positions every N steps
+        self.last_tessellation_update = 0
+        self.last_position_optimization = 0
 
     def initialize(self, cell_count=None):
         """
-        Initialize the simulation with cells.
+        Initialize the simulation with cells using mosaic structure.
 
         Parameters:
             cell_count: Number of cells to create (default: from config)
         """
-        # Use default from config if not specified
         if cell_count is None:
             cell_count = self.config.initial_cell_count
 
-        # Populate grid with initial cells
-        self.grid.populate_grid(cell_count)
+        # Calculate base area per cell
+        total_area = self.grid.width * self.grid.height
+        base_area_per_cell = total_area / cell_count
+
+        # Create area distribution function
+        def area_distribution():
+            return np.random.uniform(base_area_per_cell * 0.7, base_area_per_cell * 1.3)
+
+        # Populate grid with initial cells using improved distribution
+        self.grid.populate_grid(cell_count, area_distribution=area_distribution)
+
+        # Initial adaptation
+        self.grid.adapt_cell_properties()
 
         # Record initial state
         self._record_state()
 
     def set_constant_input(self, value):
-        """
-        Set a constant input pattern.
-
-        Parameters:
-            value: Constant shear stress value (Pa)
-        """
+        """Set a constant input pattern."""
         self.input_pattern = {
             'type': 'constant',
             'value': value,
@@ -98,14 +109,7 @@ class Simulator:
         }
 
     def set_step_input(self, initial_value, final_value, step_time):
-        """
-        Set a step input pattern.
-
-        Parameters:
-            initial_value: Initial shear stress value (Pa)
-            final_value: Final shear stress value after step (Pa)
-            step_time: Time at which the step occurs
-        """
+        """Set a step input pattern."""
         self.input_pattern = {
             'type': 'step',
             'value': initial_value,
@@ -117,15 +121,7 @@ class Simulator:
         }
 
     def set_ramp_input(self, initial_value, final_value, ramp_start_time, ramp_end_time):
-        """
-        Set a ramp input pattern.
-
-        Parameters:
-            initial_value: Initial shear stress value (Pa)
-            final_value: Final shear stress value after ramp (Pa)
-            ramp_start_time: Time at which the ramp begins
-            ramp_end_time: Time at which the ramp ends
-        """
+        """Set a ramp input pattern."""
         self.input_pattern = {
             'type': 'ramp',
             'value': initial_value,
@@ -138,15 +134,7 @@ class Simulator:
         }
 
     def set_oscillatory_input(self, base_value, amplitude, frequency, phase=0):
-        """
-        Set an oscillatory input pattern.
-
-        Parameters:
-            base_value: Base shear stress value (Pa)
-            amplitude: Oscillation amplitude (Pa)
-            frequency: Oscillation frequency (Hz)
-            phase: Initial phase (radians)
-        """
+        """Set an oscillatory input pattern."""
         self.input_pattern = {
             'type': 'oscillatory',
             'value': base_value,
@@ -159,12 +147,7 @@ class Simulator:
         }
 
     def update_input_value(self):
-        """
-        Update the current input value based on the input pattern and current time.
-
-        Returns:
-            Current input value
-        """
+        """Update the current input value based on the input pattern and current time."""
         pattern_type = self.input_pattern['type']
         params = self.input_pattern['params']
 
@@ -183,7 +166,6 @@ class Simulator:
             elif self.time > params['ramp_end_time']:
                 self.input_pattern['value'] = params['final_value']
             else:
-                # Linear interpolation during ramp
                 progress = (self.time - params['ramp_start_time']) / (
                             params['ramp_end_time'] - params['ramp_start_time'])
                 self.input_pattern['value'] = params['initial_value'] + progress * (
@@ -203,10 +185,7 @@ class Simulator:
         Returns:
             Dictionary with updated state information
         """
-        # Get current time step
         dt = self.config.time_step
-
-        # Update input value
         current_input = self.update_input_value()
 
         # Apply shear stress to cells
@@ -214,6 +193,9 @@ class Simulator:
 
         # Update models
         self._update_models(current_input, dt)
+
+        # Update mosaic structure periodically
+        self._update_mosaic_structure()
 
         # Update time and step count
         self.time += dt
@@ -225,27 +207,7 @@ class Simulator:
 
         # Record frame data if animation is enabled
         if self.record_frames and self.step_count % self.record_interval == 0:
-            # Collect cell data for this frame
-            cells_data = []
-
-            for cell_id, cell in self.grid.cells.items():
-                cells_data.append({
-                    'cell_id': cell_id,
-                    'position': cell.position,
-                    'orientation': cell.orientation,
-                    'aspect_ratio': cell.aspect_ratio,
-                    'area': cell.area,
-                    'is_senescent': cell.is_senescent,
-                    'senescence_cause': cell.senescence_cause
-                })
-
-            # Store frame data
-            self.frame_data.append({
-                'time': self.time,
-                'input_value': self.input_pattern['value'],
-                'cell_count': len(self.grid.cells),
-                'cells': cells_data
-            })
+            self._record_frame_data()
 
         return {
             'time': self.time,
@@ -253,6 +215,49 @@ class Simulator:
             'input_value': current_input,
             'cell_count': len(self.grid.cells)
         }
+
+    def _update_mosaic_structure(self):
+        """Update the mosaic structure periodically."""
+        # Update tessellation periodically
+        if self.step_count - self.last_tessellation_update >= self.tessellation_update_interval:
+            self.grid.adapt_cell_properties()
+            self.grid.add_controlled_variability()
+            self.grid._update_voronoi_tessellation()
+            self.last_tessellation_update = self.step_count
+
+        # Optimize positions less frequently
+        if self.step_count - self.last_position_optimization >= self.position_optimization_interval:
+            self.grid.optimize_cell_positions(iterations=2)
+            self.last_position_optimization = self.step_count
+
+    def _record_frame_data(self):
+        """Record frame data for animation."""
+        cells_data = []
+
+        for cell_id, cell in self.grid.cells.items():
+            cells_data.append({
+                'cell_id': cell_id,
+                'position': cell.position,
+                'centroid': cell.centroid,
+                'territory_pixels': cell.territory_pixels,
+                'boundary_points': cell.boundary_points,
+                'actual_orientation': cell.actual_orientation,
+                'target_orientation': cell.target_orientation,
+                'actual_aspect_ratio': cell.actual_aspect_ratio,
+                'actual_area': cell.actual_area,
+                'target_area': cell.target_area,
+                'is_senescent': cell.is_senescent,
+                'senescence_cause': cell.senescence_cause,
+                'compression_ratio': cell.compression_ratio
+            })
+
+        self.frame_data.append({
+            'time': self.time,
+            'input_value': self.input_pattern['value'],
+            'cell_count': len(self.grid.cells),
+            'cells': cells_data,
+            'grid_stats': self.grid.get_grid_statistics()
+        })
 
     def run(self, duration=None):
         """
@@ -271,7 +276,7 @@ class Simulator:
         # Calculate number of steps
         num_steps = int(duration / self.config.time_step)
 
-        print(f"Running simulation for {duration} time units ({num_steps} steps)...")
+        print(f"Running mosaic simulation for {duration} time units ({num_steps} steps)...")
         start_time = time.time()
 
         # Run steps
@@ -285,51 +290,25 @@ class Simulator:
                 estimated_total = elapsed / (i + 1) * num_steps
                 remaining = estimated_total - elapsed
 
+                # Get current grid statistics
+                grid_stats = self.grid.get_grid_statistics()
+                packing_eff = grid_stats.get('packing_efficiency', 0)
+                global_pressure = grid_stats.get('global_pressure', 1.0)
+
                 print(f"Progress: {progress:.1f}% (Step {i + 1}/{num_steps}), "
                       f"Time: {elapsed:.1f}s, Remaining: {remaining:.1f}s, "
-                      f"Cells: {step_info['cell_count']}")
+                      f"Cells: {step_info['cell_count']}, "
+                      f"Packing: {packing_eff:.2f}, Pressure: {global_pressure:.2f}")
 
         end_time = time.time()
         total_time = end_time - start_time
 
-        print(f"Simulation completed in {total_time:.1f} seconds")
+        print(f"Mosaic simulation completed in {total_time:.1f} seconds")
 
         # Create animations if enabled
         if self.record_frames and self.frame_data:
-            print("Creating animations...")
-
-            # Create plotter
-            plotter = Plotter(self.config)
-
-            # Generate animation filenames based on input pattern
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            pattern_type = self.input_pattern['type']
-            pattern_value = self.input_pattern['value']
-
-            # Create detailed cell animation
-            cell_animation_path = os.path.join(
-                self.config.plot_directory,
-                f"cell_animation_{pattern_type}_{pattern_value}_{timestamp}.mp4"
-            )
-            create_detailed_cell_animation(
-                plotter,
-                self.frame_data,
-                self,
-                save_path=cell_animation_path
-            )
-            print(f"Cell animation created: {cell_animation_path}")
-
-            # Create metrics animation
-            metrics_animation_path = os.path.join(
-                self.config.plot_directory,
-                f"metrics_animation_{pattern_type}_{pattern_value}_{timestamp}.mp4"
-            )
-            create_metrics_animation(
-                plotter,
-                self,
-                save_path=metrics_animation_path
-            )
-            print(f"Metrics animation created: {metrics_animation_path}")
+            print("Creating mosaic animations...")
+            self._create_animations()
 
         # Return results
         return {
@@ -338,8 +317,161 @@ class Simulator:
             'final_time': self.time,
             'execution_time': total_time,
             'history': self.history,
-            'animations_created': self.record_frames and len(self.frame_data) > 0
+            'animations_created': self.record_frames and len(self.frame_data) > 0,
+            'final_grid_stats': self.grid.get_grid_statistics()
         }
+
+    def _create_animations(self):
+        """Create animations for the mosaic simulation."""
+        plotter = Plotter(self.config)
+
+        # Generate animation filenames based on input pattern
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        pattern_type = self.input_pattern['type']
+        pattern_value = self.input_pattern['value']
+
+        # Create detailed cell animation (mosaic version)
+        cell_animation_path = os.path.join(
+            self.config.plot_directory,
+            f"mosaic_animation_{pattern_type}_{pattern_value}_{timestamp}.mp4"
+        )
+        self._create_mosaic_animation(cell_animation_path)
+        print(f"Mosaic animation created: {cell_animation_path}")
+
+        # Create metrics animation
+        metrics_animation_path = os.path.join(
+            self.config.plot_directory,
+            f"metrics_animation_{pattern_type}_{pattern_value}_{timestamp}.mp4"
+        )
+        create_metrics_animation(
+            plotter,
+            self,
+            save_path=metrics_animation_path
+        )
+        print(f"Metrics animation created: {metrics_animation_path}")
+
+    def _create_mosaic_animation(self, save_path):
+        """Create a mosaic-specific animation showing cell territories."""
+        try:
+            import matplotlib.animation as animation
+            import matplotlib.pyplot as plt
+            from matplotlib.patches import Polygon
+            from scipy.spatial import ConvexHull
+
+            # Create figure
+            fig, ax = plt.subplots(figsize=(12, 12))
+            ax.set_xlim(0, self.grid.width)
+            ax.set_ylim(0, self.grid.height)
+            ax.set_aspect('equal')
+
+            # Color mapping
+            color_map = {'healthy': 'green', 'telomere': 'red', 'stress': 'blue'}
+
+            def update_frame(frame_idx):
+                ax.clear()
+                ax.set_xlim(0, self.grid.width)
+                ax.set_ylim(0, self.grid.height)
+                ax.set_aspect('equal')
+
+                # Get frame data
+                frame = self.frame_data[min(frame_idx, len(self.frame_data) - 1)]
+
+                # Plot each cell's territory
+                for cell_data in frame['cells']:
+                    # Determine cell color
+                    if not cell_data['is_senescent']:
+                        color = color_map['healthy']
+                        alpha = 0.6
+                    elif cell_data['senescence_cause'] == 'telomere':
+                        color = color_map['telomere']
+                        alpha = 0.8
+                    else:
+                        color = color_map['stress']
+                        alpha = 0.8
+
+                    # Plot territory
+                    territory_pixels = cell_data['territory_pixels']
+                    if len(territory_pixels) > 10:  # Only for larger territories
+                        try:
+                            # Create convex hull for visualization
+                            points = np.array(territory_pixels)
+                            hull = ConvexHull(points)
+                            hull_points = points[hull.vertices]
+
+                            polygon = Polygon(hull_points, facecolor=color, alpha=alpha,
+                                            edgecolor='black', linewidth=0.5)
+                            ax.add_patch(polygon)
+                        except:
+                            # Fallback: scatter plot
+                            points = np.array(territory_pixels)
+                            ax.scatter(points[:, 0], points[:, 1], c=color, alpha=alpha, s=1, marker='s')
+
+                    # Plot orientation vector
+                    if cell_data['centroid'] is not None:
+                        cx, cy = cell_data['centroid']
+                        orientation = cell_data['actual_orientation']
+                        vector_length = np.sqrt(cell_data['actual_area']) * 0.2
+                        dx = vector_length * np.cos(orientation)
+                        dy = vector_length * np.sin(orientation)
+
+                        ax.arrow(cx, cy, dx, dy, head_width=vector_length*0.1,
+                                head_length=vector_length*0.1, fc='white', ec='black',
+                                alpha=0.8, width=vector_length*0.02)
+
+                # Add legend
+                from matplotlib.patches import Patch
+                legend_elements = [
+                    Patch(facecolor='green', edgecolor='black', alpha=0.6, label='Healthy'),
+                    Patch(facecolor='red', edgecolor='black', alpha=0.8, label='Telomere-Senescent'),
+                    Patch(facecolor='blue', edgecolor='black', alpha=0.8, label='Stress-Senescent')
+                ]
+                ax.legend(handles=legend_elements, loc='upper right')
+
+                # Add info text
+                info_text = (
+                    f"Time: {frame['time']:.1f} {self.config.time_unit}\n"
+                    f"Shear Stress: {frame['input_value']:.2f} Pa\n"
+                    f"Cells: {frame['cell_count']}\n"
+                    f"Packing: {frame['grid_stats'].get('packing_efficiency', 0):.2f}\n"
+                    f"Pressure: {frame['grid_stats'].get('global_pressure', 1.0):.2f}"
+                )
+                ax.text(0.02, 0.98, info_text, transform=ax.transAxes, fontsize=10,
+                        verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
+
+                # Add flow direction indicator
+                arrow_length = self.grid.width * 0.08
+                arrow_x = self.grid.width * 0.5
+                arrow_y = self.grid.height * 0.05
+
+                ax.arrow(arrow_x - arrow_length / 2, arrow_y, arrow_length, 0,
+                         head_width=arrow_length * 0.3, head_length=arrow_length * 0.2,
+                         fc='black', ec='black', width=arrow_length * 0.08)
+
+                ax.text(arrow_x, arrow_y - arrow_length * 0.5, "Flow Direction",
+                        ha='center', va='top', fontsize=12, weight='bold')
+
+                ax.set_title('Endothelial Cell Mosaic Evolution', fontsize=16)
+                ax.set_xlabel('X Position (pixels)', fontsize=12)
+                ax.set_ylabel('Y Position (pixels)', fontsize=12)
+
+            # Create animation
+            ani = animation.FuncAnimation(
+                fig, update_frame, frames=len(self.frame_data),
+                interval=100, repeat=True
+            )
+
+            # Save animation
+            if 'ffmpeg' in animation.writers.list():
+                Writer = animation.writers['ffmpeg']
+                writer = Writer(fps=10, metadata=dict(artist='Endothelial Mosaic Simulation'), bitrate=1800)
+                ani.save(save_path, writer=writer, dpi=100)
+            else:
+                print("Warning: ffmpeg not available for animation creation")
+
+            plt.close(fig)
+
+        except Exception as e:
+            print(f"Error creating mosaic animation: {e}")
 
     def _apply_shear_stress(self, shear_stress, duration):
         """
@@ -349,7 +481,6 @@ class Simulator:
             shear_stress: Shear stress value (Pa)
             duration: Duration of exposure
         """
-
         # Create a uniform shear stress field
         def shear_stress_function(x, y):
             return shear_stress
@@ -373,12 +504,9 @@ class Simulator:
         # Update spatial properties if enabled
         if 'spatial' in self.models and self.config.enable_spatial_properties:
             model = self.models['spatial']
-
-            # Update each cell's spatial properties
-            # Pass the shear stress value as pressure to the spatial model
-            # Also pass all cells so the model can calculate population senescence level
+            # Update all cells' spatial properties
             for cell in self.grid.cells.values():
-                model.update_cell_properties(cell, current_input, dt)
+                model.update_cell_properties(cell, current_input, dt, self.grid.cells)
 
         # Update population dynamics if enabled
         if 'population' in self.models and self.config.enable_population_dynamics:
@@ -387,7 +515,7 @@ class Simulator:
             # Determine stem cell rate
             stem_cell_rate = 10 if self.config.enable_stem_cells else 0
 
-            # Update population state (tau parameter is shear stress)
+            # Update population state
             model.update_from_cells(self.grid.cells, dt, current_input, stem_cell_rate)
 
             # Synchronize cells with population state
@@ -408,21 +536,33 @@ class Simulator:
             if birth_action['type'] == 'healthy':
                 # Create a new healthy cell
                 divisions = birth_action.get('divisions', 0)
+                # Calculate appropriate target area
+                total_area = self.grid.width * self.grid.height
+                current_cell_count = len(self.grid.cells)
+                target_area = total_area / max(1, current_cell_count + 1)
+
                 self.grid.add_cell(
                     position=None,  # Random position
                     divisions=divisions,
                     is_senescent=False,
-                    senescence_cause=None
+                    senescence_cause=None,
+                    target_area=target_area
                 )
             elif birth_action['type'] == 'senescent':
                 # Create a new senescent cell
                 cause = birth_action.get('cause', 'stress')
                 divisions = self.config.max_divisions if cause == 'telomere' else 0
+                # Senescent cells typically larger
+                total_area = self.grid.width * self.grid.height
+                current_cell_count = len(self.grid.cells)
+                target_area = total_area / max(1, current_cell_count + 1) * 1.5
+
                 self.grid.add_cell(
                     position=None,  # Random position
                     divisions=divisions,
                     is_senescent=True,
-                    senescence_cause=cause
+                    senescence_cause=cause,
+                    target_area=target_area
                 )
 
         # Process death actions
@@ -481,6 +621,10 @@ class Simulator:
             'cells': len(self.grid.cells)
         }
 
+        # Add grid statistics
+        grid_stats = self.grid.get_grid_statistics()
+        state.update(grid_stats)
+
         # Add population statistics if available
         if 'population' in self.models:
             pop_model = self.models['population']
@@ -500,36 +644,21 @@ class Simulator:
         if 'spatial' in self.models:
             spatial_model = self.models['spatial']
 
-            # Calculate alignment index
-            alignment = spatial_model.calculate_alignment_index(self.grid.cells)
+            # Calculate spatial metrics
+            collective_props = spatial_model.calculate_collective_properties(self.grid.cells, self.input_pattern['value'])
+            state.update(collective_props)
 
-            # Calculate shape index
+            # Calculate alignment and shape indices
+            alignment = spatial_model.calculate_alignment_index(self.grid.cells)
             shape_index = spatial_model.calculate_shape_index(self.grid.cells)
+            packing_quality = spatial_model.calculate_packing_quality(self.grid.cells)
 
             state.update({
                 'alignment_index': alignment,
                 'shape_index': shape_index,
+                'packing_quality': packing_quality,
                 'confluency': self.grid.calculate_confluency()
             })
-
-            # Add morphometry metrics
-            # Calculate average cell properties
-            if self.grid.cells:
-                areas = [cell.area for cell in self.grid.cells.values()]
-                aspect_ratios = [cell.aspect_ratio for cell in self.grid.cells.values()]
-                orientations = [np.degrees(cell.orientation) for cell in self.grid.cells.values()]
-                eccentricities = [cell.eccentricity for cell in self.grid.cells.values() if
-                                  hasattr(cell, 'eccentricity')]
-                circularities = [cell.circularity for cell in self.grid.cells.values() if hasattr(cell, 'circularity')]
-
-                state.update({
-                    'avg_area': np.mean(areas) if areas else 0,
-                    'avg_aspect_ratio': np.mean(aspect_ratios) if aspect_ratios else 0,
-                    'avg_orientation': np.mean(orientations) if orientations else 0,
-                    'avg_eccentricity': np.mean(eccentricities) if eccentricities else 0,
-                    'avg_circularity': np.mean(circularities) if circularities else 0,
-                    'population_senescence_level': spatial_model.get_population_senescence_level(self.grid.cells)
-                })
 
         # Add to history
         self.history.append(state)
@@ -547,7 +676,7 @@ class Simulator:
         # Use auto-generated filename if not specified
         if filename is None:
             timestamp = time.strftime("%Y%m%d-%H%M%S")
-            filename = f"results_{timestamp}.npz"
+            filename = f"mosaic_results_{timestamp}.npz"
 
         # Ensure directory exists
         os.makedirs(self.config.plot_directory, exist_ok=True)
@@ -571,18 +700,48 @@ class Simulator:
                 'grid_size': self.config.grid_size,
                 'initial_cell_count': self.config.initial_cell_count
             },
-            input_pattern=self.input_pattern
+            input_pattern=self.input_pattern,
+            final_grid_stats=self.grid.get_grid_statistics()
         )
 
-        print(f"Results saved to {filepath}")
+        print(f"Mosaic simulation results saved to {filepath}")
 
         return filepath
 
     def get_cell_data(self):
         """
-        Get data for all cells.
+        Get data for all cells including mosaic-specific properties.
 
         Returns:
             List of cell data dictionaries
         """
         return [cell.get_state_dict() for cell in self.grid.cells.values()]
+
+    def get_mosaic_summary(self):
+        """
+        Get a summary of the mosaic structure state.
+
+        Returns:
+            Dictionary with mosaic summary information
+        """
+        grid_stats = self.grid.get_grid_statistics()
+
+        # Calculate additional mosaic metrics
+        total_target_area = sum(cell.target_area for cell in self.grid.cells.values())
+        total_actual_area = sum(cell.actual_area for cell in self.grid.cells.values())
+
+        # Orientation statistics
+        orientations = [cell.actual_orientation for cell in self.grid.cells.values()]
+        target_orientations = [cell.target_orientation for cell in self.grid.cells.values()]
+
+        return {
+            'total_cells': len(self.grid.cells),
+            'total_target_area': total_target_area,
+            'total_actual_area': total_actual_area,
+            'area_utilization': total_actual_area / (self.grid.width * self.grid.height),
+            'mean_orientation': np.mean(orientations) if orientations else 0,
+            'std_orientation': np.std(orientations) if orientations else 0,
+            'mean_target_orientation': np.mean(target_orientations) if target_orientations else 0,
+            'orientation_adaptation': 1.0 - np.mean([abs(a - t) for a, t in zip(orientations, target_orientations)]) / np.pi if orientations else 0,
+            'grid_statistics': grid_stats
+        }

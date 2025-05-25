@@ -1,6 +1,5 @@
 """
 Visualization module for plotting simulation results with mosaic cells.
-Fixed to properly handle coordinate scaling.
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -29,162 +28,6 @@ class Plotter:
 
         # Set default plot style
         plt.style.use('seaborn-v0_8-darkgrid')
-
-    def plot_cell_visualization(self, simulator, save_path=None, show_boundaries=True, show_seeds=False):
-        """
-        Create a visualization of cells as mosaic territories.
-        Fixed to properly handle coordinate scaling.
-
-        Parameters:
-            simulator: Simulator object with current state
-            save_path: Path to save the plot (default: auto-generated)
-            show_boundaries: Whether to show cell boundaries
-            show_seeds: Whether to show seed points
-
-        Returns:
-            Matplotlib figure
-        """
-        # Create figure
-        fig, ax = plt.subplots(figsize=(12, 12))
-
-        # Set axis limits based on grid size
-        ax.set_xlim(0, simulator.grid.width)
-        ax.set_ylim(0, simulator.grid.height)
-
-        # Color mapping for cell types
-        color_map = {
-            'healthy': 'green',
-            'telomere': 'red',
-            'stress': 'blue'
-        }
-
-        # Get display territories (properly scaled)
-        display_territories = simulator.grid.get_display_territories()
-
-        # Plot each cell's territory
-        for cell_id, cell in simulator.grid.cells.items():
-            if cell_id not in display_territories:
-                continue
-
-            display_pixels = display_territories[cell_id]
-            if not display_pixels:
-                continue
-
-            # Determine cell color
-            if not cell.is_senescent:
-                color = color_map['healthy']
-                alpha = 0.6
-            elif cell.senescence_cause == 'telomere':
-                color = color_map['telomere']
-                alpha = 0.8
-            else:  # stress-induced
-                color = color_map['stress']
-                alpha = 0.8
-
-            # Create polygon from display territory pixels
-            if len(display_pixels) > 10:  # Only for territories with reasonable size
-                try:
-                    # Sample pixels if territory is very large (for performance)
-                    pixels_to_use = display_pixels
-                    if len(pixels_to_use) > 500:
-                        # Randomly sample pixels for boundary detection
-                        indices = np.random.choice(len(pixels_to_use), 500, replace=False)
-                        pixels_to_use = [pixels_to_use[i] for i in indices]
-
-                    # Create convex hull for visualization
-                    from scipy.spatial import ConvexHull
-                    points = np.array(pixels_to_use)
-                    hull = ConvexHull(points)
-                    hull_points = points[hull.vertices]
-
-                    polygon = Polygon(hull_points, facecolor=color, alpha=alpha,
-                                      edgecolor='black' if show_boundaries else color,
-                                      linewidth=0.5 if show_boundaries else 0)
-                    ax.add_patch(polygon)
-                except Exception as e:
-                    # Fallback: scatter plot of pixels
-                    if len(display_pixels) > 100:
-                        # Sample pixels for performance
-                        sample_size = min(100, len(display_pixels))
-                        indices = np.random.choice(len(display_pixels), sample_size, replace=False)
-                        sampled_pixels = [display_pixels[i] for i in indices]
-                        points = np.array(sampled_pixels)
-                    else:
-                        points = np.array(display_pixels)
-
-                    ax.scatter(points[:, 0], points[:, 1], c=color, alpha=alpha, s=2, marker='s')
-
-            # Show seed point if requested
-            if show_seeds:
-                seed_x, seed_y = cell.position
-                ax.plot(seed_x, seed_y, 'ko', markersize=4)
-
-            # Show orientation vector at centroid
-            if cell.centroid is not None:
-                # Convert centroid from computational to display coordinates
-                display_centroid = simulator.grid._comp_to_display_coords(cell.centroid[0], cell.centroid[1])
-                cx, cy = display_centroid
-
-                # Draw orientation vector
-                vector_length = np.sqrt(cell.actual_area * (simulator.grid.computation_scale ** 2)) * 0.15
-                dx = vector_length * np.cos(cell.actual_orientation)
-                dy = vector_length * np.sin(cell.actual_orientation)
-
-                ax.arrow(cx, cy, dx, dy, head_width=vector_length * 0.2,
-                         head_length=vector_length * 0.2, fc='white', ec='black',
-                         alpha=0.9, width=vector_length * 0.05, zorder=10)
-
-        # Add legend
-        from matplotlib.patches import Patch
-        legend_elements = [
-            Patch(facecolor='green', edgecolor='black', alpha=0.6, label='Healthy'),
-            Patch(facecolor='red', edgecolor='black', alpha=0.8, label='Telomere-Senescent'),
-            Patch(facecolor='blue', edgecolor='black', alpha=0.8, label='Stress-Senescent')
-        ]
-        ax.legend(handles=legend_elements, loc='upper right')
-
-        # Format plot
-        ax.set_xlabel('X Position (pixels)', fontsize=12)
-        ax.set_ylabel('Y Position (pixels)', fontsize=12)
-        ax.set_aspect('equal')
-
-        # Add info text
-        total_cells = len(simulator.grid.cells)
-        grid_stats = simulator.grid.get_grid_statistics()
-
-        info_text = (
-            f"Time: {simulator.time:.1f} {simulator.config.time_unit}\n"
-            f"Shear Stress: {simulator.input_pattern['value']:.2f} Pa\n"
-            f"Total Cells: {total_cells}\n"
-            f"Packing Efficiency: {grid_stats.get('packing_efficiency', 0):.2f}\n"
-            f"Global Pressure: {grid_stats.get('global_pressure', 1.0):.2f}"
-        )
-        ax.text(0.02, 0.98, info_text, transform=ax.transAxes, fontsize=10,
-                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
-
-        # Add flow direction indicator
-        arrow_length = simulator.grid.width * 0.08
-        arrow_x = simulator.grid.width * 0.5
-        arrow_y = simulator.grid.height * 0.05
-
-        ax.arrow(arrow_x - arrow_length / 2, arrow_y, arrow_length, 0,
-                 head_width=arrow_length * 0.3, head_length=arrow_length * 0.2,
-                 fc='black', ec='black', width=arrow_length * 0.08, zorder=5)
-
-        ax.text(arrow_x, arrow_y - arrow_length * 0.5, "Flow Direction",
-                ha='center', va='top', fontsize=12, weight='bold')
-
-        # Add title
-        plt.title('Endothelial Cell Mosaic Visualization', fontsize=16)
-
-        # Save if requested
-        if save_path is not None:
-            plt.tight_layout()
-            plt.savefig(save_path, dpi=300, bbox_inches='tight')
-
-        return fig
-
-    # ... (keep all the other methods unchanged)
 
     def plot_cell_population(self, history, save_path=None):
         """
@@ -295,6 +138,138 @@ class Plotter:
         # Format plot
         axes[2].set_xlabel(time_label, fontsize=12)
         plt.suptitle('Mosaic Structure Metrics', fontsize=14)
+
+        # Save if requested
+        if save_path is not None:
+            plt.tight_layout()
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+
+        return fig
+
+    def plot_cell_visualization(self, simulator, save_path=None, show_boundaries=True, show_seeds=False):
+        """
+        Create a visualization of cells as mosaic territories.
+
+        Parameters:
+            simulator: Simulator object with current state
+            save_path: Path to save the plot (default: auto-generated)
+            show_boundaries: Whether to show cell boundaries
+            show_seeds: Whether to show seed points
+
+        Returns:
+            Matplotlib figure
+        """
+        # Create figure
+        fig, ax = plt.subplots(figsize=(12, 12))
+
+        # Set axis limits based on grid size
+        ax.set_xlim(0, simulator.grid.width)
+        ax.set_ylim(0, simulator.grid.height)
+
+        # Color mapping for cell types
+        color_map = {
+            'healthy': 'green',
+            'telomere': 'red',
+            'stress': 'blue'
+        }
+
+        # Plot each cell's territory
+        for cell in simulator.grid.cells.values():
+            if not cell.territory_pixels:
+                continue
+
+            # Determine cell color
+            if not cell.is_senescent:
+                color = color_map['healthy']
+                alpha = 0.6
+            elif cell.senescence_cause == 'telomere':
+                color = color_map['telomere']
+                alpha = 0.8
+            else:  # stress-induced
+                color = color_map['stress']
+                alpha = 0.8
+
+            # Create polygon from territory pixels
+            if len(cell.territory_pixels) > 2:
+                # Create a simplified boundary polygon
+                boundary_coords = np.array(cell.boundary_points)
+                if len(boundary_coords) > 2:
+                    # Sort boundary points to form a proper polygon
+                    # Simple convex hull approach
+                    from scipy.spatial import ConvexHull
+                    try:
+                        hull = ConvexHull(boundary_coords)
+                        polygon_coords = boundary_coords[hull.vertices]
+
+                        polygon = Polygon(polygon_coords, facecolor=color, alpha=alpha,
+                                        edgecolor='black' if show_boundaries else color,
+                                        linewidth=1 if show_boundaries else 0)
+                        ax.add_patch(polygon)
+                    except:
+                        # Fallback: just plot pixels as points
+                        pixels_array = np.array(cell.territory_pixels)
+                        ax.scatter(pixels_array[:, 0], pixels_array[:, 1],
+                                 c=color, alpha=alpha, s=1, marker='s')
+
+            # Show seed point if requested
+            if show_seeds:
+                seed_x, seed_y = cell.position
+                ax.plot(seed_x, seed_y, 'ko', markersize=3)
+
+            # Show orientation vector
+            if cell.centroid is not None:
+                cx, cy = cell.centroid
+                # Draw orientation vector
+                vector_length = np.sqrt(cell.actual_area) * 0.3
+                dx = vector_length * np.cos(cell.actual_orientation)
+                dy = vector_length * np.sin(cell.actual_orientation)
+
+                ax.arrow(cx, cy, dx, dy, head_width=vector_length*0.1,
+                        head_length=vector_length*0.1, fc='white', ec='black',
+                        alpha=0.8, width=vector_length*0.02)
+
+        # Add legend
+        from matplotlib.patches import Patch
+        legend_elements = [
+            Patch(facecolor='green', edgecolor='black', alpha=0.6, label='Healthy'),
+            Patch(facecolor='red', edgecolor='black', alpha=0.8, label='Telomere-Senescent'),
+            Patch(facecolor='blue', edgecolor='black', alpha=0.8, label='Stress-Senescent')
+        ]
+        ax.legend(handles=legend_elements, loc='upper right')
+
+        # Format plot
+        ax.set_xlabel('X Position (pixels)', fontsize=12)
+        ax.set_ylabel('Y Position (pixels)', fontsize=12)
+        ax.set_aspect('equal')
+
+        # Add info text
+        total_cells = len(simulator.grid.cells)
+        grid_stats = simulator.grid.get_grid_statistics()
+
+        info_text = (
+            f"Time: {simulator.time:.1f} {simulator.config.time_unit}\n"
+            f"Shear Stress: {simulator.input_pattern['value']:.2f} Pa\n"
+            f"Total Cells: {total_cells}\n"
+            f"Packing Efficiency: {grid_stats.get('packing_efficiency', 0):.2f}\n"
+            f"Global Pressure: {grid_stats.get('global_pressure', 1.0):.2f}"
+        )
+        ax.text(0.02, 0.98, info_text, transform=ax.transAxes, fontsize=10,
+                verticalalignment='top', bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
+
+        # Add flow direction indicator
+        arrow_length = simulator.grid.width * 0.08
+        arrow_x = simulator.grid.width * 0.5
+        arrow_y = simulator.grid.height * 0.05
+
+        ax.arrow(arrow_x - arrow_length / 2, arrow_y, arrow_length, 0,
+                 head_width=arrow_length * 0.3, head_length=arrow_length * 0.2,
+                 fc='black', ec='black', width=arrow_length * 0.08)
+
+        ax.text(arrow_x, arrow_y - arrow_length * 0.5, "Flow Direction",
+                ha='center', va='top', fontsize=12, weight='bold')
+
+        # Add title
+        plt.title('Endothelial Cell Mosaic Visualization', fontsize=16)
 
         # Save if requested
         if save_path is not None:
