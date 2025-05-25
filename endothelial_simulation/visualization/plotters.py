@@ -1,6 +1,6 @@
 """
 Visualization module for plotting simulation results with mosaic cells.
-Fixed to properly handle coordinate scaling.
+Fixed to properly handle coordinate scaling and enhanced senescent cell growth.
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -33,7 +33,7 @@ class Plotter:
     def plot_cell_visualization(self, simulator, save_path=None, show_boundaries=True, show_seeds=False):
         """
         Create a visualization of cells as mosaic territories.
-        Fixed to properly handle coordinate scaling.
+        Enhanced to show senescent cell growth factors.
 
         Parameters:
             simulator: Simulator object with current state
@@ -51,13 +51,6 @@ class Plotter:
         ax.set_xlim(0, simulator.grid.width)
         ax.set_ylim(0, simulator.grid.height)
 
-        # Color mapping for cell types
-        color_map = {
-            'healthy': 'green',
-            'telomere': 'red',
-            'stress': 'blue'
-        }
-
         # Get display territories (properly scaled)
         display_territories = simulator.grid.get_display_territories()
 
@@ -70,16 +63,34 @@ class Plotter:
             if not display_pixels:
                 continue
 
-            # Determine cell color
+            # Enhanced color determination with size-based shading
+            edge_width = 0.5  # Default edge width
+
             if not cell.is_senescent:
-                color = color_map['healthy']
+                color = 'green'
                 alpha = 0.6
-            elif cell.senescence_cause == 'telomere':
-                color = color_map['telomere']
-                alpha = 0.8
-            else:  # stress-induced
-                color = color_map['stress']
-                alpha = 0.8
+            else:
+                # Senescent cells - color intensity based on size
+                growth_factor = getattr(cell, 'senescent_growth_factor', 1.0)
+
+                # Base color depends on senescence cause
+                if cell.senescence_cause == 'telomere':
+                    base_color = '#DC143C'  # Crimson
+                else:
+                    base_color = '#4169E1'  # Royal Blue
+
+                # Darker and more opaque for larger senescent cells
+                size_intensity = min(1.0, (growth_factor - 1.0) / 2.0)  # 0 to 1 scale
+                alpha = 0.7 + 0.2 * size_intensity  # 0.7 to 0.9
+                edge_width = 0.5 + 1.5 * size_intensity  # 0.5 to 2.0
+
+                # Make larger cells darker
+                if growth_factor > 2.0:
+                    color = '#8B0000' if cell.senescence_cause == 'telomere' else '#191970'  # Very dark
+                elif growth_factor > 1.5:
+                    color = '#B22222' if cell.senescence_cause == 'telomere' else '#000080'  # Dark
+                else:
+                    color = base_color  # Normal senescent color
 
             # Create polygon from display territory pixels
             if len(display_pixels) > 10:  # Only for territories with reasonable size
@@ -99,7 +110,7 @@ class Plotter:
 
                     polygon = Polygon(hull_points, facecolor=color, alpha=alpha,
                                       edgecolor='black' if show_boundaries else color,
-                                      linewidth=0.5 if show_boundaries else 0)
+                                      linewidth=edge_width)
                     ax.add_patch(polygon)
                 except Exception as e:
                     # Fallback: scatter plot of pixels
@@ -134,14 +145,16 @@ class Plotter:
                          head_length=vector_length * 0.2, fc='white', ec='black',
                          alpha=0.9, width=vector_length * 0.05, zorder=10)
 
-        # Add legend
+        # Enhanced legend showing size categories
         from matplotlib.patches import Patch
         legend_elements = [
             Patch(facecolor='green', edgecolor='black', alpha=0.6, label='Healthy'),
-            Patch(facecolor='red', edgecolor='black', alpha=0.8, label='Telomere-Senescent'),
-            Patch(facecolor='blue', edgecolor='black', alpha=0.8, label='Stress-Senescent')
+            Patch(facecolor='#DC143C', edgecolor='black', alpha=0.7, label='Senescent (Tel)'),
+            Patch(facecolor='#4169E1', edgecolor='black', alpha=0.7, label='Senescent (Stress)'),
+            Patch(facecolor='#B22222', edgecolor='black', alpha=0.8, label='Enlarged Sen. (Tel)'),
+            Patch(facecolor='#000080', edgecolor='black', alpha=0.8, label='Enlarged Sen. (Stress)')
         ]
-        ax.legend(handles=legend_elements, loc='upper right')
+        ax.legend(handles=legend_elements, loc='upper right', fontsize=9)
 
         # Format plot
         ax.set_xlabel('X Position (pixels)', fontsize=12)
@@ -152,10 +165,15 @@ class Plotter:
         total_cells = len(simulator.grid.cells)
         grid_stats = simulator.grid.get_grid_statistics()
 
+        # Count enlarged senescent cells
+        enlarged_senescent = sum(1 for cell in simulator.grid.cells.values()
+                               if cell.is_senescent and getattr(cell, 'senescent_growth_factor', 1.0) > 1.2)
+
         info_text = (
             f"Time: {simulator.time:.1f} {simulator.config.time_unit}\n"
             f"Shear Stress: {simulator.input_pattern['value']:.2f} Pa\n"
             f"Total Cells: {total_cells}\n"
+            f"Enlarged Senescent: {enlarged_senescent}\n"
             f"Packing Efficiency: {grid_stats.get('packing_efficiency', 0):.2f}\n"
             f"Global Pressure: {grid_stats.get('global_pressure', 1.0):.2f}"
         )
@@ -175,7 +193,7 @@ class Plotter:
                 ha='center', va='top', fontsize=12, weight='bold')
 
         # Add title
-        plt.title('Endothelial Cell Mosaic Visualization', fontsize=16)
+        plt.title('Endothelial Cell Mosaic Visualization with Growth Factors', fontsize=16)
 
         # Save if requested
         if save_path is not None:
@@ -183,8 +201,6 @@ class Plotter:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
 
         return fig
-
-    # ... (keep all the other methods unchanged)
 
     def plot_cell_population(self, history, save_path=None):
         """
@@ -236,6 +252,64 @@ class Plotter:
         # Save if requested
         if save_path is not None:
             plt.tight_layout()
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+
+        return fig
+
+    def plot_senescent_growth_metrics(self, history, save_path=None):
+        """
+        Plot senescent cell growth metrics over time.
+
+        Parameters:
+            history: List of state dictionaries from simulation
+            save_path: Path to save the plot (default: auto-generated)
+
+        Returns:
+            Matplotlib figure
+        """
+        if not history or 'senescent_count' not in history[0]:
+            print("Senescent growth data not available")
+            return None
+
+        # Extract time data
+        time = np.array([state['time'] for state in history])
+        time_hours = time / 60 if self.config.time_unit == "minutes" else time
+        time_label = "Time (hours)" if self.config.time_unit == "minutes" else f"Time ({self.config.time_unit})"
+
+        # Extract data
+        senescent_count = np.array([state.get('senescent_count', 0) for state in history])
+        enlarged_count = np.array([state.get('enlarged_senescent_count', 0) for state in history])
+        mean_size = np.array([state.get('mean_senescent_size', 1.0) for state in history])
+        max_size = np.array([state.get('max_senescent_size', 1.0) for state in history])
+
+        # Create figure
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+
+        # Population plot
+        ax1.plot(time_hours, senescent_count, 'r-', linewidth=2, label='Total Senescent')
+        ax1.plot(time_hours, enlarged_count, 'darkred', linewidth=2, label='Enlarged (>1.2x)')
+        ax1.fill_between(time_hours, 0, enlarged_count, alpha=0.3, color='darkred')
+
+        ax1.set_ylabel('Cell Count', fontsize=12)
+        ax1.set_title('Senescent Cell Growth Over Time', fontsize=14)
+        ax1.legend(fontsize=10)
+        ax1.grid(True)
+
+        # Size metrics plot
+        ax2.plot(time_hours, mean_size, 'b-', linewidth=2, label='Mean Size Factor')
+        ax2.plot(time_hours, max_size, 'r--', linewidth=2, label='Max Size Factor')
+        ax2.axhline(y=1.0, color='k', linestyle=':', alpha=0.5, label='Normal Size')
+        ax2.axhline(y=3.0, color='r', linestyle=':', alpha=0.5, label='Max Allowed')
+
+        ax2.set_xlabel(time_label, fontsize=12)
+        ax2.set_ylabel('Size Factor', fontsize=12)
+        ax2.set_title('Senescent Cell Size Evolution', fontsize=14)
+        ax2.legend(fontsize=10)
+        ax2.grid(True)
+
+        plt.tight_layout()
+
+        if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
 
         return fig
@@ -461,6 +535,14 @@ class Plotter:
         )
         if mosaic_fig:
             figures.append(mosaic_fig)
+
+        # Senescent growth metrics plot (if available)
+        growth_fig = self.plot_senescent_growth_metrics(
+            history,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_senescent_growth.png")
+        )
+        if growth_fig:
+            figures.append(growth_fig)
 
         # Cell visualization
         cell_vis_fig = self.plot_cell_visualization(

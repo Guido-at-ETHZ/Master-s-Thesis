@@ -66,6 +66,13 @@ class Cell:
         self.growth_pressure = 0.0  # Pressure to expand beyond current territory
         self.compression_ratio = 1.0  # How compressed the cell is compared to target size
 
+        # Senescent growth
+        # Probabilistic senescent growth properties
+        self.senescent_growth_factor = 1.0  # Current size multiplier (starts at 1.0)
+        self.max_senescent_growth = 3.0  # Maximum size (3x normal)
+        self.growth_probability_base = 0.15  # 15% chance per hour to grow
+        self.growth_increment = 0.05  # 5% size increase when growth occurs
+
     def assign_territory(self, pixel_list):
         """
         Assign a list of pixels to this cell's territory.
@@ -96,6 +103,56 @@ class Cell:
                 self.growth_pressure = (1.0 - self.compression_ratio) * 2.0
             else:
                 self.growth_pressure = 0.0
+
+    def update_senescent_growth(self, dt_hours):
+        """
+        Probabilistic growth for senescent cells.
+
+        Parameters:
+            dt_hours: Time step in hours
+
+        Returns:
+            Boolean indicating if growth occurred
+        """
+        if not self.is_senescent:
+            return False
+
+        # Can't grow beyond maximum
+        if self.senescent_growth_factor >= self.max_senescent_growth:
+            return False
+
+        # Calculate growth probability for this time step
+        growth_prob = self.growth_probability_base * dt_hours
+
+        # Factors that influence growth probability:
+        # 1. Mechanical stress increases growth probability
+        stress_factor = 1.0 + 0.1 * self.local_shear_stress
+
+        # 2. Compression increases growth probability (crowded cells try to expand)
+        compression_factor = max(1.0, 2.0 - self.compression_ratio)
+
+        # 3. Growth becomes less likely as cell approaches maximum size
+        size_factor = (self.max_senescent_growth - self.senescent_growth_factor) / \
+                      (self.max_senescent_growth - 1.0)
+
+        # Combined probability
+        final_prob = growth_prob * stress_factor * compression_factor * size_factor
+        final_prob = min(0.3 * dt_hours, final_prob)  # Cap at 30% per hour
+
+        # Random growth check
+        if np.random.random() < final_prob:
+            # Grow by the increment
+            growth_increase = self.growth_increment * np.random.uniform(0.8, 1.2)  # Add variability
+            self.senescent_growth_factor = min(self.max_senescent_growth,
+                                               self.senescent_growth_factor + growth_increase)
+
+            # Update target area
+            base_area = self.target_area / (self.senescent_growth_factor - growth_increase + 1.0)  # Back-calculate base
+            self.target_area = base_area * self.senescent_growth_factor
+
+            return True
+
+        return False
 
     def _calculate_boundary_fast(self):
         """Calculate the boundary points of the cell territory - optimized version."""
@@ -411,5 +468,8 @@ class Cell:
             'adhesion_strength': self.adhesion_strength,
             'response': self.response,
             'local_shear_stress': self.local_shear_stress,
-            'stress_exposure_time': self.stress_exposure_time
+            'stress_exposure_time': self.stress_exposure_time,
+            # ADD these two lines:
+            'senescent_growth_factor': self.senescent_growth_factor,
+            'is_enlarged_senescent': self.senescent_growth_factor > 1.5
         }
