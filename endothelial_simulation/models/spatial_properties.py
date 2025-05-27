@@ -1,7 +1,7 @@
 """
 Spatial properties model for endothelial cell mechanotransduction with mosaic structure.
 Updated to work with territory-based cells that adapt to available space.
-Fixed division by zero errors.
+Enhanced with temporal dynamics for realistic morphological adaptation.
 """
 import numpy as np
 
@@ -11,17 +11,19 @@ class SpatialPropertiesModel:
     Model for spatial arrangement and morphological adaptations of endothelial cells in a mosaic structure.
 
     This model calculates target properties that cells try to achieve while respecting
-    the constraints of the Voronoi tessellation.
+    the constraints of the Voronoi tessellation. Enhanced with temporal dynamics.
     """
 
-    def __init__(self, config):
+    def __init__(self, config, temporal_model=None):
         """
         Initialize the spatial properties model with configuration parameters.
 
         Parameters:
             config: SimulationConfig object with parameter settings
+            temporal_model: TemporalDynamicsModel instance for shared time constant calculation
         """
         self.config = config
+        self.temporal_model = temporal_model  # Reference to temporal model for shared τ(P)
 
         # Define pressure points for interpolation
         self.pressure_points = [0.0, 1.4]  # Pa
@@ -173,7 +175,9 @@ class SpatialPropertiesModel:
 
     def update_cell_properties(self, cell, pressure, dt, cells_dict=None):
         """
-        Update a cell's target properties and allow adaptation toward them.
+        Update a cell's target properties using temporal dynamics.
+
+        This is the NEW METHOD that replaces instant calculation with temporal evolution.
 
         Parameters:
             cell: Cell object to update
@@ -182,29 +186,125 @@ class SpatialPropertiesModel:
             cells_dict: Dictionary of all cells for population-level calculations
 
         Returns:
-            Dictionary of updated property values
+            Dictionary of updated property values and dynamics info
         """
+        if cell.is_senescent:
+            return self._handle_senescent_cell(cell, pressure, dt, cells_dict)
+
         # Get population senescence level
         senescence_level = self.get_population_senescence_level(cells_dict) if cells_dict else 0
 
-        # Calculate target properties
-        target_orientation = self.calculate_target_orientation(senescence_level, pressure, cell.is_senescent)
-        target_area = self.calculate_target_area(pressure, cell.is_senescent, senescence_level)
-        target_aspect_ratio = self.calculate_target_aspect_ratio(pressure, cell.is_senescent)
+        # Calculate instantaneous target values (what the cell wants to achieve)
+        instant_target_orientation = self.calculate_target_orientation(senescence_level, pressure, False)
+        instant_target_area = self.calculate_target_area(pressure, False, senescence_level)
+        instant_target_aspect_ratio = self.calculate_target_aspect_ratio(pressure, False)
 
-        # Update cell's target properties
-        cell.update_target_properties(target_orientation, target_aspect_ratio, target_area)
+        # Initialize cell target properties if not already set
+        if not hasattr(cell, 'target_orientation') or cell.target_orientation is None:
+            cell.target_orientation = instant_target_orientation
+        if not hasattr(cell, 'target_area') or cell.target_area is None:
+            cell.target_area = instant_target_area
+        if not hasattr(cell, 'target_aspect_ratio') or cell.target_aspect_ratio is None:
+            cell.target_aspect_ratio = instant_target_aspect_ratio
 
-        # The actual adaptation happens in the cell's adapt_to_constraints method
-        # which is called by the grid during tessellation updates
+        # Update properties with temporal dynamics using scaled time constants
+        dynamics_info = {}
+
+        # 1. Area evolution with scaled time constant
+        if self.temporal_model:
+            tau_area, A_max = self.temporal_model.get_scaled_tau_and_amax(pressure, 'area')
+        else:
+            # Fallback calculation if no temporal model
+            A_max = max(1.0, 0.108 * pressure + 0.12)
+            base_tau = 30.0 * (A_max ** 0.8)
+            tau_area = base_tau * 1.0  # Start with 1.0 scaling
+
+        area_diff = instant_target_area - cell.target_area
+        cell.target_area += dt * area_diff / tau_area
+        dynamics_info['tau_area'] = tau_area
+
+        # 2. Orientation evolution with scaled time constant
+        if self.temporal_model:
+            tau_orient, _ = self.temporal_model.get_scaled_tau_and_amax(pressure, 'orientation')
+        else:
+            # Fallback calculation
+            A_max = max(1.0, 0.108 * pressure + 0.12)
+            base_tau = 30.0 * (A_max ** 0.8)
+            tau_orient = base_tau * 1.0  # Start with 1.0 scaling
+
+        # Handle angle wrapping for orientation
+        orientation_diff = instant_target_orientation - cell.target_orientation
+        while orientation_diff > np.pi:
+            orientation_diff -= 2 * np.pi
+        while orientation_diff < -np.pi:
+            orientation_diff += 2 * np.pi
+
+        cell.target_orientation += dt * orientation_diff / tau_orient
+        dynamics_info['tau_orientation'] = tau_orient
+
+        # 3. Aspect ratio evolution with scaled time constant
+        if self.temporal_model:
+            tau_ar, _ = self.temporal_model.get_scaled_tau_and_amax(pressure, 'aspect_ratio')
+        else:
+            # Fallback calculation
+            A_max = max(1.0, 0.108 * pressure + 0.12)
+            base_tau = 30.0 * (A_max ** 0.8)
+            tau_ar = base_tau * 1.0  # Start with 1.0 scaling
+
+        ar_diff = instant_target_aspect_ratio - cell.target_aspect_ratio
+        cell.target_aspect_ratio += dt * ar_diff / tau_ar
+        dynamics_info['tau_aspect_ratio'] = tau_ar
+
+        # Update the cell's target properties (calls existing method in Cell class)
+        cell.update_target_properties(
+            cell.target_orientation,
+            cell.target_aspect_ratio,
+            cell.target_area
+        )
 
         return {
-            'target_orientation': target_orientation,
-            'target_area': target_area,
-            'target_aspect_ratio': target_aspect_ratio,
+            'target_orientation': cell.target_orientation,
+            'target_area': cell.target_area,
+            'target_aspect_ratio': cell.target_aspect_ratio,
             'actual_orientation': cell.actual_orientation,
             'actual_area': cell.actual_area,
-            'actual_aspect_ratio': cell.actual_aspect_ratio
+            'actual_aspect_ratio': cell.actual_aspect_ratio,
+            'dynamics_info': dynamics_info
+        }
+
+    def _handle_senescent_cell(self, cell, pressure, dt, cells_dict):
+        """
+        Handle senescent cells (no temporal dynamics - they don't adapt).
+
+        Parameters:
+            cell: Senescent cell object
+            pressure: Applied pressure in Pa (ignored for senescent cells)
+            dt: Time step (ignored for senescent cells)
+            cells_dict: Dictionary of all cells
+
+        Returns:
+            Dictionary with senescent cell properties
+        """
+        # Senescent cells maintain constant properties (no adaptation)
+        cell.target_orientation = np.radians(self.senescent_params['orientation'])
+        cell.target_aspect_ratio = self.senescent_params['aspect_ratio']
+        cell.target_area = self.senescent_params['area']
+
+        # Update the cell's properties
+        cell.update_target_properties(
+            cell.target_orientation,
+            cell.target_aspect_ratio,
+            cell.target_area
+        )
+
+        return {
+            'target_orientation': cell.target_orientation,
+            'target_area': cell.target_area,
+            'target_aspect_ratio': cell.target_aspect_ratio,
+            'actual_orientation': cell.actual_orientation,
+            'actual_area': cell.actual_area,
+            'actual_aspect_ratio': cell.actual_aspect_ratio,
+            'dynamics_info': {'tau_used': None}  # No dynamics for senescent cells
         }
 
     def calculate_collective_properties(self, cells_dict, pressure):
@@ -247,11 +347,11 @@ class SpatialPropertiesModel:
 
         for cell in cells_dict.values():
             actual_orientations.append(cell.actual_orientation)
-            target_orientations.append(cell.target_orientation)
+            target_orientations.append(getattr(cell, 'target_orientation', cell.actual_orientation))
             actual_areas.append(max(0.1, cell.actual_area))  # Ensure minimum area
-            target_areas.append(max(0.1, cell.target_area))  # Ensure minimum area
+            target_areas.append(max(0.1, getattr(cell, 'target_area', cell.actual_area)))  # Ensure minimum area
             actual_aspect_ratios.append(cell.actual_aspect_ratio)
-            target_aspect_ratios.append(cell.target_aspect_ratio)
+            target_aspect_ratios.append(getattr(cell, 'target_aspect_ratio', cell.actual_aspect_ratio))
             compression_ratios.append(cell.compression_ratio)
 
             # Calculate shape deviation
@@ -479,7 +579,7 @@ class SpatialPropertiesModel:
         Returns:
             Dictionary with population-level statistics
         """
-        # Update each cell's target properties
+        # Update each cell's target properties with temporal dynamics
         for cell in cells_dict.values():
             self.update_cell_properties(cell, pressure, dt, cells_dict)
 

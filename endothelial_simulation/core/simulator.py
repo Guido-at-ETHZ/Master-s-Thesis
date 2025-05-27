@@ -46,7 +46,9 @@ class Simulator:
             self.models['population'] = PopulationDynamicsModel(config)
 
         if config.enable_spatial_properties:
-            self.models['spatial'] = SpatialPropertiesModel(config)
+            # CHANGE: Pass temporal model to spatial model for shared τ calculation
+            temporal_model = self.models.get('temporal', None)
+            self.models['spatial'] = SpatialPropertiesModel(config, temporal_model)
 
         # Simulation state
         self.time = 0.0
@@ -490,38 +492,31 @@ class Simulator:
 
     def _update_models(self, current_input, dt):
         """
-        Update all active models.
-
-        Parameters:
-            current_input: Current input value (shear stress in Pa)
-            dt: Time step
+        REPLACE this method in your existing simulator.py
         """
-        # Update temporal dynamics if enabled
+        # Update temporal dynamics if enabled (UNCHANGED from your original)
         if 'temporal' in self.models and self.config.enable_temporal_dynamics:
             model = self.models['temporal']
             model.update_cell_responses(self.grid.cells, current_input, dt)
 
-        # Update spatial properties if enabled
+        # Update spatial properties if enabled (CHANGED - now uses temporal dynamics)
         if 'spatial' in self.models and self.config.enable_spatial_properties:
             model = self.models['spatial']
-            # Update all cells' spatial properties
+            # NEW: Use temporal dynamics for all cells
             for cell in self.grid.cells.values():
-                model.update_cell_properties(cell, current_input, dt, self.grid.cells)
+                # This now uses temporal dynamics instead of instant calculation
+                dynamics_result = model.update_cell_properties(cell, current_input, dt, self.grid.cells)
 
-        # Update population dynamics if enabled
+                # Optional: Store dynamics info for monitoring/debugging
+                if hasattr(cell, 'last_dynamics_info'):
+                    cell.last_dynamics_info = dynamics_result.get('dynamics_info', {})
+
+        # Update population dynamics if enabled (UNCHANGED from your original)
         if 'population' in self.models and self.config.enable_population_dynamics:
             model = self.models['population']
-
-            # Determine stem cell rate
             stem_cell_rate = 10 if self.config.enable_stem_cells else 0
-
-            # Update population state
             model.update_from_cells(self.grid.cells, dt, current_input, stem_cell_rate)
-
-            # Synchronize cells with population state
             actions = model.synchronize_cells(self.grid.cells)
-
-            # Execute actions
             self._execute_population_actions(actions)
 
     def _execute_population_actions(self, actions):
@@ -611,9 +606,11 @@ class Simulator:
 
     def _record_state(self):
         """
-        Record the current simulation state for later analysis.
+        MODIFY this method in your existing simulator.py to include temporal dynamics info
         """
-        # Collect state information
+        # Keep all your existing state recording code...
+
+        # Collect state information (your existing code)
         state = {
             'time': self.time,
             'step_count': self.step_count,
@@ -621,11 +618,31 @@ class Simulator:
             'cells': len(self.grid.cells)
         }
 
-        # Add grid statistics
+        # Add grid statistics (your existing code)
         grid_stats = self.grid.get_grid_statistics()
         state.update(grid_stats)
 
-        # Add population statistics if available
+        # ADD: Temporal dynamics monitoring
+        if 'temporal' in self.models and self.config.enable_temporal_dynamics:
+            temporal_model = self.models['temporal']
+            current_pressure = self.input_pattern['value']
+
+            # Get time constants for different properties
+            tau_biochem, A_max = temporal_model.get_scaled_tau_and_amax(current_pressure, 'biochemical')
+            tau_area, _ = temporal_model.get_scaled_tau_and_amax(current_pressure, 'area')
+            tau_orientation, _ = temporal_model.get_scaled_tau_and_amax(current_pressure, 'orientation')
+            tau_aspect_ratio, _ = temporal_model.get_scaled_tau_and_amax(current_pressure, 'aspect_ratio')
+
+            state.update({
+                'current_A_max': A_max,
+                'tau_biochemical': tau_biochem,
+                'tau_area': tau_area,
+                'tau_orientation': tau_orientation,
+                'tau_aspect_ratio': tau_aspect_ratio,
+                'temporal_dynamics_active': True
+            })
+
+        # Keep all your existing population statistics code...
         if 'population' in self.models:
             pop_model = self.models['population']
             totals = pop_model.calculate_total_cells()
@@ -640,15 +657,13 @@ class Simulator:
                 'telomere_length': tel_len
             })
 
-        # Add spatial statistics if available
+        # Keep all your existing spatial statistics code...
         if 'spatial' in self.models:
             spatial_model = self.models['spatial']
-
-            # Calculate spatial metrics
-            collective_props = spatial_model.calculate_collective_properties(self.grid.cells, self.input_pattern['value'])
+            collective_props = spatial_model.calculate_collective_properties(self.grid.cells,
+                                                                             self.input_pattern['value'])
             state.update(collective_props)
 
-            # Calculate alignment and shape indices
             alignment = spatial_model.calculate_alignment_index(self.grid.cells)
             shape_index = spatial_model.calculate_shape_index(self.grid.cells)
             packing_quality = spatial_model.calculate_packing_quality(self.grid.cells)
@@ -660,7 +675,7 @@ class Simulator:
                 'confluency': self.grid.calculate_confluency()
             })
 
-        # Add to history
+        # Add to history (your existing code)
         self.history.append(state)
 
     def save_results(self, filename=None):

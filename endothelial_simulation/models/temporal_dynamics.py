@@ -1,5 +1,6 @@
 """
 Temporal dynamics model for endothelial cell adaptation to mechanical stimuli.
+Enhanced with scaled time constants for different biological properties.
 """
 import numpy as np
 from scipy.integrate import odeint
@@ -12,6 +13,7 @@ class TemporalDynamicsModel:
 
     This model captures how cellular responses evolve following pressure changes,
     implementing the first-order differential equation described in the thesis.
+    Enhanced with scaled time constants for different biological properties.
     """
 
     def __init__(self, config):
@@ -38,6 +40,16 @@ class TemporalDynamicsModel:
         P_known = np.array(list(self.A_max_map.keys()))
         A_max_known = np.array(list(self.A_max_map.values()))
         self.slope, self.intercept = np.polyfit(P_known, A_max_known, 1)
+
+        # NEW: Biological time scale factors for different properties
+        # Start with all factors = 1.0 (unified approach)
+        # You can modify these later for realistic scaling
+        self.time_scale_factors = {
+            'biochemical': 1.0,      # Base - your fitted data
+            'area': 1.0,             # Cell volume/area changes
+            'orientation': 1.0,      # Cell orientation/alignment
+            'aspect_ratio': 1.0,     # Cell elongation/shape
+        }
 
     def calculate_A_max(self, P):
         """
@@ -74,6 +86,40 @@ class TemporalDynamicsModel:
         """
         # Reference value is 1.0
         return self.tau_base * (A_max ** self.lambda_scale)
+
+    def get_tau_and_amax(self, pressure):
+        """
+        Get time constant and A_max for given pressure.
+        This method provides backward compatibility.
+
+        Parameters:
+            pressure: Pressure value in Pa
+
+        Returns:
+            tuple: (tau, A_max) using biochemical scaling (base)
+        """
+        return self.get_scaled_tau_and_amax(pressure, 'biochemical')
+
+    def get_scaled_tau_and_amax(self, pressure, property_type='biochemical'):
+        """
+        Get time constant scaled for specific biological property.
+
+        Parameters:
+            pressure: Applied pressure (Pa)
+            property_type: Type of property ('biochemical', 'area', 'orientation', 'aspect_ratio')
+
+        Returns:
+            tuple: (scaled_tau, A_max)
+        """
+        # Base calculation using your experimental data
+        A_max = self.calculate_A_max(pressure)
+        base_tau = self.calculate_tau(A_max)
+
+        # Apply biological scaling
+        scale_factor = self.time_scale_factors.get(property_type, 1.0)
+        scaled_tau = base_tau * scale_factor
+
+        return scaled_tau, A_max
 
     def model(self, y, t, P):
         """
@@ -369,5 +415,19 @@ class TemporalDynamicsModel:
             'tau_base': self.tau_base,
             'lambda_scale': self.lambda_scale,
             'slope': self.slope,
-            'intercept': self.intercept
+            'intercept': self.intercept,
+            'time_scale_factors': self.time_scale_factors
         }
+
+    def set_time_scale_factors(self, factors):
+        """
+        Set time scale factors for different properties.
+
+        Parameters:
+            factors: Dictionary with keys 'biochemical', 'area', 'orientation', 'aspect_ratio'
+        """
+        for key, value in factors.items():
+            if key in self.time_scale_factors:
+                self.time_scale_factors[key] = value
+            else:
+                print(f"Warning: Unknown property type '{key}' for time scaling")

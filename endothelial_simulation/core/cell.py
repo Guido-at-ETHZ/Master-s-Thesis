@@ -73,6 +73,14 @@ class Cell:
         self.growth_probability_base = 0.15  # 15% chance per hour to grow
         self.growth_increment = 0.05  # 5% size increase when growth occurs
 
+        # Added temporal
+        self.target_orientation = 0.0  # Will be set by spatial model
+        self.target_aspect_ratio = 1.0  # Will be set by spatial model
+        self.target_area = target_area  # Already exists, but ensure it's set
+
+        # Optional: For monitoring temporal dynamics
+        self.last_dynamics_info = {}
+
     def assign_territory(self, pixel_list):
         """
         Assign a list of pixels to this cell's territory.
@@ -309,6 +317,7 @@ class Cell:
 
     def update_target_properties(self, target_orientation, target_aspect_ratio, target_area):
         """
+        ADD this method to your existing Cell class.
         Update target properties based on biological parameters.
 
         Parameters:
@@ -443,19 +452,23 @@ class Cell:
             return 0.017 + (tau - 20) * 0.005
 
     def get_state_dict(self):
-        """Get a dictionary representation of the cell state."""
-        return {
+        """
+        MODIFY your existing get_state_dict method by ADDING these entries:
+        """
+        # Keep all your existing state dict entries, then ADD these:
+        state_dict = {
+            # ... all your existing entries ...
             'cell_id': self.cell_id,
             'position': self.position,
             'centroid': self.centroid,
             'divisions': self.divisions,
             'is_senescent': self.is_senescent,
             'senescence_cause': self.senescence_cause,
-            'target_orientation': self.target_orientation,
+            'target_orientation': getattr(self, 'target_orientation', self.actual_orientation),  # ADD
             'actual_orientation': self.actual_orientation,
-            'target_aspect_ratio': self.target_aspect_ratio,
+            'target_aspect_ratio': getattr(self, 'target_aspect_ratio', self.actual_aspect_ratio),  # ADD
             'actual_aspect_ratio': self.actual_aspect_ratio,
-            'target_area': self.target_area,
+            'target_area': getattr(self, 'target_area', self.actual_area),  # ADD
             'actual_area': self.actual_area,
             'territory_size': len(self.territory_pixels),
             'perimeter': self.perimeter,
@@ -469,7 +482,8 @@ class Cell:
             'response': self.response,
             'local_shear_stress': self.local_shear_stress,
             'stress_exposure_time': self.stress_exposure_time,
-            # ADD these two lines:
             'senescent_growth_factor': self.senescent_growth_factor,
             'is_enlarged_senescent': self.senescent_growth_factor > 1.5
         }
+
+        return state_dict
