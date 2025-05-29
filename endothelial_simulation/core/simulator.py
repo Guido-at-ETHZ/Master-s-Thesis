@@ -162,6 +162,25 @@ class Simulator:
             else:
                 self.input_pattern['value'] = params['final_value']
 
+        elif pattern_type == 'multi_step':
+            schedule = params['schedule']
+            current_value = schedule[0][1]  # Default to first value
+
+            # Find the appropriate value for current time
+            for i, (step_time, step_value) in enumerate(schedule):
+                if self.time >= step_time:
+                    current_value = step_value
+                else:
+                    break
+
+            # Update the value if it changed
+            if self.input_pattern['value'] != current_value:
+                old_value = self.input_pattern['value']
+                self.input_pattern['value'] = current_value
+
+                # Optional: Print step changes (you can remove this if you don't want the output)
+                print(f"Step change at t={self.time:.1f}min: {old_value:.2f} → {current_value:.2f} Pa")
+
         elif pattern_type == 'ramp':
             if self.time < params['ramp_start_time']:
                 self.input_pattern['value'] = params['initial_value']
@@ -169,9 +188,9 @@ class Simulator:
                 self.input_pattern['value'] = params['final_value']
             else:
                 progress = (self.time - params['ramp_start_time']) / (
-                            params['ramp_end_time'] - params['ramp_start_time'])
+                        params['ramp_end_time'] - params['ramp_start_time'])
                 self.input_pattern['value'] = params['initial_value'] + progress * (
-                            params['final_value'] - params['initial_value'])
+                        params['final_value'] - params['initial_value'])
 
         elif pattern_type == 'oscillatory':
             omega = 2 * np.pi * params['frequency']
@@ -179,6 +198,175 @@ class Simulator:
                 omega * self.time + params['phase'])
 
         return self.input_pattern['value']
+
+    def set_multi_step_input(self, step_schedule):
+        """
+        Set a multi-step input pattern with multiple step changes.
+
+        Parameters:
+            step_schedule: List of tuples (time, value) defining when to change input
+                          Example: [(0, 0.0), (60, 1.4), (180, 0.7), (300, 2.0)]
+                          Times should be in minutes, values in Pa
+        """
+        # Validate input
+        if not step_schedule or not isinstance(step_schedule, list):
+            raise ValueError("step_schedule must be a non-empty list of (time, value) tuples")
+
+        # Ensure all entries are tuples with 2 elements
+        for i, step in enumerate(step_schedule):
+            if not isinstance(step, (list, tuple)) or len(step) != 2:
+                raise ValueError(f"Step {i} must be a (time, value) tuple, got: {step}")
+
+        # Sort schedule by time to ensure proper order
+        sorted_schedule = sorted(step_schedule, key=lambda x: x[0])
+
+        # Validate that first time point is 0 or at start
+        if sorted_schedule[0][0] > 0:
+            print(f"Warning: First time point is {sorted_schedule[0][0]}, adding baseline at time 0")
+            sorted_schedule.insert(0, (0, sorted_schedule[0][1]))
+
+        self.input_pattern = {
+            'type': 'multi_step',
+            'value': sorted_schedule[0][1],  # Start with first value
+            'params': {
+                'schedule': sorted_schedule
+            }
+        }
+
+        print(f"Multi-step input pattern set with {len(sorted_schedule)} steps:")
+        for time_point, value in sorted_schedule:
+            print(f"  {time_point:6.1f} min ({time_point / 60:5.2f}h): {value:5.2f} Pa")
+
+    def set_protocol_input(self, protocol_name, **kwargs):
+        """
+        Set predefined experimental protocols.
+
+        Parameters:
+            protocol_name: Name of the protocol
+            **kwargs: Additional parameters like scale_time, scale_stress
+
+        Available protocols:
+            - 'baseline': Constant low shear
+            - 'acute_stress': Short stress pulse with recovery
+            - 'chronic_stress': Sustained stress
+            - 'stepwise_increase': Gradual stress increase
+            - 'stress_recovery': Stress with recovery cycles
+            - 'oscillating': On/off stress pattern
+        """
+        # Define protocol templates (times in minutes, stress in Pa)
+        protocols = {
+            'baseline': [
+                (0, 0.0)  # Constant baseline
+            ],
+
+            'acute_stress': [
+                (0, 0.0),  # Baseline (1 hour)
+                (60, 1.4),  # Acute stress (2 hours)
+                (180, 0.0)  # Recovery (remainder)
+            ],
+
+            'chronic_stress': [
+                (0, 0.0),  # Baseline (1 hour)
+                (60, 1.4),  # Start chronic stress
+                (1020, 1.4)  # Maintain until end (16 hours of stress)
+            ],
+
+            'stepwise_increase': [
+                (0, 0.0),  # Baseline
+                (60, 0.5),  # Low stress (1h)
+                (120, 1.0),  # Medium stress (1h)
+                (180, 1.4),  # High stress (2h)
+                (300, 0.0)  # Recovery
+            ],
+
+            'stress_recovery': [
+                (0, 0.0),  # Baseline
+                (60, 1.4),  # Stress episode 1 (2h)
+                (180, 0.0),  # Recovery 1 (2h)
+                (300, 1.4),  # Stress episode 2 (2h)
+                (420, 0.0)  # Final recovery
+            ],
+
+            'oscillating': [
+                (0, 0.0),  # Start
+                (30, 1.0),  # Stress on (1h)
+                (90, 0.0),  # Stress off (1h)
+                (150, 1.0),  # Stress on (1h)
+                (210, 0.0),  # Stress off (1h)
+                (270, 1.0),  # Stress on (1h)
+                (330, 0.0)  # Final off
+            ]
+        }
+
+        if protocol_name not in protocols:
+            available = ', '.join(protocols.keys())
+            raise ValueError(f"Unknown protocol: {protocol_name}. Available: {available}")
+
+        # Get base schedule
+        schedule = protocols[protocol_name].copy()
+
+        # Apply scaling if requested
+        if 'scale_time' in kwargs:
+            scale = kwargs['scale_time']
+            schedule = [(t * scale, v) for t, v in schedule]
+            print(f"Time scaling applied: {scale}x")
+
+        if 'scale_stress' in kwargs:
+            scale = kwargs['scale_stress']
+            schedule = [(t, v * scale) for t, v in schedule]
+            print(f"Stress scaling applied: {scale}x")
+
+        # Custom modifications
+        if 'max_stress' in kwargs:
+            max_stress = kwargs['max_stress']
+            schedule = [(t, min(v, max_stress) if v > 0 else v) for t, v in schedule]
+            print(f"Maximum stress limited to: {max_stress} Pa")
+
+        print(f"Using predefined protocol: '{protocol_name}'")
+        self.set_multi_step_input(schedule)
+
+    def get_current_step_info(self):
+        """
+        Get information about the current step in a multi-step pattern.
+
+        Returns:
+            Dictionary with current step information or None if not multi-step
+        """
+        if self.input_pattern['type'] != 'multi_step':
+            return None
+
+        schedule = self.input_pattern['params']['schedule']
+        current_time = self.time
+
+        # Find current step
+        current_step_idx = 0
+        for i, (step_time, step_value) in enumerate(schedule):
+            if current_time >= step_time:
+                current_step_idx = i
+            else:
+                break
+
+        # Calculate time in current step and time to next step
+        current_step_time, current_step_value = schedule[current_step_idx]
+        time_in_step = current_time - current_step_time
+
+        if current_step_idx < len(schedule) - 1:
+            next_step_time, next_step_value = schedule[current_step_idx + 1]
+            time_to_next = next_step_time - current_time
+        else:
+            next_step_time, next_step_value = None, None
+            time_to_next = None
+
+        return {
+            'step_number': current_step_idx + 1,
+            'total_steps': len(schedule),
+            'current_value': current_step_value,
+            'step_start_time': current_step_time,
+            'time_in_step': time_in_step,
+            'next_step_time': next_step_time,
+            'next_step_value': next_step_value,
+            'time_to_next_step': time_to_next
+        }
 
     def step(self):
         """

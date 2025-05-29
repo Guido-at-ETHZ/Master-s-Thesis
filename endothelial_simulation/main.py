@@ -1,11 +1,14 @@
 """
 Main module for running endothelial cell mechanotransduction simulations with step input.
+Enhanced with optional multi-step experiment support.
 """
 import os
 import argparse
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+import subprocess
+import sys
 
 from config import SimulationConfig, create_temporal_only_config, create_spatial_only_config, create_full_config
 from core import Simulator
@@ -74,7 +77,48 @@ def main():
     parser.add_argument('--plot', action='store_true',
                         help='Show plots after simulation')
 
+    # Multi-step option
+    parser.add_argument('--use-multi-step', action='store_true',
+                        help='Launch multi-step experiment tool')
+
     args = parser.parse_args()
+
+    # Handle multi-step delegation
+    if args.use_multi_step:
+        print("=" * 70)
+        print("Multi-Step Experiment Tool")
+        print("=" * 70)
+        print("Launching multi-step experiment interface...")
+        print("\nMulti-step experiments allow multiple stress changes over time.")
+        print("\nExamples:")
+        print("• Predefined protocols:")
+        print("  python multi_step_main.py --protocol acute_stress")
+        print("  python multi_step_main.py --protocol chronic_stress --duration 600")
+        print("  python multi_step_main.py --protocol stepwise_increase --scale-time 2.0")
+        print()
+        print("• Custom schedules:")
+        print("  python multi_step_main.py --schedule '0,0.0;60,1.4;180,0.5;300,0.0'")
+        print("  python multi_step_main.py --schedule '0,0;30,1.0;90,0;150,1.5' --duration 240")
+        print()
+        print("Available protocols: baseline, acute_stress, chronic_stress,")
+        print("                    stepwise_increase, stress_recovery, oscillating")
+        print()
+        print("Full multi-step tool help:")
+        print("-" * 70)
+
+        try:
+            # Launch the multi-step tool with help
+            subprocess.run([sys.executable, 'multi_step_main.py', '--help'])
+        except FileNotFoundError:
+            print("\nError: multi_step_main.py not found in current directory.")
+            print("\nTo use multi-step experiments:")
+            print("1. Create multi_step_main.py using the provided code")
+            print("2. Ensure it's in the same directory as main.py")
+            print("3. Run: python multi_step_main.py --help")
+            print("\nFor now, continuing with single-step simulation...")
+            print("Use your regular arguments (--initial-value, --final-value, etc.)")
+
+        return
 
     # Create configuration based on mode
     if args.mode == 'full':
