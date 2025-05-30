@@ -448,12 +448,7 @@ class Grid:
         }
 
     def get_grid_statistics(self):
-        """
-        Get comprehensive statistics about the grid state.
-
-        Returns:
-            Dictionary with various statistics
-        """
+        """Get comprehensive statistics about the grid state - real parameters only."""
         if not self.cells:
             return {}
 
@@ -465,10 +460,9 @@ class Grid:
         actual_areas = [cell.actual_area * (self.computation_scale ** 2) for cell in self.cells.values()]
         compression_ratios = [cell.compression_ratio for cell in self.cells.values()]
 
-        # Shape statistics
+        # Shape statistics - real parameters only
         aspect_ratios = [cell.actual_aspect_ratio for cell in self.cells.values()]
         orientations = [cell.actual_orientation for cell in self.cells.values()]
-        compactness_values = [cell.compactness for cell in self.cells.values()]
 
         return {
             'cell_counts': cell_counts,
@@ -484,8 +478,8 @@ class Grid:
                 'mean_aspect_ratio': np.mean(aspect_ratios),
                 'std_aspect_ratio': np.std(aspect_ratios),
                 'mean_orientation': np.mean(orientations),
-                'std_orientation': np.std(orientations),
-                'mean_compactness': np.mean(compactness_values)
+                'std_orientation': np.std(orientations)
+                # Removed: mean_compactness (fake parameter)
             }
         }
 

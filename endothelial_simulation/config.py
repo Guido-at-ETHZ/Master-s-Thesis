@@ -180,5 +180,5 @@ def create_spatial_only_config():
 def create_full_config():
     """Create a configuration with all components enabled."""
     config = SimulationConfig()
-    config.enable_all()
+    #config.enable_all()
     return config

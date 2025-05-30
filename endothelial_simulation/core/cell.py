@@ -49,9 +49,6 @@ class Cell:
 
         # Computed properties from territory
         self.perimeter = 0.0
-        self.eccentricity = 0.8
-        self.circularity = 0.5
-        self.compactness = 1.0  # Area/(perimeter^2), measure of how circular the territory is
 
         # Cell state properties
         self.age = 0.0
@@ -207,7 +204,7 @@ class Cell:
         self.perimeter = len(boundary)
 
     def _calculate_geometry_fast(self):
-        """Calculate geometric properties from the territory - optimized version."""
+        """Calculate geometric properties from the territory - real parameters only."""
         if not self.territory_pixels:
             return
 
@@ -215,7 +212,6 @@ class Cell:
 
         # For very large territories, sample points for PCA
         if len(pixels_array) > 1000:
-            # Sample points for PCA calculation
             sample_size = min(1000, len(pixels_array))
             indices = np.random.choice(len(pixels_array), sample_size, replace=False)
             sample_pixels = pixels_array[indices]
@@ -231,8 +227,6 @@ class Cell:
             if len(centered) > 1:
                 try:
                     cov_matrix = np.cov(centered, rowvar=False)
-
-                    # Get eigenvalues and eigenvectors
                     eigenvals, eigenvecs = np.linalg.eigh(cov_matrix)
 
                     # Sort by eigenvalue (largest first)
@@ -250,11 +244,6 @@ class Cell:
                     else:
                         self.actual_aspect_ratio = 1.0
 
-                    # Eccentricity
-                    if eigenvals[0] > 0:
-                        self.eccentricity = np.sqrt(1 - min(eigenvals[1] / eigenvals[0], 1.0))
-                    else:
-                        self.eccentricity = 0.0
                 except:
                     # Fallback to simple calculations
                     self._calculate_geometry_simple()
@@ -263,23 +252,10 @@ class Cell:
         else:
             self._calculate_geometry_simple()
 
-        # Circularity (4π*Area/Perimeter²)
-        if self.perimeter > 0:
-            self.circularity = 4 * np.pi * self.actual_area / (self.perimeter ** 2)
-        else:
-            self.circularity = 1.0
-
-        # Compactness
-        if self.perimeter > 0:
-            self.compactness = self.actual_area / (self.perimeter ** 2)
-        else:
-            self.compactness = 1.0
-
     def _calculate_geometry_simple(self):
-        """Simple fallback geometry calculation."""
+        """Simple fallback geometry calculation - real parameters only."""
         self.actual_orientation = self.target_orientation
         self.actual_aspect_ratio = max(1.0, self.target_aspect_ratio)
-        self.eccentricity = 0.5
 
     def adapt_to_constraints(self, available_space_factor=1.0):
         """
@@ -452,29 +428,23 @@ class Cell:
             return 0.017 + (tau - 20) * 0.005
 
     def get_state_dict(self):
-        """
-        MODIFY your existing get_state_dict method by ADDING these entries:
-        """
-        # Keep all your existing state dict entries, then ADD these:
+        """Get cell state dictionary with real parameters only."""
         state_dict = {
-            # ... all your existing entries ...
             'cell_id': self.cell_id,
             'position': self.position,
             'centroid': self.centroid,
             'divisions': self.divisions,
             'is_senescent': self.is_senescent,
             'senescence_cause': self.senescence_cause,
-            'target_orientation': getattr(self, 'target_orientation', self.actual_orientation),  # ADD
+            'target_orientation': getattr(self, 'target_orientation', self.actual_orientation),
             'actual_orientation': self.actual_orientation,
-            'target_aspect_ratio': getattr(self, 'target_aspect_ratio', self.actual_aspect_ratio),  # ADD
+            'target_aspect_ratio': getattr(self, 'target_aspect_ratio', self.actual_aspect_ratio),
             'actual_aspect_ratio': self.actual_aspect_ratio,
-            'target_area': getattr(self, 'target_area', self.actual_area),  # ADD
+            'target_area': getattr(self, 'target_area', self.actual_area),
             'actual_area': self.actual_area,
             'territory_size': len(self.territory_pixels),
             'perimeter': self.perimeter,
-            'eccentricity': self.eccentricity,
-            'circularity': self.circularity,
-            'compactness': self.compactness,
+            # Removed: eccentricity, circularity, compactness (fake parameters)
             'compression_ratio': self.compression_ratio,
             'growth_pressure': self.growth_pressure,
             'age': self.age,
@@ -485,5 +455,4 @@ class Cell:
             'senescent_growth_factor': self.senescent_growth_factor,
             'is_enlarged_senescent': self.senescent_growth_factor > 1.5
         }
-
         return state_dict
