@@ -4,9 +4,11 @@ This script demonstrates different ways to set up time-varying shear stress patt
 """
 import numpy as np
 import matplotlib.pyplot as plt
-from config import SimulationConfig, create_full_config
-from core import Simulator
-from visualization import Plotter
+
+# FIXED IMPORTS - use absolute package imports
+from endothelial_simulation.config import SimulationConfig, create_full_config
+from endothelial_simulation.core import Simulator
+from endothelial_simulation.visualization import Plotter
 
 
 def example_1_custom_multi_step():

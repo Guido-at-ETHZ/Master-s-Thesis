@@ -3,14 +3,16 @@ Enhanced main module for running endothelial cell mechanotransduction simulation
 Now includes full multi-step input support directly in main.py.
 """
 import os
+import os
 import argparse
 import time
 import numpy as np
 import matplotlib.pyplot as plt
 
-from config import SimulationConfig, create_temporal_only_config, create_spatial_only_config, create_full_config
-from core import Simulator
-from visualization import Plotter
+# FIXED IMPORTS - use absolute package imports
+from endothelial_simulation.config import SimulationConfig, create_temporal_only_config, create_spatial_only_config, create_full_config
+from endothelial_simulation.core import Simulator
+from endothelial_simulation.visualization import Plotter
 
 
 def parse_schedule_string(schedule_str):
