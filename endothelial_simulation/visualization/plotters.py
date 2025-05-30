@@ -464,7 +464,7 @@ class Plotter:
         fig, ax = plt.subplots(figsize=(10, 4))
 
         # Plot input pattern
-        ax.plot(time_in_hours, input_value, 'r-', linewidth=2)
+        ax.plot(time_in_hours, input_value, 'r-', linewidth=2, drawstyle='steps-post')
 
         # Format plot
         ax.set_xlabel(time_label, fontsize=12)
