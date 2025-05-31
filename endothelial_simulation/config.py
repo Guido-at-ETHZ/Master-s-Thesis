@@ -50,7 +50,7 @@ class SimulationConfig:
         self.grid_size = (1024, 1024)
 
         # Number of cells at the start of simulation
-        self.initial_cell_count = 200
+        self.initial_cell_count = 50
 
         # ----------------
         # Component toggles
