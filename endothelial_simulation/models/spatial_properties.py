@@ -33,7 +33,7 @@ class SpatialPropertiesModel:
             },
             'aspect_ratio': {
                 0.0: 1.9,      # Static control
-                1.4: 2.3       # Flow control (increased elongation)
+                1.4: 200.3       # Flow control (increased elongation) 2.3 in reality
             },
             'orientation_mean': {
                 0.0: 49.0,     # Random orientation (degrees)
@@ -117,67 +117,38 @@ class SpatialPropertiesModel:
 
     def calculate_target_aspect_ratio(self, pressure, is_senescent):
         """
-        Calculate target cell aspect ratio based on pressure and senescence state.
-
-        Parameters:
-            pressure: Applied pressure in Pa
-            is_senescent: Whether the cell is senescent
-
-        Returns:
-            Target aspect ratio (major axis / minor axis)
+        Calculate target cell aspect ratio using YOUR experimental values.
         """
         if is_senescent:
             # Senescent cells: no significant response to flow
             base_ratio = self.interpolate_pressure_effect(self.senescent_params['aspect_ratio'], pressure)
-            # Add biological variability based on experimental data
-            if pressure <= 0.0:
-                std_dev = 0.65 / 1.9  # Relative std from static data
-            else:
-                std_dev = 0.72 / 2.0  # Relative std from flow data
+            std_dev = 0.1  # Small variation
+            variability = np.random.normal(1.0, std_dev)
+            return max(1.0, base_ratio * variability)
         else:
-            # Control cells: significant elongation under flow
+            # Control cells: USE YOUR EXACT VALUES
             base_ratio = self.interpolate_pressure_effect(self.control_params['aspect_ratio'], pressure)
-            # Add biological variability
-            if pressure <= 0.0:
-                std_dev = 0.67 / 1.9  # Relative std from static data
-            else:
-                std_dev = 0.78 / 2.3  # Relative std from flow data
-
-        # Apply variability
-        variability = np.random.normal(1.0, std_dev)
-        return max(1.0, base_ratio * variability)
+            std_dev = 0.05  # Small variation to see your exact values
+            variability = np.random.normal(1.0, std_dev)
+            return max(1.0, base_ratio * variability)  # NO CAPPING - use your 200.3!
 
     def calculate_target_orientation(self, pressure, is_senescent):
         """
         Calculate target cell orientation based on pressure and senescence state.
-
-        Parameters:
-            pressure: Applied pressure in Pa
-            is_senescent: Whether the cell is senescent
-
-        Returns:
-            Target orientation in radians
         """
         if is_senescent:
             # Senescent cells: remain randomly oriented regardless of flow
-            mean_deg = self.interpolate_pressure_effect(self.senescent_params['orientation_mean'], pressure)
-            std_deg = self.interpolate_pressure_effect(self.senescent_params['orientation_std'], pressure)
+            return np.random.uniform(-np.pi, np.pi)
         else:
-            # Control cells: align with flow at higher pressures
-            mean_deg = self.interpolate_pressure_effect(self.control_params['orientation_mean'], pressure)
-            std_deg = self.interpolate_pressure_effect(self.control_params['orientation_std'], pressure)
-
-        # Generate orientation with experimental variability
-        orientation_deg = np.random.normal(mean_deg, std_deg)
-
-        # Convert to radians and ensure within [-π, π]
-        orientation_rad = np.radians(orientation_deg)
-        while orientation_rad > np.pi:
-            orientation_rad -= 2 * np.pi
-        while orientation_rad < -np.pi:
-            orientation_rad += 2 * np.pi
-
-        return orientation_rad
+            # Normal cells: align with flow direction (0°) under shear stress
+            if pressure <= 0.0:
+                # No flow: random orientation
+                return np.random.uniform(-np.pi, np.pi)
+            else:
+                # Flow present: align horizontally (0° ± small variation)
+                flow_direction = 0.0  # Horizontal flow
+                variability = 0.2 * np.exp(-pressure * 0.5)  # Less variation at higher pressure
+                return np.random.normal(flow_direction, variability)
 
     def update_cell_properties(self, cell, pressure, dt, cells_dict=None):
         """

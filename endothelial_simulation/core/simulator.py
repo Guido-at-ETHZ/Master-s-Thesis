@@ -384,6 +384,15 @@ class Simulator:
         # Update models
         self._update_models(current_input, dt)
 
+        # Update biological adaptation every 2 steps
+        if self.step_count % 2 == 0:
+            self.grid.update_biological_adaptation()
+
+            # Optimize positions every 6 steps
+            if self.step_count % 6 == 0:
+                self.grid.optimize_cell_positions(iterations=2)
+
+
         # Update mosaic structure periodically
         self._update_mosaic_structure()
 
