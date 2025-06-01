@@ -342,33 +342,26 @@ class SpatialPropertiesModel:
         if not cells:
             return 0
 
-        # Convert cells input to a list of cell objects
         if isinstance(cells, dict):
             cell_list = list(cells.values())
         else:
             cell_list = cells
 
-        # Calculate alignment using actual orientations
         alignment_sum = 0
         cell_count = 0
 
         for cell in cell_list:
-            # Use actual orientation from territory shape
-            angle_diff = cell.actual_orientation - flow_direction
-            # Normalize to [-pi, pi]
-            angle_diff = (angle_diff + np.pi) % (2 * np.pi) - np.pi
+            # Convert to alignment angle (0-90°)
+            orientation_rad = cell.actual_orientation
+            alignment_angle = np.abs(orientation_rad) % (np.pi / 2)  # 0 to π/2 radians
 
-            # Cosine of the angle difference gives alignment (-1 to 1)
-            alignment = abs(np.cos(angle_diff))  # Use absolute value for bidirectional alignment
+            # Convert to alignment score (1 = perfectly aligned, 0 = perpendicular)
+            alignment_score = np.cos(alignment_angle)  # cos(0) = 1, cos(π/2) = 0
 
-            alignment_sum += alignment
+            alignment_sum += alignment_score
             cell_count += 1
 
-        # Average alignment (0-1)
-        if cell_count > 0:
-            return alignment_sum / cell_count
-        else:
-            return 0
+        return alignment_sum / cell_count if cell_count > 0 else 0
 
     def calculate_shape_index(self, cells):
         """

@@ -526,32 +526,25 @@ class Plotter:
 
             print(f"Hour {target_hour}: using data from t={closest_time:.1f} min ({closest_time / 60:.1f}h)")
 
-            # Get current cells at this time point
-            current_cells = list(simulator.grid.cells.values())
+            historical_state = simulator.history[closest_idx]
 
-            if not current_cells:
+            # Check if historical cell properties exist
+            if 'cell_properties' not in historical_state:
+                print(f"Warning: No historical cell properties found for time {closest_time:.1f}")
                 continue
 
-            # Extract properties
-            areas = []
-            aspect_ratios = []
-            orientations_deg = []
+            # Extract historical properties
+            cell_props = historical_state['cell_properties']
+            areas = cell_props['areas']
+            aspect_ratios = cell_props['aspect_ratios']
+            orientations_deg = cell_props['orientations']
 
-            for cell in current_cells:
-                # Scale area back to display units if needed
-                area = cell.actual_area * (simulator.grid.computation_scale ** 2)
-                areas.append(area)
+            if not areas:  # Skip if no cells
+                continue
 
-                aspect_ratios.append(cell.actual_aspect_ratio)
-
-                # Convert orientation from radians to degrees
-                orientation_deg = np.degrees(cell.actual_orientation)
-                # Normalize to [-90, 90] for flow alignment interpretation
-                while orientation_deg > 90:
-                    orientation_deg -= 180
-                while orientation_deg < -90:
-                    orientation_deg += 180
-                orientations_deg.append(orientation_deg)
+            # Get shear stress for this time point
+            shear_stress = historical_state.get('input_value', 0)
+            # ================================================
 
             hourly_data.append({
                 'hour': target_hour,
@@ -559,7 +552,8 @@ class Plotter:
                 'areas': areas,
                 'aspect_ratios': aspect_ratios,
                 'orientations': orientations_deg,
-                'cell_count': len(current_cells)
+                'cell_count': len(areas),
+                'shear_stress': shear_stress  # MAKE SURE this line uses the historical shear_stress
             })
 
         if not hourly_data:
@@ -615,16 +609,20 @@ class Plotter:
             # Orientation distribution
             ax_orient = fig.add_subplot(gs[row, 2])
             ax_orient.hist(orientations, bins=20, color=colors[2], alpha=0.7, edgecolor='black',
-                           range=(-90, 90))
-            ax_orient.set_title(f'Hour {hour}: Orientation Distribution', fontsize=10)
-            ax_orient.set_xlabel('Orientation (degrees)', fontsize=9)
+                           range=(0, 90))
+            ax_orient.set_title(f'Hour {hour}: Flow Alignment Distribution', fontsize=10)
+            ax_orient.set_xlabel('Alignment Angle (degrees)', fontsize=9)
             ax_orient.set_ylabel('Frequency', fontsize=9)
             ax_orient.grid(True, alpha=0.3)
-            ax_orient.set_xlim(-90, 90)
+            ax_orient.set_xlim(0, 90)
 
-            # Add flow direction reference (0 degrees = aligned with flow)
-            ax_orient.axvline(0, color='orange', linestyle='-', alpha=0.8, linewidth=2,
-                              label='Flow direction')
+            # Add alignment references
+            ax_orient.axvline(0, color='green', linestyle='-', alpha=0.8, linewidth=2,
+                              label='Perfect alignment')
+            ax_orient.axvline(45, color='orange', linestyle='--', alpha=0.6, linewidth=1,
+                              label='45° (intermediate)')
+            ax_orient.axvline(90, color='red', linestyle='-', alpha=0.8, linewidth=2,
+                              label='Perpendicular')
 
             # Add statistics
             mean_orient = np.mean(orientations)
@@ -671,16 +669,8 @@ class Plotter:
 
     def plot_animated_cell_distributions(self, simulator, save_path=None, max_hours=None, fps=2):
         """
+        REPLACE your entire function with this FIXED version.
         Create an animated video showing how cell property distributions evolve over time.
-
-        Parameters:
-            simulator: Simulator object with completed simulation
-            save_path: Path to save the video (default: auto-generated MP4)
-            max_hours: Maximum number of hours to animate (default: all available)
-            fps: Frames per second for the animation (default: 2, so 1 frame every 30 minutes)
-
-        Returns:
-            Animation object
         """
         import matplotlib.animation as animation
 
@@ -704,7 +694,7 @@ class Plotter:
             print("Simulation too short for animation")
             return None
 
-        # Extract all data first (reusing existing logic)
+        # Extract HISTORICAL data for each hourly timepoint
         hourly_data = []
 
         for target_hour in hourly_timepoints:
@@ -717,36 +707,24 @@ class Plotter:
 
             print(f"Hour {target_hour}: using data from t={closest_time:.1f} min ({closest_time / 60:.1f}h)")
 
-            # Get current cells at this time point
-            current_cells = list(simulator.grid.cells.values())
+            historical_state = simulator.history[closest_idx]
 
-            if not current_cells:
+            # Check if historical cell properties exist
+            if 'cell_properties' not in historical_state:
+                print(f"Warning: No historical cell properties found for animation at time {closest_time:.1f}")
                 continue
 
-            # Extract properties (same logic as static version)
-            areas = []
-            aspect_ratios = []
-            orientations_deg = []
+            # Extract historical properties
+            cell_props = historical_state['cell_properties']
+            areas = cell_props['areas']
+            aspect_ratios = cell_props['aspect_ratios']
+            orientations_deg = cell_props['orientations']
 
-            for cell in current_cells:
-                # Scale area back to display units if needed
-                area = cell.actual_area * (simulator.grid.computation_scale ** 2)
-                areas.append(area)
+            if not areas:  # Skip if no cells
+                continue
 
-                aspect_ratios.append(cell.actual_aspect_ratio)
-
-                # Convert orientation from radians to degrees
-                orientation_deg = np.degrees(cell.actual_orientation)
-                # Normalize to [-90, 90] for flow alignment interpretation
-                while orientation_deg > 90:
-                    orientation_deg -= 180
-                while orientation_deg < -90:
-                    orientation_deg += 180
-                orientations_deg.append(orientation_deg)
-
-            # Get shear stress for this time point
-            state_idx = min(target_hour * len(simulator.history) // len(hourly_timepoints), len(simulator.history) - 1)
-            shear_stress = simulator.history[state_idx].get('input_value', 0)
+            # Get shear stress for this time point from historical data
+            shear_stress = historical_state.get('input_value', 0)
 
             hourly_data.append({
                 'hour': target_hour,
@@ -754,7 +732,7 @@ class Plotter:
                 'areas': areas,
                 'aspect_ratios': aspect_ratios,
                 'orientations': orientations_deg,
-                'cell_count': len(current_cells),
+                'cell_count': len(areas),
                 'shear_stress': shear_stress
             })
 
@@ -775,7 +753,10 @@ class Plotter:
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))
         fig.suptitle('Cell Property Distributions Over Time', fontsize=16)
 
-        # Initialize empty plots
+        # DEFINE COLORS FIRST (before using them)
+        colors = ['skyblue', 'lightcoral', 'lightgreen']
+
+        # Initialize empty plots (NO data plotting here, just setup)
         axes[0].set_title('Area Distribution')
         axes[0].set_xlabel('Area (pixels²)')
         axes[0].set_ylabel('Frequency')
@@ -788,26 +769,24 @@ class Plotter:
         axes[1].set_xlim(ar_range)
         axes[1].grid(True, alpha=0.3)
 
-        axes[2].set_title('Orientation Distribution')
-        axes[2].set_xlabel('Orientation (degrees)')
+        # FIXED: Just setup the third axis, don't plot data yet
+        axes[2].set_title('Flow Alignment Distribution')
+        axes[2].set_xlabel('Alignment Angle (degrees)')
         axes[2].set_ylabel('Frequency')
-        axes[2].set_xlim(-90, 90)
+        axes[2].set_xlim(0, 90)  # FIXED: Use 0-90 range
         axes[2].grid(True, alpha=0.3)
-
-        # Colors for the three properties
-        colors = ['skyblue', 'lightcoral', 'lightgreen']
 
         # Create text objects for dynamic info
         time_text = fig.text(0.02, 0.95, '', fontsize=12,
                              bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
 
-        # Animation update function
+        # FIXED Animation update function
         def update_frame(frame_idx):
             # Clear all axes
             for ax in axes:
                 ax.clear()
 
-            # Get current data
+            # Get current data - THIS WAS THE MISSING LINE!
             data = hourly_data[frame_idx]
 
             # Plot Area distribution
@@ -840,18 +819,22 @@ class Plotter:
                                 label=f'Mean: {mean_ar:.1f}')
                 axes[1].legend(fontsize=9)
 
-            # Plot Orientation distribution
+            # FIXED: Plot Flow Alignment distribution (0-90° range)
             axes[2].hist(data['orientations'], bins=20, color=colors[2], alpha=0.7, edgecolor='black',
-                         range=(-90, 90))
-            axes[2].set_title('Orientation Distribution')
-            axes[2].set_xlabel('Orientation (degrees)')
+                         range=(0, 90))  # FIXED: Use 0-90 range
+            axes[2].set_title('Flow Alignment Distribution')
+            axes[2].set_xlabel('Alignment Angle (degrees)')
             axes[2].set_ylabel('Frequency')
-            axes[2].set_xlim(-90, 90)
+            axes[2].set_xlim(0, 90)  # FIXED: Use 0-90 range
             axes[2].grid(True, alpha=0.3)
 
-            # Add flow direction reference
-            axes[2].axvline(0, color='orange', linestyle='-', alpha=0.8, linewidth=2,
-                            label='Flow direction')
+            # FIXED: Add alignment references (not flow direction)
+            axes[2].axvline(0, color='green', linestyle='-', alpha=0.8, linewidth=2,
+                            label='Perfect alignment')
+            axes[2].axvline(45, color='orange', linestyle='--', alpha=0.6, linewidth=1,
+                            label='45° (intermediate)')
+            axes[2].axvline(90, color='red', linestyle='-', alpha=0.8, linewidth=2,
+                            label='Perpendicular')
 
             # Add mean orientation
             if data['orientations']:
@@ -879,7 +862,7 @@ class Plotter:
             import time
             timestamp = time.strftime("%Y%m%d-%H%M%S")
             save_path = os.path.join(self.config.plot_directory,
-                                     f"animated_distributions_{timestamp}.mp4")
+                                     f"historical_animated_distributions_{timestamp}.mp4")
 
         # Save animation
         print(f"Saving animation to {save_path}...")

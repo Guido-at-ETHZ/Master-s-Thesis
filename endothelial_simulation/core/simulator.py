@@ -819,6 +819,43 @@ class Simulator:
         grid_stats = self.grid.get_grid_statistics()
         state.update(grid_stats)
 
+        cell_properties = {
+            'areas': [],
+            'aspect_ratios': [],
+            'orientations': [],
+            'cell_types': [],
+            'is_senescent': [],
+            'senescence_causes': []
+        }
+
+        for cell in self.grid.cells.values():
+            # Scale area back to display units
+            area = cell.actual_area * (self.grid.computation_scale ** 2)
+            cell_properties['areas'].append(area)
+
+            cell_properties['aspect_ratios'].append(cell.actual_aspect_ratio)
+
+            # Convert orientation to degrees and normalize
+            # Convert to alignment angle (0-90°: 0° = aligned with flow, 90° = perpendicular)
+            orientation_rad = cell.actual_orientation
+            alignment_angle = np.abs(orientation_rad) % (np.pi / 2)  # Map to [0, π/2]
+            alignment_deg = np.degrees(alignment_angle)  # Convert to [0, 90] degrees
+            cell_properties['orientations'].append(alignment_deg)
+
+            cell_properties['is_senescent'].append(cell.is_senescent)
+            cell_properties['senescence_causes'].append(cell.senescence_cause)
+
+            # Cell type classification
+            if not cell.is_senescent:
+                cell_properties['cell_types'].append('healthy')
+            elif cell.senescence_cause == 'telomere':
+                cell_properties['cell_types'].append('telomere_senescent')
+            else:
+                cell_properties['cell_types'].append('stress_senescent')
+
+        # Add cell properties to state
+        state['cell_properties'] = cell_properties
+
         # ADD: Temporal dynamics monitoring
         if 'temporal' in self.models and self.config.enable_temporal_dynamics:
             temporal_model = self.models['temporal']
