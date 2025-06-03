@@ -76,6 +76,7 @@ class Simulator:
     def initialize(self, cell_count=None):
         """
         Initialize the simulation with cells using mosaic structure.
+        FIXED: Now sets initial cell properties based on current pressure.
 
         Parameters:
             cell_count: Number of cells to create (default: from config)
@@ -94,11 +95,61 @@ class Simulator:
         # Populate grid with initial cells using improved distribution
         self.grid.populate_grid(cell_count, area_distribution=area_distribution)
 
+        # CRITICAL FIX: Initialize cell properties based on current pressure
+        self._initialize_cell_properties_for_pressure()
+
         # Initial adaptation
         self.grid.adapt_cell_properties()
 
         # Record initial state
         self._record_state()
+
+    def _initialize_cell_properties_for_pressure(self):
+        """
+        NEW METHOD: Initialize all cell properties based on current input pressure.
+        This ensures cells start with realistic values for the given pressure.
+        """
+        current_pressure = self.input_pattern.get('value', 0.0)
+
+        print(f"Initializing {len(self.grid.cells)} cells for pressure {current_pressure:.2f} Pa")
+
+        if 'spatial' not in self.models:
+            print("Warning: No spatial model available for property initialization")
+            return
+
+        spatial_model = self.models['spatial']
+
+        # Initialize each cell with pressure-appropriate properties
+        for cell_id, cell in self.grid.cells.items():
+            # Calculate initial target properties for current pressure
+            target_area = spatial_model.calculate_target_area(
+                current_pressure, cell.is_senescent, cell.senescence_cause
+            )
+            target_aspect_ratio = spatial_model.calculate_target_aspect_ratio(
+                current_pressure, cell.is_senescent
+            )
+            target_orientation = spatial_model.calculate_target_orientation(
+                current_pressure, cell.is_senescent
+            )
+
+            # Set target properties
+            cell.target_area = target_area
+            cell.target_aspect_ratio = target_aspect_ratio
+            cell.target_orientation = target_orientation
+
+            # IMPORTANT: Set actual properties to match targets initially
+            # (they will evolve through temporal dynamics)
+            cell.actual_aspect_ratio = target_aspect_ratio
+            cell.actual_orientation = target_orientation
+            # Note: actual_area will be set by territory assignment
+
+            print(
+                f"Cell {cell_id}: target_AR={target_aspect_ratio:.1f}, target_orient={np.degrees(target_orientation):.1f}°")
+
+        # Update tessellation to reflect new target areas
+        self.grid._update_voronoi_tessellation()
+
+        print(f"Initialization complete. Cells should start with pressure-appropriate properties.")
 
     def set_constant_input(self, value):
         """Set a constant input pattern."""
