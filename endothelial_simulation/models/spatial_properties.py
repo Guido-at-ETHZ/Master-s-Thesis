@@ -33,7 +33,7 @@ class SpatialPropertiesModel:
             },
             'aspect_ratio': {
                 0.0: 1.9,      # Static control
-                1.4: 200.3       # Flow control (increased elongation) 2.3 in reality
+                1.4: 2.3       # Flow control (increased elongation) 2.3 in reality
             },
             'orientation_mean': {
                 0.0: 49.0,     # Random orientation (degrees)
@@ -170,16 +170,7 @@ class SpatialPropertiesModel:
     def update_cell_properties(self, cell, pressure, dt, cells_dict=None):
         """
         Update a cell's target properties using temporal dynamics with real parameters.
-        FIXED: Ensures temporal dynamics actually drive cells toward targets.
-
-        Parameters:
-            cell: Cell object to update
-            pressure: Applied pressure in Pa
-            dt: Time step
-            cells_dict: Dictionary of all cells (not used in this simplified version)
-
-        Returns:
-            Dictionary of updated property values and dynamics info
+        The tessellation will then work to make actual properties match these targets.
         """
         # Calculate instantaneous target values for current pressure
         instant_target_area = self.calculate_target_area(pressure, cell.is_senescent, cell.senescence_cause)
@@ -223,7 +214,7 @@ class SpatialPropertiesModel:
                 tau_orient = tau_unified
                 tau_ar = tau_unified
 
-            # 1. Area evolution - STRONGER temporal dynamics
+            # 1. Area evolution - temporal dynamics
             area_diff = instant_target_area - cell.target_area
             if abs(area_diff) > 10:  # Only adapt if significant difference
                 cell.target_area += dt * area_diff / tau_area
@@ -231,7 +222,7 @@ class SpatialPropertiesModel:
                 print(
                     f"Cell {cell.cell_id} area: {cell.target_area:.0f} → target {instant_target_area:.0f} (Δ={area_diff:.0f})")
 
-            # 2. Orientation evolution - STRONGER temporal dynamics
+            # 2. Orientation evolution - temporal dynamics
             orientation_diff = instant_target_orientation - cell.target_orientation
             while orientation_diff > np.pi:
                 orientation_diff -= 2 * np.pi
@@ -244,7 +235,7 @@ class SpatialPropertiesModel:
                 print(
                     f"Cell {cell.cell_id} orientation: {np.degrees(cell.target_orientation):.1f}° → target {np.degrees(instant_target_orientation):.1f}° (Δ={np.degrees(orientation_diff):.1f}°)")
 
-            # 3. Aspect ratio evolution - STRONGER temporal dynamics
+            # 3. Aspect ratio evolution - temporal dynamics
             ar_diff = instant_target_aspect_ratio - cell.target_aspect_ratio
             if abs(ar_diff) > 0.1:  # Only adapt if significant difference
                 cell.target_aspect_ratio += dt * ar_diff / tau_ar
@@ -252,18 +243,13 @@ class SpatialPropertiesModel:
                 print(
                     f"Cell {cell.cell_id} AR: {cell.target_aspect_ratio:.1f} → target {instant_target_aspect_ratio:.1f} (Δ={ar_diff:.1f})")
 
-        # Update the cell's properties
+        # Update the cell's target properties
         cell.update_target_properties(
             cell.target_orientation,
             cell.target_aspect_ratio,
             cell.target_area
         )
 
-        # CRITICAL: Also update actual properties to match targets
-        # (This ensures the visual representation matches the biological state)
-        cell.actual_orientation = cell.target_orientation
-        cell.actual_aspect_ratio = cell.target_aspect_ratio
-        # Note: actual_area is set by territory assignment in the grid
 
         return {
             'target_orientation': cell.target_orientation,
@@ -278,13 +264,7 @@ class SpatialPropertiesModel:
     def calculate_collective_properties(self, cells_dict, pressure):
         """
         Calculate collective properties focusing on real measured parameters.
-
-        Parameters:
-            cells_dict: Dictionary of Cell objects
-            pressure: Applied pressure in Pa
-
-        Returns:
-            Dictionary with collective properties
+        FIXED: Handle zero areas properly.
         """
         if not cells_dict:
             return {
@@ -330,19 +310,21 @@ class SpatialPropertiesModel:
             alignment = np.cos(angle_diff)
             alignment_scores.append(alignment)
 
-        # Calculate adaptation quality
+        # Calculate adaptation quality - FIXED to handle zero values
         orientation_adaptation = np.mean([
             1.0 - min(1.0, abs(a - t) / np.pi)
             for a, t in zip(actual_orientations, target_orientations)
         ])
 
+        # FIXED: Handle zero areas properly
         area_adaptation = np.mean([
-            min(a/t, t/a) if t > 0 else 1.0
+            min(a / t, t / a) if t > 0 and a > 0 else 1.0
             for a, t in zip(actual_areas, target_areas)
         ])
 
+        # FIXED: Handle zero aspect ratios properly
         aspect_ratio_adaptation = np.mean([
-            min(a/t, t/a) if t > 0 else 1.0
+            min(a / t, t / a) if t > 0 and a > 0 else 1.0
             for a, t in zip(actual_aspect_ratios, target_aspect_ratios)
         ])
 
@@ -363,7 +345,8 @@ class SpatialPropertiesModel:
 
             # Additional metrics
             'large_senescent_fraction': len([c for c in cells_dict.values()
-                                           if c.is_senescent and getattr(c, 'target_area', 0) > 27174]) / len(cells_dict),
+                                             if c.is_senescent and getattr(c, 'target_area', 0) > 27174]) / len(
+                cells_dict),
             'pressure': pressure
         }
 
@@ -475,7 +458,7 @@ class SpatialPropertiesModel:
                 orientation_quality = max(0, 1.0 - orientation_diff / np.pi)
 
             # Area quality
-            if hasattr(cell, 'target_area') and cell.target_area > 0:
+            if hasattr(cell, 'target_area') and cell.target_area > 0 and cell.actual_area > 0:
                 area_ratio = min(cell.actual_area / cell.target_area,
                                  cell.target_area / cell.actual_area)
                 area_quality = area_ratio

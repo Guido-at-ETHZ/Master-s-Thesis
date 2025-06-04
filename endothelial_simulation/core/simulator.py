@@ -852,6 +852,42 @@ class Simulator:
                 cause = senescence_action.get('cause', 'stress')
                 cell.induce_senescence(cause)
 
+    def _update_models(self, current_input, dt):
+        """
+        Update models with enhanced biological adaptation while preserving temporal dynamics.
+        """
+        # Update temporal dynamics if enabled (UNCHANGED - your original system)
+        if 'temporal' in self.models and self.config.enable_temporal_dynamics:
+            model = self.models['temporal']
+            model.update_cell_responses(self.grid.cells, current_input, dt)
+
+        # Update spatial properties if enabled (ENHANCED but preserves your temporal dynamics)
+        if 'spatial' in self.models and self.config.enable_spatial_properties:
+            model = self.models['spatial']
+            # Update cell properties using YOUR temporal dynamics
+            for cell in self.grid.cells.values():
+                dynamics_result = model.update_cell_properties(cell, current_input, dt, self.grid.cells)
+
+                # Optional: Store dynamics info for monitoring/debugging
+                if hasattr(cell, 'last_dynamics_info'):
+                    cell.last_dynamics_info = dynamics_result.get('dynamics_info', {})
+
+        # NEW: Update biological tessellation adaptation (every 2 steps as in your original)
+        if self.step_count % 2 == 0:
+            self.grid.update_biological_adaptation()
+
+            # Optimize positions every 6 steps (as in your original)
+            if self.step_count % 6 == 0:
+                self.grid.optimize_cell_positions(iterations=2)
+
+        # Update population dynamics if enabled (UNCHANGED - your original system)
+        if 'population' in self.models and self.config.enable_population_dynamics:
+            model = self.models['population']
+            stem_cell_rate = 10 if self.config.enable_stem_cells else 0
+            model.update_from_cells(self.grid.cells, dt, current_input, stem_cell_rate)
+            actions = model.synchronize_cells(self.grid.cells)
+            self._execute_population_actions(actions)
+
     def _record_state(self):
         """
         MODIFY this method in your existing simulator.py to include temporal dynamics info

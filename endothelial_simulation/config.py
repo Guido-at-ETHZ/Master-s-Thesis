@@ -94,6 +94,18 @@ class SimulationConfig:
         # Time units label for plot titles and axes
         self.time_unit = "minutes"
 
+        # NEW: Biological optimization parameters
+        self.biological_optimization_enabled = True
+        self.adaptation_strength = 0.25  # How strongly cells adapt toward targets
+        self.max_displacement_per_step = 12.0  # Maximum cell movement per step
+        self.global_adaptation_interval = 3  # Steps between global optimizations
+        self.convergence_threshold = 0.001  # Energy convergence threshold
+
+        # Energy weights for different properties
+        self.energy_weight_area = 1.0
+        self.energy_weight_aspect_ratio = 0.5
+        self.energy_weight_orientation = 0.5
+
     def disable_all_but_temporal(self):
         """Configure to focus only on temporal dynamics."""
         self.enable_population_dynamics = False
