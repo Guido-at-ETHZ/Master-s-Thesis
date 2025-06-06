@@ -38,7 +38,7 @@ class Grid:
         self.energy_weights = {
             'area': 1.0,        # Weight for area deviation
             'aspect_ratio': 0.5, # Weight for aspect ratio deviation
-            'orientation': 0.5,  # Weight for orientation deviation
+            'orientation': 2.0,  # Weight for orientation deviation
             'overlap': 2.0,      # Weight for preventing overlap
             'boundary': 0.1      # Weight for staying within bounds
         }
@@ -105,8 +105,10 @@ class Grid:
 
             # Orientation deviation energy
             if hasattr(cell, 'target_orientation'):
-                orientation_diff = self._angle_difference(cell.target_orientation, cell.actual_orientation)
-                orientation_energy = (orientation_diff / np.pi) ** 2
+                target_align = self.to_alignment_angle(cell.target_orientation)
+                actual_align = self.to_alignment_angle(cell.actual_orientation)
+                angle_diff = abs(target_align - actual_align)
+                orientation_energy = (angle_diff / (np.pi/2)) ** 2
                 total_energy += self.energy_weights['orientation'] * orientation_energy
 
         return total_energy
@@ -216,21 +218,25 @@ class Grid:
                     ar_force = ar_force_magnitude * stretch_direction
                     total_force += ar_force
 
-            # Force from orientation mismatch
+            # Force from orientation mismatch (ALIGNMENT-AWARE)
             if hasattr(cell, 'target_orientation') and cell.territory_pixels:
-                orientation_error = self._angle_difference(cell.target_orientation, cell.actual_orientation)
+                # Convert to alignment angles for comparison
+                target_align = np.abs(cell.target_orientation) % (np.pi / 2)
+                actual_align = np.abs(cell.actual_orientation) % (np.pi / 2)
 
-                if abs(orientation_error) > 0.1:  # ~6 degrees
+                alignment_error = target_align - actual_align
+
+                if abs(alignment_error) > np.radians(5):  # ~5 degrees threshold
                     # Move perpendicular to current orientation to change it
                     perp_direction = np.array([
                         -np.sin(cell.actual_orientation),
                         np.cos(cell.actual_orientation)
                     ])
 
-                    if orientation_error < 0:
+                    if alignment_error < 0:
                         perp_direction = -perp_direction
 
-                    orientation_force_magnitude = abs(orientation_error) * 4
+                    orientation_force_magnitude = abs(alignment_error) * 4
                     orientation_force = orientation_force_magnitude * perp_direction
                     total_force += orientation_force
 
@@ -291,6 +297,10 @@ class Grid:
                 repulsion_force += repulsion_magnitude * repulsion_direction
 
         return repulsion_force
+
+    def to_alignment_angle(self, angle_rad):
+        """Convert any angle to [0, π/2] flow alignment angle"""
+        return np.abs(angle_rad) % (np.pi / 2)
 
     def _update_voronoi_tessellation(self):
         """
