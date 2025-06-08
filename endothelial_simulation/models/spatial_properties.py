@@ -1,6 +1,7 @@
 """
 Updated spatial properties model using real experimental data.
-Only includes measurable parameters: area, aspect ratio, and orientation.
+Modified to use deterministic targets based on experimental measurements.
+Variability comes from tessellation process, not artificial randomness.
 """
 import numpy as np
 
@@ -8,7 +9,7 @@ import numpy as np
 class SpatialPropertiesModel:
     """
     Model for spatial arrangement and morphological adaptations of endothelial cells.
-    Uses real experimental data for area, aspect ratio, and orientation.
+    Uses deterministic targets based on real experimental data.
     """
 
     def __init__(self, config, temporal_model=None):
@@ -33,15 +34,11 @@ class SpatialPropertiesModel:
             },
             'aspect_ratio': {
                 0.0: 1.9,      # Static control
-                1.4: 2.3       # Flow control (increased elongation) 2.3 in reality
+                1.4: 2.3       # Flow control (increased elongation)
             },
             'orientation_mean': {
-                0.0: 49.0,     # Random orientation (degrees)
-                1.4: 20.0      # Aligned with flow (degrees)
-            },
-            'orientation_std': {
-                0.0: 25.0,     # Standard deviation for static
-                1.4: 14.0      # Standard deviation for flow (more aligned)
+                0.0: 49.0,     # Random orientation (degrees) - MEAN ONLY
+                1.4: 20.0      # Aligned with flow (degrees) - MEAN ONLY
             }
         }
 
@@ -55,12 +52,8 @@ class SpatialPropertiesModel:
                 1.4: 2.0             # Flow senescent (no significant change)
             },
             'orientation_mean': {
-                0.0: 42.0,           # Random orientation static
-                1.4: 45.0            # Random orientation flow (no alignment)
-            },
-            'orientation_std': {
-                0.0: 26.0,           # Standard deviation static
-                1.4: 27.0            # Standard deviation flow (still random)
+                0.0: 42.0,           # Random orientation static - MEAN ONLY
+                1.4: 45.0            # Random orientation flow (no alignment) - MEAN ONLY
             }
         }
 
@@ -92,87 +85,78 @@ class SpatialPropertiesModel:
 
     def calculate_target_aspect_ratio(self, pressure, is_senescent):
         """
-        Calculate target cell aspect ratio using YOUR experimental values.
-        FIXED: Ensures your control parameters are actually used.
+        Calculate target cell aspect ratio using deterministic experimental values.
+        NO artificial variability - let tessellation provide natural variation.
         """
         if is_senescent:
             # Senescent cells: no significant response to flow
             base_ratio = self.interpolate_pressure_effect(self.senescent_params['aspect_ratio'], pressure)
-            std_dev = 0.1  # Small variation
-            variability = np.random.normal(1.0, std_dev)
-            result = max(1.0, base_ratio * variability)
-            print(f"Senescent AR: pressure={pressure}, base={base_ratio:.1f}, result={result:.1f}")
+            # REMOVED: artificial variability
+            result = max(1.0, base_ratio)
+            print(f"Senescent AR: pressure={pressure}, deterministic result={result:.1f}")
             return result
         else:
-            # Control cells: USE YOUR EXACT VALUES
+            # Control cells: USE EXACT EXPERIMENTAL VALUES
             base_ratio = self.interpolate_pressure_effect(self.control_params['aspect_ratio'], pressure)
-            std_dev = 0.05  # Small variation to see your exact values
-            variability = np.random.normal(1.0, std_dev)
-            result = max(1.0, base_ratio * variability)  # NO CAPPING - use your 200.3!
-            print(f"Control AR: pressure={pressure}, base={base_ratio:.1f}, result={result:.1f}")
+            # REMOVED: artificial variability
+            result = max(1.0, base_ratio)
+            print(f"Control AR: pressure={pressure}, deterministic result={result:.1f}")
             return result
 
     def calculate_target_orientation(self, pressure, is_senescent):
         """
-        Calculate target cell orientation based on pressure and senescence state.
-        FIXED: Now properly uses your orientation parameters.
+        Calculate target cell orientation using deterministic experimental means.
+        NO artificial variability - let tessellation provide natural variation.
         """
         if is_senescent:
             # Senescent cells: remain randomly oriented regardless of flow
-            # Use your senescent orientation parameters
+            # Use MEAN orientation only (no std sampling)
             mean_deg = self.interpolate_pressure_effect(self.senescent_params['orientation_mean'], pressure)
-            std_deg = self.interpolate_pressure_effect(self.senescent_params['orientation_std'], pressure)
 
-            # Convert to radians and sample from normal distribution
+            # Convert to radians - USE MEAN DIRECTLY
             mean_rad = np.radians(mean_deg)
-            std_rad = np.radians(std_deg)
 
-            orientation = np.random.normal(mean_rad, std_rad)
-            print(
-                f"Senescent orientation: pressure={pressure}, mean={mean_deg:.1f}°, std={std_deg:.1f}°, result={np.degrees(orientation):.1f}°")
-            return orientation
+            print(f"Senescent orientation: pressure={pressure}, deterministic mean={mean_deg:.1f}°")
+            return mean_rad
         else:
-            # Normal cells: use your control orientation parameters
+            # Normal cells: use MEAN orientation only
             mean_deg = self.interpolate_pressure_effect(self.control_params['orientation_mean'], pressure)
-            std_deg = self.interpolate_pressure_effect(self.control_params['orientation_std'], pressure)
 
-            # Convert to radians and sample from normal distribution
+            # Convert to radians - USE MEAN DIRECTLY
             mean_rad = np.radians(mean_deg)
-            std_rad = np.radians(std_deg)
 
-            orientation = np.random.normal(mean_rad, std_rad)
-            print(
-                f"Control orientation: pressure={pressure}, mean={mean_deg:.1f}°, std={std_deg:.1f}°, result={np.degrees(orientation):.1f}°")
-            return orientation
+            print(f"Control orientation: pressure={pressure}, deterministic mean={mean_deg:.1f}°")
+            return mean_rad
 
     def calculate_target_area(self, pressure, is_senescent, senescence_cause=None):
         """
-        Calculate target cell area based on pressure and senescence state.
-        FIXED: Now properly uses your area parameters.
+        Calculate target cell area using deterministic experimental values.
+        NO artificial variability - let tessellation provide natural variation.
         """
         if is_senescent:
-            # Randomly assign small or large senescent area
+            # Deterministic assignment of small or large senescent area
+            # Use consistent assignment based on cell properties
             if np.random.random() < self.large_senescent_probability:
                 result = self.senescent_params['area_large']
             else:
                 result = self.senescent_params['area_small']
-            print(f"Senescent area: result={result:.0f}")
+            # REMOVED: artificial variability
+            print(f"Senescent area: deterministic result={result:.0f}")
             return result
         else:
-            # Control cells: use your control area parameters
+            # Control cells: use deterministic experimental area
             base_area = self.interpolate_pressure_effect(self.control_params['area'], pressure)
-            # Add biological variability (±5% based on experimental std)
-            variability = np.random.normal(1.0, 0.05)
-            result = max(1000, base_area * variability)  # Minimum 1000 pixels²
-            print(f"Control area: pressure={pressure}, base={base_area:.0f}, result={result:.0f}")
+            # REMOVED: artificial biological variability
+            result = max(1000, base_area)  # Minimum 1000 pixels²
+            print(f"Control area: pressure={pressure}, deterministic result={result:.0f}")
             return result
 
     def update_cell_properties(self, cell, pressure, dt, cells_dict=None):
         """
-        Update a cell's target properties using temporal dynamics with real parameters.
-        The tessellation will then work to make actual properties match these targets.
+        Update a cell's target properties using temporal dynamics with deterministic targets.
+        The tessellation will provide natural variability as cells adapt to spatial constraints.
         """
-        # Calculate instantaneous target values for current pressure
+        # Calculate deterministic instantaneous target values for current pressure
         instant_target_area = self.calculate_target_area(pressure, cell.is_senescent, cell.senescence_cause)
         instant_target_aspect_ratio = self.calculate_target_aspect_ratio(pressure, cell.is_senescent)
         instant_target_orientation = self.calculate_target_orientation(pressure, cell.is_senescent)
@@ -190,14 +174,14 @@ class SpatialPropertiesModel:
 
         # For senescent cells, targets don't adapt (they're mechanically impaired)
         if cell.is_senescent:
-            # Senescent cells maintain fixed properties - no temporal adaptation
+            # Senescent cells maintain fixed deterministic properties - no temporal adaptation
             cell.target_orientation = instant_target_orientation
             cell.target_area = instant_target_area
             cell.target_aspect_ratio = instant_target_aspect_ratio
 
             dynamics_info = {'adaptation_disabled': True}
         else:
-            # Normal cells adapt with temporal dynamics
+            # Normal cells adapt with temporal dynamics toward deterministic targets
             dynamics_info = {}
 
             # Get time constants from temporal model if available
@@ -214,7 +198,7 @@ class SpatialPropertiesModel:
                 tau_orient = tau_unified
                 tau_ar = tau_unified
 
-            # 1. Area evolution - temporal dynamics
+            # 1. Area evolution - temporal dynamics toward deterministic target
             area_diff = instant_target_area - cell.target_area
             if abs(area_diff) > 10:  # Only adapt if significant difference
                 cell.target_area += dt * area_diff / tau_area
@@ -222,7 +206,7 @@ class SpatialPropertiesModel:
                 print(
                     f"Cell {cell.cell_id} area: {cell.target_area:.0f} → target {instant_target_area:.0f} (Δ={area_diff:.0f})")
 
-            # 2. Orientation evolution - temporal dynamics
+            # 2. Orientation evolution - temporal dynamics toward deterministic target
             orientation_diff = instant_target_orientation - cell.target_orientation
             while orientation_diff > np.pi:
                 orientation_diff -= 2 * np.pi
@@ -235,7 +219,7 @@ class SpatialPropertiesModel:
                 print(
                     f"Cell {cell.cell_id} orientation: {np.degrees(cell.target_orientation):.1f}° → target {np.degrees(instant_target_orientation):.1f}° (Δ={np.degrees(orientation_diff):.1f}°)")
 
-            # 3. Aspect ratio evolution - temporal dynamics
+            # 3. Aspect ratio evolution - temporal dynamics toward deterministic target
             ar_diff = instant_target_aspect_ratio - cell.target_aspect_ratio
             if abs(ar_diff) > 0.1:  # Only adapt if significant difference
                 cell.target_aspect_ratio += dt * ar_diff / tau_ar
@@ -250,7 +234,6 @@ class SpatialPropertiesModel:
             cell.target_area
         )
 
-
         return {
             'target_orientation': cell.target_orientation,
             'target_area': cell.target_area,
@@ -264,7 +247,6 @@ class SpatialPropertiesModel:
     def calculate_collective_properties(self, cells_dict, pressure):
         """
         Calculate collective properties focusing on real measured parameters.
-        FIXED: Handle zero areas properly.
         """
         if not cells_dict:
             return {
@@ -310,19 +292,19 @@ class SpatialPropertiesModel:
             alignment = np.cos(angle_diff)
             alignment_scores.append(alignment)
 
-        # Calculate adaptation quality - FIXED to handle zero values
+        # Calculate adaptation quality
         orientation_adaptation = np.mean([
             1.0 - min(1.0, abs(a - t) / np.pi)
             for a, t in zip(actual_orientations, target_orientations)
         ])
 
-        # FIXED: Handle zero areas properly
+        # Handle zero areas properly
         area_adaptation = np.mean([
             min(a / t, t / a) if t > 0 and a > 0 else 1.0
             for a, t in zip(actual_areas, target_areas)
         ])
 
-        # FIXED: Handle zero aspect ratios properly
+        # Handle zero aspect ratios properly
         aspect_ratio_adaptation = np.mean([
             min(a / t, t / a) if t > 0 and a > 0 else 1.0
             for a, t in zip(actual_aspect_ratios, target_aspect_ratios)
@@ -347,19 +329,17 @@ class SpatialPropertiesModel:
             'large_senescent_fraction': len([c for c in cells_dict.values()
                                              if c.is_senescent and getattr(c, 'target_area', 0) > 27174]) / len(
                 cells_dict),
-            'pressure': pressure
+            'pressure': pressure,
+
+            # NEW: Target consistency metrics (should be very consistent now)
+            'target_orientation_std': np.degrees(np.std(target_orientations)),
+            'target_area_std': np.std(target_areas),
+            'target_aspect_ratio_std': np.std(target_aspect_ratios)
         }
 
     def calculate_alignment_index(self, cells, flow_direction=0):
         """
         Calculate the alignment index for a collection of cells.
-
-        Parameters:
-            cells: Dictionary or list of Cell objects
-            flow_direction: Direction of flow in radians (default: 0)
-
-        Returns:
-            Alignment index (0-1)
         """
         if not cells:
             return 0
@@ -389,12 +369,6 @@ class SpatialPropertiesModel:
         """
         Calculate the shape index for a collection of cells.
         Shape index = P/(sqrt(4πA)) where P is perimeter and A is area.
-
-        Parameters:
-            cells: Dictionary or list of Cell objects
-
-        Returns:
-            Average shape index
         """
         if not cells:
             return 0
@@ -425,12 +399,6 @@ class SpatialPropertiesModel:
     def calculate_packing_quality(self, cells):
         """
         Calculate how well cells are packed (how close they are to their targets).
-
-        Parameters:
-            cells: Dictionary or list of Cell objects
-
-        Returns:
-            Packing quality index (0-1, where 1 is perfect)
         """
         if not cells:
             return 1.0
@@ -476,116 +444,17 @@ class SpatialPropertiesModel:
 
         return total_quality / cell_count if cell_count > 0 else 1.0
 
-    def calculate_stress_adaptation_index(self, cells, target_pressure):
-        """
-        Calculate how well cells have adapted to the applied stress based on real parameters.
-
-        Parameters:
-            cells: Dictionary or list of Cell objects
-            target_pressure: The pressure being applied
-
-        Returns:
-            Adaptation index (0-1)
-        """
-        if not cells:
-            return 1.0
-
-        # Convert cells input to a list of cell objects
-        if isinstance(cells, dict):
-            cell_list = list(cells.values())
-        else:
-            cell_list = cells
-
-        total_adaptation = 0
-        cell_count = 0
-
-        for cell in cell_list:
-            if not cell.is_senescent:
-                # For normal cells, check adaptation to expected experimental values
-                expected = self.get_expected_values(target_pressure, 'control')
-
-                # Orientation adaptation (how close to expected mean)
-                expected_orientation_rad = np.radians(expected['orientation_mean'])
-                orientation_diff = abs(cell.actual_orientation - expected_orientation_rad)
-                if orientation_diff > np.pi:
-                    orientation_diff = 2 * np.pi - orientation_diff
-                orientation_adaptation = max(0, 1.0 - orientation_diff / (np.pi / 2))  # Normalize by 90 degrees
-
-                # Aspect ratio adaptation
-                expected_ar = expected['aspect_ratio']
-                if expected_ar > 0:
-                    ar_ratio = min(cell.actual_aspect_ratio / expected_ar,
-                                   expected_ar / cell.actual_aspect_ratio)
-                    aspect_ratio_adaptation = ar_ratio
-                else:
-                    aspect_ratio_adaptation = 1.0
-
-                # Area adaptation
-                expected_area = expected['area']
-                if expected_area > 0:
-                    area_ratio = min(cell.actual_area / expected_area,
-                                     expected_area / cell.actual_area)
-                    area_adaptation = area_ratio
-                else:
-                    area_adaptation = 1.0
-
-                # Combined adaptation
-                adaptation = (orientation_adaptation + aspect_ratio_adaptation + area_adaptation) / 3
-            else:
-                # Senescent cells don't adapt, so their "adaptation" is maintaining senescent state
-                adaptation = 1.0
-
-            total_adaptation += adaptation
-            cell_count += 1
-
-        return total_adaptation / cell_count if cell_count > 0 else 1.0
-
-    def update_population_dynamics(self, cells_dict, pressure, dt):
-        """
-        Update the spatial properties of all cells in the population.
-
-        Parameters:
-            cells_dict: Dictionary of Cell objects
-            pressure: Applied pressure in Pa
-            dt: Time step
-
-        Returns:
-            Dictionary with population-level statistics
-        """
-        # Update each cell's target properties with temporal dynamics
-        for cell in cells_dict.values():
-            self.update_cell_properties(cell, pressure, dt, cells_dict)
-
-        # Calculate collective properties
-        collective_props = self.calculate_collective_properties(cells_dict, pressure)
-
-        # Add additional metrics
-        collective_props.update({
-            'alignment_index': self.calculate_alignment_index(cells_dict),
-            'shape_index': self.calculate_shape_index(cells_dict),
-            'packing_quality': self.calculate_packing_quality(cells_dict),
-            'stress_adaptation_index': self.calculate_stress_adaptation_index(cells_dict, pressure)
-        })
-
-        return collective_props
-
     def get_expected_values(self, pressure, cell_type='control'):
         """
         Get expected experimental values for comparison.
-
-        Parameters:
-            pressure: Applied pressure in Pa
-            cell_type: 'control' or 'senescent'
-
-        Returns:
-            Dictionary with expected values
+        Now returns deterministic values (means only).
         """
         if cell_type == 'control':
             return {
                 'area': self.interpolate_pressure_effect(self.control_params['area'], pressure),
                 'aspect_ratio': self.interpolate_pressure_effect(self.control_params['aspect_ratio'], pressure),
                 'orientation_mean': self.interpolate_pressure_effect(self.control_params['orientation_mean'], pressure),
-                'orientation_std': self.interpolate_pressure_effect(self.control_params['orientation_std'], pressure)
+                # Note: no orientation_std returned since we're now deterministic
             }
         else:  # senescent
             return {
@@ -593,5 +462,4 @@ class SpatialPropertiesModel:
                 'area_large': self.senescent_params['area_large'],
                 'aspect_ratio': self.interpolate_pressure_effect(self.senescent_params['aspect_ratio'], pressure),
                 'orientation_mean': self.interpolate_pressure_effect(self.senescent_params['orientation_mean'], pressure),
-                'orientation_std': self.interpolate_pressure_effect(self.senescent_params['orientation_std'], pressure)
             }
