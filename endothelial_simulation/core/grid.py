@@ -14,7 +14,7 @@ class Grid:
     """
 
     def __init__(self, width, height, config):
-        """Initialize the biological grid with energy-based optimization."""
+        """Initialize the biological grid with gradient-based energy optimization."""
         self.width = width
         self.height = height
         self.config = config
@@ -36,21 +36,55 @@ class Grid:
 
         # Biological optimization parameters
         self.energy_weights = {
-            'area': 1.0,        # Weight for area deviation
-            'aspect_ratio': 0.5, # Weight for aspect ratio deviation
+            'area': 1.0,  # Weight for area deviation
+            'aspect_ratio': 0.5,  # Weight for aspect ratio deviation
             'orientation': 2.0,  # Weight for orientation deviation
-            'overlap': 2.0,      # Weight for preventing overlap
-            'boundary': 0.1      # Weight for staying within bounds
+            'overlap': 2.0,  # Weight for preventing overlap
+            'boundary': 0.1  # Weight for staying within bounds
         }
 
-        # Optimization settings
-        self.max_displacement_per_step = 12.0  # Maximum cell movement per optimization step
-        self.convergence_threshold = 0.001     # Energy convergence threshold
-        self.max_optimization_steps = 8       # Maximum optimization iterations per time step
+        # NEW: Gradient-based optimization parameters
+        self.energy_history = []
+        self.energy_window = 5  # Track last 5 energy values
+        self.stuck_threshold = 3  # Steps with minimal improvement = "stuck"
+        self.stuck_counter = 0
+
+        # NEW: Intensity-based optimization parameters
+        self.optimization_params = {
+            'gentle': {
+                'max_steps': 1,
+                'displacement_scale': 0.3,
+                'convergence_threshold': 0.001,
+                'movement_threshold': 1.5
+            },
+            'moderate': {
+                'max_steps': 2,
+                'displacement_scale': 0.6,
+                'convergence_threshold': 0.01,
+                'movement_threshold': 1.0
+            },
+            'active': {
+                'max_steps': 4,
+                'displacement_scale': 0.9,
+                'convergence_threshold': 0.05,
+                'movement_threshold': 0.5
+            },
+            'crisis': {
+                'max_steps': 6,
+                'displacement_scale': 1.2,
+                'convergence_threshold': 0.1,
+                'movement_threshold': 0.3
+            },
+            'escape': {  # Special mode for escaping local minima
+                'max_steps': 8,
+                'displacement_scale': 1.5,
+                'convergence_threshold': 0.2,
+                'movement_threshold': 0.1
+            }
+        }
 
         # Adaptation parameters
-        self.adaptation_strength = 0.25        # How strongly cells adapt toward targets
-        self.global_adaptation_interval = 3   # Steps between global optimizations
+        self.adaptation_strength = 0.25  # How strongly cells adapt toward targets
 
         # Keep original grid parameters for compatibility
         self.global_pressure = 1.0
@@ -115,38 +149,96 @@ class Grid:
 
     def update_biological_adaptation(self):
         """
-        Update biological adaptation every 2 steps (same as your original).
-        This integrates with your existing temporal dynamics.
+        Update biological adaptation with gradient-based optimization.
         """
         self._adaptation_step_counter += 1
 
-        # Perform global optimization periodically
-        if self._adaptation_step_counter % self.global_adaptation_interval == 0:
-            self.optimize_biological_tessellation()
-        else:
-            # Perform lighter local optimization more frequently
-            self._light_local_optimization()
+        # Always use gradient-based adaptive optimization
+        self.optimize_biological_tessellation()
 
     def optimize_biological_tessellation(self):
         """
-        Optimize cell positions and tessellation to minimize biological energy.
-        This works with targets that are evolving via your temporal dynamics.
+        Gradient-based adaptive optimization - responds to energy trajectory.
         """
         if len(self.cells) < 2:
             return
 
-        initial_energy = self.calculate_biological_energy()
+        current_energy = self.calculate_biological_energy()
+        self.energy_history.append(current_energy)
 
-        for step in range(self.max_optimization_steps):
-            # Local optimization: small adjustments to each cell
+        # Keep only recent history
+        if len(self.energy_history) > self.energy_window:
+            self.energy_history.pop(0)
+
+        # Calculate optimization intensity based on energy trajectory
+        intensity = self._calculate_optimization_intensity(current_energy)
+
+        # Apply optimization with calculated intensity
+        self._run_adaptive_optimization(intensity, current_energy)
+
+    def _calculate_optimization_intensity(self, current_energy):
+        """Calculate optimization intensity based on energy dynamics."""
+
+        if len(self.energy_history) < 3:
+            return 'moderate'  # Default for early steps
+
+        # Calculate energy gradient (rate of change)
+        recent_energies = self.energy_history[-3:]
+        energy_gradient = (recent_energies[-1] - recent_energies[0]) / 2
+        energy_variance = np.var(recent_energies)
+
+        # Debug output if enabled
+        if hasattr(self.config, 'debug_adaptive') and self.config.debug_adaptive:
+            print(f"  Energy gradient: {energy_gradient:.4f}, variance: {energy_variance:.4f}")
+
+        # Detect different scenarios
+        if energy_gradient > 0.1:  # Energy increasing - crisis!
+            self.stuck_counter = 0
+            return 'crisis'
+
+        elif abs(energy_gradient) < 0.01 and energy_variance < 0.001:  # Stuck/oscillating
+            self.stuck_counter += 1
+            if self.stuck_counter > self.stuck_threshold:
+                return 'escape'  # Special mode to escape local minima
+            else:
+                return 'active'
+
+        elif energy_gradient < -0.05:  # Rapidly improving
+            self.stuck_counter = 0
+            return 'gentle'  # Don't interfere with good progress
+
+        elif current_energy < 1.0:  # Already quite good
+            self.stuck_counter = 0
+            return 'gentle'
+
+        else:  # Moderate improvement needed
+            self.stuck_counter = 0
+            return 'moderate'
+
+    def _run_adaptive_optimization(self, intensity, initial_energy):
+        """Run optimization with specified intensity parameters."""
+
+        if intensity not in self.optimization_params:
+            intensity = 'moderate'  # Fallback
+
+        params = self.optimization_params[intensity]
+
+        if hasattr(self.config, 'debug_adaptive') and self.config.debug_adaptive:
+            print(f"Step {self._adaptation_step_counter}: Energy={initial_energy:.2f} → {intensity} mode")
+
+        # Run optimization with adaptive parameters
+        for step in range(params['max_steps']):
             position_adjustments = self._calculate_local_position_adjustments()
 
-            # Apply adjustments with constraints
+            # Apply adaptive scaling
             movements_applied = 0
             for cell_id, adjustment in position_adjustments.items():
-                if np.linalg.norm(adjustment) > 1.0:  # Only apply significant adjustments
+                scaled_adjustment = adjustment * params['displacement_scale']
+
+                # Apply movement threshold from adaptive parameters
+                if np.linalg.norm(scaled_adjustment) > params['movement_threshold']:
                     current_pos = np.array(self.cell_seeds[cell_id])
-                    new_pos = current_pos + adjustment
+                    new_pos = current_pos + scaled_adjustment
 
                     # Constrain to grid bounds
                     new_pos[0] = max(20, min(self.width - 20, new_pos[0]))
@@ -156,18 +248,27 @@ class Grid:
                     self.cells[cell_id].update_position(tuple(new_pos))
                     movements_applied += 1
 
-            if movements_applied > 0:
-                # Update tessellation after movements
-                self._update_voronoi_tessellation()
+            if movements_applied == 0:
+                if hasattr(self.config, 'debug_adaptive') and self.config.debug_adaptive:
+                    print(f"    Converged at step {step} (no movements)")
+                break
 
-                # Check convergence
-                current_energy = self.calculate_biological_energy()
-                energy_improvement = initial_energy - current_energy
+            # Update tessellation after movements
+            self._update_voronoi_tessellation()
 
-                if abs(energy_improvement) < self.convergence_threshold:
-                    break
+            # Check convergence
+            current_energy = self.calculate_biological_energy()
+            improvement = initial_energy - current_energy
 
-                initial_energy = current_energy
+            if hasattr(self.config, 'debug_adaptive') and self.config.debug_adaptive:
+                print(f"    Step {step}: energy {current_energy:.2f} (Δ{improvement:+.3f})")
+
+            if improvement < params['convergence_threshold']:
+                if hasattr(self.config, 'debug_adaptive') and self.config.debug_adaptive:
+                    print(f"    Converged at step {step} (energy threshold)")
+                break
+
+            initial_energy = current_energy
 
     def _calculate_local_position_adjustments(self):
         """
@@ -242,40 +343,14 @@ class Grid:
 
             # Limit maximum displacement per step
             force_magnitude = np.linalg.norm(total_force)
-            if force_magnitude > self.max_displacement_per_step:
-                total_force = total_force / force_magnitude * self.max_displacement_per_step
+            max_displacement = 12.0  # Reasonable default
+            if force_magnitude > max_displacement:
+                total_force = total_force / force_magnitude * max_displacement
 
             adjustments[cell_id] = total_force
 
         return adjustments
 
-    def _light_local_optimization(self):
-        """Perform lighter local optimization between global optimization steps."""
-        if len(self.cells) < 2:
-            return
-
-        # Small position adjustments only
-        position_adjustments = self._calculate_local_position_adjustments()
-
-        movements_applied = 0
-        for cell_id, adjustment in position_adjustments.items():
-            # Apply smaller adjustments for frequent updates
-            adjustment = adjustment * 0.4
-
-            if np.linalg.norm(adjustment) > 0.5:
-                current_pos = np.array(self.cell_seeds[cell_id])
-                new_pos = current_pos + adjustment
-
-                # Constrain to grid bounds
-                new_pos[0] = max(20, min(self.width - 20, new_pos[0]))
-                new_pos[1] = max(20, min(self.height - 20, new_pos[1]))
-
-                self.cell_seeds[cell_id] = tuple(new_pos)
-                self.cells[cell_id].update_position(tuple(new_pos))
-                movements_applied += 1
-
-        if movements_applied > 0:
-            self._update_voronoi_tessellation()
 
     def _calculate_repulsion_force(self, cell_id):
         """Calculate repulsion force from neighboring cells."""
