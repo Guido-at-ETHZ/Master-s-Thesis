@@ -319,10 +319,27 @@ class Grid:
                     ar_force = ar_force_magnitude * stretch_direction
                     total_force += ar_force
 
-            # Force from orientation mismatch
+            # Force from orientation mismatch (ALIGNMENT-AWARE)
             if hasattr(cell, 'target_orientation') and cell.territory_pixels:
-                orientation_force = self._calculate_orientation_force_fixed(cell)
-                total_force += orientation_force
+                # Convert to alignment angles for comparison
+                target_align = np.abs(cell.target_orientation) % (np.pi / 2)
+                actual_align = np.abs(cell.actual_orientation) % (np.pi / 2)
+
+                alignment_error = target_align - actual_align
+
+                if abs(alignment_error) > np.radians(5):  # ~5 degrees threshold
+                    # Move perpendicular to current orientation to change it
+                    perp_direction = np.array([
+                        -np.sin(cell.actual_orientation),
+                        np.cos(cell.actual_orientation)
+                    ])
+
+                    if alignment_error < 0:
+                        perp_direction = -perp_direction
+
+                    orientation_force_magnitude = abs(alignment_error) * 4
+                    orientation_force = orientation_force_magnitude * perp_direction
+                    total_force += orientation_force
 
             # Limit maximum displacement per step
             force_magnitude = np.linalg.norm(total_force)
@@ -357,70 +374,8 @@ class Grid:
         return repulsion_force
 
     def to_alignment_angle(self, angle_rad):
-        """
-        FIXED: Convert orientation to flow alignment quality (0-90°).
-        0° = perfectly aligned with flow, 90° = perpendicular to flow.
-        """
-        # Calculate angle relative to flow direction (0°)
-        flow_direction = 0.0  # Flow in +x direction
-        angle_diff = angle_rad - flow_direction
-
-        # Normalize to [-π, π]
-        angle_diff = ((angle_diff + np.pi) % (2 * np.pi)) - np.pi
-
-        # Get acute angle (0 to π/2) - this represents alignment quality
-        alignment_angle = min(abs(angle_diff), abs(abs(angle_diff) - np.pi))
-
-        return alignment_angle
-
-    def _calculate_shortest_angle_difference(self, target_angle, current_angle):
-        """
-        Calculate the shortest rotation needed to go from current_angle to target_angle.
-        Returns signed difference where positive = counterclockwise rotation.
-        """
-        diff = target_angle - current_angle
-
-        # Normalize to [-π, π] for shortest path
-        while diff > np.pi:
-            diff -= 2 * np.pi
-        while diff < -np.pi:
-            diff += 2 * np.pi
-
-        return diff
-
-    def _calculate_orientation_force_fixed(self, cell):
-        """
-        FIXED: Calculate orientation force using proper angle differences.
-        """
-        if not (hasattr(cell, 'target_orientation') and cell.territory_pixels):
-            return np.array([0.0, 0.0])
-
-        # Calculate the shortest rotation needed
-        angle_difference = self._calculate_shortest_angle_difference(
-            cell.target_orientation, cell.actual_orientation
-        )
-
-        # Only apply force if significant misalignment (> 5 degrees)
-        if abs(angle_difference) < np.radians(5):
-            return np.array([0.0, 0.0])
-
-        # Force perpendicular to current orientation to induce rotation
-        perp_angle = cell.actual_orientation + np.pi / 2
-
-        # Force direction depends on required rotation direction
-        if angle_difference > 0:  # Need counterclockwise rotation
-            force_direction = perp_angle
-        else:  # Need clockwise rotation
-            force_direction = perp_angle + np.pi
-
-        # Force magnitude proportional to needed rotation
-        force_magnitude = min(abs(angle_difference) * 4.0, 8.0)  # Cap maximum force
-
-        # Convert to force vector
-        fx = force_magnitude * np.cos(force_direction)
-        fy = force_magnitude * np.sin(force_direction)
-
-        return np.array([fx, fy])
+        """Convert any angle to [0, π/2] flow alignment angle"""
+        return np.abs(angle_rad) % (np.pi / 2)
 
     def _update_voronoi_tessellation(self):
         """
