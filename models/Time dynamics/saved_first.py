@@ -1,4 +1,6 @@
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # Use non-interactive backend
 import matplotlib.pyplot as plt
 from scipy.integrate import odeint
 from scipy.optimize import minimize
@@ -310,4 +312,5 @@ for P in sorted(all_P_values):
 
     print(f"{P:^10.1f} | {A_max:^15.3f} | {steady_state:^15.3f} | {tau:^15.3f} | {time_to_95:^15.3f}")
 
-plt.show()
+plt.savefig('model_plots.png', dpi=300, bbox_inches='tight')
+print("Plots saved to model_plots.png")

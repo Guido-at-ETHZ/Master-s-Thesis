@@ -172,7 +172,8 @@ handles, labels = plt.gca().get_legend_handles_labels()  # For ordering legend
 # For now, standard legend
 plt.legend(bbox_to_anchor=(1.03, 1), loc='upper left', borderaxespad=0.)
 plt.tight_layout(rect=[0, 0, 0.80, 1])
-plt.show()
+plt.savefig('model_plots_time.png', dpi=300, bbox_inches='tight')
+print("Plots saved to model_plots.png")
 
 # Plot 2: Steady-state (A_max) vs Pressure
 plt.figure(figsize=(10, 6))
@@ -196,7 +197,8 @@ plt.title('$A_{max}$ vs. Pressure: Model Comparison', fontsize=16)
 plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
 plt.legend()
 plt.tight_layout()
-plt.show()
+plt.savefig('model_plots_response.png', dpi=300, bbox_inches='tight')
+print("Plots saved to model_plots.png")
 
 # Plot 3: Time Constant (tau) vs Steady-State (A_max)
 plt.figure(figsize=(12, 8))
@@ -239,7 +241,8 @@ plt.title('Time Constant vs. $A_{max}$ (based on Hybrid Model)', fontsize=16)
 plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
 plt.legend()
 plt.tight_layout()
-plt.show()
+plt.savefig('model_plots_steady.png', dpi=300, bbox_inches='tight')
+print("Plots saved to model_plots.png")
 
 # Plot 4: Time to 95% of Steady State vs Pressure
 plt.figure(figsize=(10, 6))
@@ -287,7 +290,8 @@ plt.grid(True, which='both', linestyle='--', linewidth=0.5, alpha=0.7)
 plt.legend()
 plt.ylim(bottom=0)  # Ensure y-axis starts at 0 for time
 plt.tight_layout()
-plt.show()
+plt.savefig('model_plots.png', dpi=300, bbox_inches='tight')
+print("Plots saved to model_plots.png")
 
 # Print predicted values for Hybrid A_max model
 print("\nPredicted values (Hybrid A_max model - used for fitting):")

@@ -21,7 +21,7 @@ class SimulationConfig:
         self.known_pressures = [15, 25, 45]
         self.known_A_max = {15: 1.5, 25: 3.7, 45: 5.3}
         self.initial_response = 1.0
-        self.tau_base = 30.0
+        self.tau_base = 60.0
         self.lambda_scale = 0.8
 
         # ----------------

@@ -890,11 +890,10 @@ class Simulator:
 
     def _record_state(self):
         """
-        MODIFY this method in your existing simulator.py to include temporal dynamics info
+        Record simulation state including temporal dynamics tracking.
+        MODIFIED to include target parameter evolution for time dynamics verification.
         """
-        # Keep all your existing state recording code...
-
-        # Collect state information (your existing code)
+        # Collect basic state information
         state = {
             'time': self.time,
             'step_count': self.step_count,
@@ -902,20 +901,33 @@ class Simulator:
             'cells': len(self.grid.cells)
         }
 
-        # Add grid statistics (your existing code)
+        # Add grid statistics
         grid_stats = self.grid.get_grid_statistics()
         state.update(grid_stats)
 
+        # Initialize cell properties dictionary - ENHANCED with target tracking
         cell_properties = {
             'areas': [],
             'aspect_ratios': [],
             'orientations': [],
             'cell_types': [],
             'is_senescent': [],
-            'senescence_causes': []
+            'senescence_causes': [],
+            # NEW: Target parameter tracking for time dynamics
+            'target_areas': [],
+            'target_aspect_ratios': [],
+            'target_orientations': [],
+            'target_orientations_degrees': [],  # For easier analysis
+            # Additional tracking for debugging
+            'biochemical_responses': [],
+            'compression_ratios': [],
+            'senescent_growth_factors': []
         }
 
+        # Process each cell
         for cell in self.grid.cells.values():
+            # === ACTUAL VALUES (existing code) ===
+
             # Scale area back to display units
             area = cell.actual_area * (self.grid.computation_scale ** 2)
             cell_properties['areas'].append(area)
@@ -940,10 +952,51 @@ class Simulator:
             else:
                 cell_properties['cell_types'].append('stress_senescent')
 
+            # === NEW: TARGET VALUES (for time dynamics tracking) ===
+
+            # Target area (scaled to display units)
+            target_area = getattr(cell, 'target_area', area)
+            if target_area is not None:
+                target_area_display = target_area * (self.grid.computation_scale ** 2)
+                cell_properties['target_areas'].append(target_area_display)
+            else:
+                cell_properties['target_areas'].append(area)  # Fallback to actual
+
+            # Target aspect ratio
+            target_ar = getattr(cell, 'target_aspect_ratio', cell.actual_aspect_ratio)
+            cell_properties['target_aspect_ratios'].append(
+                target_ar if target_ar is not None else cell.actual_aspect_ratio)
+
+            # Target orientation (in radians and degrees)
+            target_orient_rad = getattr(cell, 'target_orientation', cell.actual_orientation)
+            if target_orient_rad is not None:
+                cell_properties['target_orientations'].append(target_orient_rad)
+                # Convert to alignment angle in degrees for easier analysis
+                target_alignment_angle = np.abs(target_orient_rad) % (np.pi / 2)
+                target_alignment_deg = np.degrees(target_alignment_angle)
+                cell_properties['target_orientations_degrees'].append(target_alignment_deg)
+            else:
+                cell_properties['target_orientations'].append(cell.actual_orientation)
+                cell_properties['target_orientations_degrees'].append(alignment_deg)
+
+            # === ADDITIONAL TRACKING ===
+
+            # Biochemical response (from temporal dynamics)
+            biochem_response = getattr(cell, 'response', 1.0)
+            cell_properties['biochemical_responses'].append(biochem_response)
+
+            # Compression ratio (from mosaic dynamics)
+            compression_ratio = getattr(cell, 'compression_ratio', 1.0)
+            cell_properties['compression_ratios'].append(compression_ratio)
+
+            # Senescent growth factor (enhanced senescent cell tracking)
+            growth_factor = getattr(cell, 'senescent_growth_factor', 1.0)
+            cell_properties['senescent_growth_factors'].append(growth_factor)
+
         # Add cell properties to state
         state['cell_properties'] = cell_properties
 
-        # ADD: Temporal dynamics monitoring
+        # === TEMPORAL DYNAMICS MONITORING ===
         if 'temporal' in self.models and self.config.enable_temporal_dynamics:
             temporal_model = self.models['temporal']
             current_pressure = self.input_pattern['value']
@@ -954,16 +1007,35 @@ class Simulator:
             tau_orientation, _ = temporal_model.get_scaled_tau_and_amax(current_pressure, 'orientation')
             tau_aspect_ratio, _ = temporal_model.get_scaled_tau_and_amax(current_pressure, 'aspect_ratio')
 
+            # Calculate instantaneous targets for current pressure (for comparison)
+            if 'spatial' in self.models and len(self.grid.cells) > 0:
+                spatial_model = self.models['spatial']
+                # Use first healthy cell as reference
+                ref_cell = next((cell for cell in self.grid.cells.values() if not cell.is_senescent), None)
+                if ref_cell:
+                    instant_target_area = spatial_model.calculate_target_area(current_pressure, False, None)
+                    instant_target_ar = spatial_model.calculate_target_aspect_ratio(current_pressure, False)
+                    instant_target_orient = spatial_model.calculate_target_orientation(current_pressure, False)
+                else:
+                    instant_target_area = instant_target_ar = instant_target_orient = None
+            else:
+                instant_target_area = instant_target_ar = instant_target_orient = None
+
             state.update({
                 'current_A_max': A_max,
                 'tau_biochemical': tau_biochem,
                 'tau_area': tau_area,
                 'tau_orientation': tau_orientation,
                 'tau_aspect_ratio': tau_aspect_ratio,
-                'temporal_dynamics_active': True
+                'temporal_dynamics_active': True,
+                'instant_target_area': instant_target_area,
+                'instant_target_aspect_ratio': instant_target_ar,
+                'instant_target_orientation': instant_target_orient,
+                'instant_target_orientation_degrees': np.degrees(
+                    instant_target_orient) if instant_target_orient is not None else None
             })
 
-        # Keep all your existing population statistics code...
+        # === POPULATION DYNAMICS TRACKING ===
         if 'population' in self.models:
             pop_model = self.models['population']
             totals = pop_model.calculate_total_cells()
@@ -978,7 +1050,7 @@ class Simulator:
                 'telomere_length': tel_len
             })
 
-        # Keep all your existing spatial statistics code...
+        # === SPATIAL DYNAMICS TRACKING ===
         if 'spatial' in self.models:
             spatial_model = self.models['spatial']
             collective_props = spatial_model.calculate_collective_properties(self.grid.cells,
@@ -996,8 +1068,61 @@ class Simulator:
                 'confluency': self.grid.calculate_confluency()
             })
 
-        # Add to history (your existing code)
+        # === ENHANCED STATISTICS FOR TIME DYNAMICS ANALYSIS ===
+        if len(self.grid.cells) > 0:
+            # Calculate adaptation progress metrics
+            target_areas = cell_properties['target_areas']
+            target_ars = cell_properties['target_aspect_ratios']
+            actual_areas = cell_properties['areas']
+            actual_ars = cell_properties['aspect_ratios']
+
+            # Mean adaptation errors (how far targets are from actuals)
+            area_adaptation_error = np.mean([abs(t - a) / max(t, 1) for t, a in zip(target_areas, actual_areas)])
+            ar_adaptation_error = np.mean([abs(t - a) / max(t, 1) for t, a in zip(target_ars, actual_ars)])
+
+            # Target parameter statistics
+            state.update({
+                'mean_target_area': np.mean(target_areas),
+                'std_target_area': np.std(target_areas),
+                'mean_target_aspect_ratio': np.mean(target_ars),
+                'std_target_aspect_ratio': np.std(target_ars),
+                'mean_target_orientation_degrees': np.mean(cell_properties['target_orientations_degrees']),
+                'area_adaptation_error': area_adaptation_error,
+                'aspect_ratio_adaptation_error': ar_adaptation_error,
+                'mean_biochemical_response': np.mean(cell_properties['biochemical_responses']),
+                'mean_compression_ratio': np.mean(cell_properties['compression_ratios'])
+            })
+
+            # Enhanced senescent cell tracking
+            senescent_cells = [i for i, is_sen in enumerate(cell_properties['is_senescent']) if is_sen]
+            if senescent_cells:
+                enlarged_senescent = sum(1 for i in senescent_cells
+                                         if cell_properties['senescent_growth_factors'][i] > 1.2)
+                state.update({
+                    'enlarged_senescent_count': enlarged_senescent,
+                    'senescent_count': len(senescent_cells),
+                    'mean_senescent_size': np.mean(
+                        [cell_properties['senescent_growth_factors'][i] for i in senescent_cells]),
+                    'max_senescent_size': np.max(
+                        [cell_properties['senescent_growth_factors'][i] for i in senescent_cells])
+                })
+            else:
+                state.update({
+                    'enlarged_senescent_count': 0,
+                    'senescent_count': 0,
+                    'mean_senescent_size': 1.0,
+                    'max_senescent_size': 1.0
+                })
+
+        # Add to history
         self.history.append(state)
+
+        # Optional: Print debug info for time dynamics (can be disabled)
+        if hasattr(self.config, 'debug_time_dynamics') and self.config.debug_time_dynamics:
+            if self.step_count % 50 == 0:  # Every 50 steps
+                print(f"t={self.time:.1f}min: P={current_pressure:.2f}Pa, "
+                      f"mean_target_AR={state.get('mean_target_aspect_ratio', 0):.2f}, "
+                      f"τ={state.get('tau_biochemical', 0):.1f}min")
 
     def save_results(self, filename=None):
         """
