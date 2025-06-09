@@ -882,37 +882,20 @@ class Plotter:
 
     def plot_polar_cell_distribution(self, simulator, save_path=None):
         """
-        Simple polar plot showing cell distribution around grid center.
+        Polar plot showing cell orientations (which direction cells are pointing).
         """
         if not simulator.grid.cells:
             print("No cells to plot")
             return None
 
-        # Get grid center
-        center_x = simulator.grid.width / 2
-        center_y = simulator.grid.height / 2
-
-        # Calculate polar coordinates for each cell
-        angles = []
-        radii = []
+        # Extract cell orientations and colors
+        orientations = []
         colors = []
 
         for cell in simulator.grid.cells.values():
-            # Get cell position (use centroid if available)
-            if cell.centroid is not None:
-                display_pos = simulator.grid._comp_to_display_coords(cell.centroid[0], cell.centroid[1])
-                x, y = display_pos
-            else:
-                x, y = cell.position
-
-            # Calculate polar coordinates
-            dx = x - center_x
-            dy = y - center_y
-            radius = np.sqrt(dx ** 2 + dy ** 2)
-            angle = np.arctan2(dy, dx)
-
-            angles.append(angle)
-            radii.append(radius)
+            # Get cell orientation (direction cell is pointing)
+            orientation = cell.actual_orientation
+            orientations.append(orientation)
 
             # Set color based on cell type
             if not cell.is_senescent:
@@ -922,25 +905,32 @@ class Plotter:
             else:
                 colors.append('blue')
 
-        # Create polar plot
+        # Create polar histogram of orientations
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
 
-        # Plot cells
-        scatter = ax.scatter(angles, radii, c=colors, alpha=0.7, s=50)
+        # Convert to degrees for histogram
+        orientations_deg = np.degrees(orientations)
+
+        # Create histogram bins (36 bins = 10 degrees each)
+        bins = np.linspace(-180, 180, 37)
+        hist, bin_edges = np.histogram(orientations_deg, bins=bins)
+
+        # Convert bin centers back to radians for polar plot
+        bin_centers = np.radians((bin_edges[:-1] + bin_edges[1:]) / 2)
+        width = np.radians(10)  # 10 degree width
+
+        # Create bar chart
+        bars = ax.bar(bin_centers, hist, width=width, alpha=0.7,
+                      color='skyblue', edgecolor='black')
+
+        # Add flow direction reference (0° = aligned with flow)
+        ax.axvline(0, color='red', linewidth=3, alpha=0.8, label='Flow Direction')
 
         # Customize plot
-        ax.set_title(f'Cell Distribution (Polar View)\n{len(simulator.grid.cells)} cells',
+        ax.set_title(f'Cell Orientations\n{len(orientations)} cells',
                      fontsize=14, pad=20)
+        ax.legend(loc='upper left', bbox_to_anchor=(0.1, 1.1))
         ax.grid(True, alpha=0.3)
-
-        # Add legend
-        from matplotlib.patches import Patch
-        legend_elements = [
-            Patch(facecolor='green', alpha=0.7, label='Healthy'),
-            Patch(facecolor='red', alpha=0.7, label='Telomere Senescent'),
-            Patch(facecolor='blue', alpha=0.7, label='Stress Senescent')
-        ]
-        ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.1, 1.1))
 
         # Save if requested
         if save_path is not None:
@@ -951,7 +941,7 @@ class Plotter:
 
     def create_polar_animation(self, simulator, save_path=None, fps=2):
         """
-        Create MP4 animation of polar plot evolving over time.
+        Create MP4 animation of cell orientations evolving over time using historical target orientations.
         """
         import matplotlib.animation as animation
 
@@ -959,98 +949,126 @@ class Plotter:
             print("No simulation history for animation")
             return None
 
-        # Get grid center
-        center_x = simulator.grid.width / 2
-        center_y = simulator.grid.height / 2
-
-        # Extract data for each hour
-        simulation_hours = int(simulator.time / 60) + 1
+        # Extract HISTORICAL orientation data for each time point
         time_data = []
 
-        for hour in range(simulation_hours):
-            target_time = hour * 60
+        # Use every 10th time point to reduce frames
+        history_indices = list(range(0, len(simulator.history), 10))
+        if history_indices[-1] != len(simulator.history) - 1:
+            history_indices.append(len(simulator.history) - 1)
 
-            # Find closest time point in history
-            times = [state['time'] for state in simulator.history]
-            closest_idx = np.argmin([abs(t - target_time) for t in times])
+        for hist_idx in history_indices:
+            state = simulator.history[hist_idx]
 
-            # Use current cell positions (proxy for historical positions)
-            angles, radii, colors = [], [], []
+            # Check if we have cell properties in history
+            if 'cell_properties' not in state:
+                print(f"Warning: No cell properties in history at index {hist_idx}")
+                continue
 
-            for cell in simulator.grid.cells.values():
-                if cell.centroid is not None:
-                    display_pos = simulator.grid._comp_to_display_coords(cell.centroid[0], cell.centroid[1])
-                    x, y = display_pos
-                else:
-                    x, y = cell.position
+            cell_props = state['cell_properties']
 
-                dx, dy = x - center_x, y - center_y
-                radius = np.sqrt(dx ** 2 + dy ** 2)
-                angle = np.arctan2(dy, dx)
+            # Use HISTORICAL target orientations (this changes over time!)
+            if 'target_orientations_degrees' in cell_props:
+                orientations_deg = cell_props['target_orientations_degrees']
+            elif 'orientations' in cell_props:
+                orientations_deg = cell_props['orientations']  # Actual orientations in degrees
+            else:
+                print(f"No orientation data found in history at index {hist_idx}")
+                continue
 
-                angles.append(angle)
-                radii.append(radius)
+            if not orientations_deg:
+                continue
 
-                if not cell.is_senescent:
-                    colors.append('green')
-                elif cell.senescence_cause == 'telomere':
-                    colors.append('red')
-                else:
-                    colors.append('blue')
+            # Create histogram from historical data
+            bins = np.linspace(0, 90, 19)  # 0-90 degrees (flow alignment range)
+            hist, bin_edges = np.histogram(orientations_deg, bins=bins)
+            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+            bin_centers_rad = np.radians(bin_centers)
 
             time_data.append({
-                'hour': hour,
-                'angles': angles,
-                'radii': radii,
-                'colors': colors,
-                'shear_stress': simulator.history[closest_idx].get('input_value', 0)
+                'hour': state['time'] / 60,
+                'bin_centers': bin_centers_rad,
+                'hist': hist,
+                'cell_count': len(orientations_deg),
+                'shear_stress': state.get('input_value', 0),
+                'mean_orientation': np.mean(orientations_deg),
+                'time_minutes': state['time']
             })
+
+        if not time_data:
+            print("No valid orientation data found in history")
+            return None
+
+        print(f"Creating orientation animation with {len(time_data)} frames...")
+        print(f"Orientation range: {time_data[0]['mean_orientation']:.1f}° → {time_data[-1]['mean_orientation']:.1f}°")
 
         # Create animation
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
 
         # Set consistent limits
-        max_radius = max(max(data['radii']) if data['radii'] else [0] for data in time_data) * 1.1
-        ax.set_ylim(0, max_radius)
+        max_hist = max(max(data['hist']) if len(data['hist']) > 0 else [1] for data in time_data) * 1.1
+        ax.set_ylim(0, max_hist)
         ax.grid(True, alpha=0.3)
-
-        # Initialize empty scatter plot
-        scat = ax.scatter([], [], s=50, alpha=0.7)
-        title_text = ax.set_title('', fontsize=14, pad=20)
 
         def animate(frame):
             data = time_data[frame]
 
-            if data['angles']:
-                # Update scatter plot
-                scat.set_offsets(np.column_stack([data['angles'], data['radii']]))
-                scat.set_color(data['colors'])
+            # Clear previous bars
+            ax.clear()
+            ax.set_ylim(0, max_hist)
+            ax.grid(True, alpha=0.3)
 
-            # Update title
-            title_text.set_text(f'Hour {data["hour"]}: Polar Cell Distribution\n'
-                                f'{len(data["angles"])} cells, {data["shear_stress"]:.2f} Pa')
+            # Plot histogram bars (if we have data)
+            if len(data['hist']) > 0 and np.sum(data['hist']) > 0:
+                width = np.radians(5)  # 5 degree width
+                bars = ax.bar(data['bin_centers'], data['hist'], width=width,
+                              alpha=0.7, color='skyblue', edgecolor='black')
 
-            return scat, title_text
+            # Add flow direction reference (0° = perfect alignment)
+            ax.axvline(0, color='red', linewidth=3, alpha=0.8, label='Perfect Flow Alignment')
+
+            # Add mean orientation indicator
+            mean_rad = np.radians(data['mean_orientation'])
+            ax.axvline(mean_rad, color='orange', linewidth=2, alpha=0.8,
+                       label=f'Mean: {data["mean_orientation"]:.1f}°')
+
+            # Update title with changing values
+            ax.set_title(f'Hour {data["hour"]:.1f}: Cell Flow Alignment\n'
+                         f'{data["cell_count"]} cells, {data["shear_stress"]:.2f} Pa\n'
+                         f'Mean alignment: {data["mean_orientation"]:.1f}°',
+                         fontsize=12, pad=20)
+
+            # Set theta range (0-90 degrees for flow alignment)
+            ax.set_thetamax(90)
+            ax.set_thetamin(0)
+            ax.set_thetagrids([0, 15, 30, 45, 60, 75, 90],
+                              ['0°\n(Perfect)', '15°', '30°', '45°', '60°', '75°', '90°\n(Perpendicular)'])
+
+            ax.legend(loc='upper left', bbox_to_anchor=(0.0, 1.0), fontsize=9)
+
+            return ax.patches + ax.lines
 
         ani = animation.FuncAnimation(fig, animate, frames=len(time_data),
-                                      interval=1000 / fps, blit=True, repeat=True)
+                                      interval=1000 / fps, blit=False, repeat=True)
 
         # Save MP4
         if save_path is None:
             import time
             timestamp = time.strftime("%Y%m%d-%H%M%S")
-            save_path = os.path.join(self.config.plot_directory, f"polar_animation_{timestamp}.mp4")
+            save_path = os.path.join(self.config.plot_directory, f"orientation_animation_{timestamp}.mp4")
 
         try:
             if 'ffmpeg' in animation.writers.list():
                 Writer = animation.writers['ffmpeg']
                 writer = Writer(fps=fps, metadata=dict(artist='Endothelial Simulation'), bitrate=1800)
                 ani.save(save_path, writer=writer, dpi=150)
-                print(f"Polar animation saved to: {save_path}")
+                print(f"✅ Orientation animation saved to: {save_path}")
+                print(
+                    f"   Shows evolution from {time_data[0]['mean_orientation']:.1f}° to {time_data[-1]['mean_orientation']:.1f}°")
             else:
-                print("ffmpeg not available - cannot save MP4")
+                print("❌ ffmpeg not available - cannot save MP4")
         except Exception as e:
-            print(f"Error saving animation: {e}")
+            print(f"❌ Error saving animation: {e}")
 
         return ani
 
