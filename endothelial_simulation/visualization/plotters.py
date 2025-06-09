@@ -537,7 +537,17 @@ class Plotter:
             cell_props = historical_state['cell_properties']
             areas = cell_props['areas']
             aspect_ratios = cell_props['aspect_ratios']
-            orientations_deg = cell_props['orientations']
+            raw_orientations_deg = cell_props['orientations']  # Renamed to "raw"
+
+            # APPLY THE CONSISTENT 0-90° ALIGNMENT ANGLE CONVERSION
+            alignment_angles = []
+            for angle in raw_orientations_deg:
+                angle_180 = angle % 180  # Normalize to 0-180° range
+                alignment_angle = min(angle_180, 180 - angle_180)  # Take acute angle
+                alignment_angles.append(alignment_angle)
+
+            # Use the converted alignment angles
+            orientations_deg = alignment_angles
 
             if not areas:  # Skip if no cells
                 continue
@@ -552,6 +562,7 @@ class Plotter:
                 'areas': areas,
                 'aspect_ratios': aspect_ratios,
                 'orientations': orientations_deg,
+                'raw_orientations': raw_orientations_deg,
                 'cell_count': len(areas),
                 'shear_stress': shear_stress  # MAKE SURE this line uses the historical shear_stress
             })
@@ -715,10 +726,21 @@ class Plotter:
                 continue
 
             # Extract historical properties
+            # Extract historical properties
             cell_props = historical_state['cell_properties']
             areas = cell_props['areas']
             aspect_ratios = cell_props['aspect_ratios']
-            orientations_deg = cell_props['orientations']
+            raw_orientations_deg = cell_props['orientations']  # Renamed to "raw"
+
+            # APPLY THE CONSISTENT 0-90° ALIGNMENT ANGLE CONVERSION
+            alignment_angles = []
+            for angle in raw_orientations_deg:
+                angle_180 = angle % 180  # Normalize to 0-180° range
+                alignment_angle = min(angle_180, 180 - angle_180)  # Take acute angle
+                alignment_angles.append(alignment_angle)
+
+            # Use the converted alignment angles
+            orientations_deg = alignment_angles
 
             if not areas:  # Skip if no cells
                 continue
@@ -942,6 +964,7 @@ class Plotter:
     def create_polar_animation(self, simulator, save_path=None, fps=2):
         """
         Create MP4 animation of cell orientations evolving over time using historical target orientations.
+        Now includes proper 0-90° alignment angle conversion.
         """
         import matplotlib.animation as animation
 
@@ -969,17 +992,27 @@ class Plotter:
 
             # Use HISTORICAL target orientations (this changes over time!)
             if 'target_orientations_degrees' in cell_props:
-                orientations_deg = cell_props['target_orientations_degrees']
+                raw_orientations_deg = cell_props['target_orientations_degrees']
             elif 'orientations' in cell_props:
-                orientations_deg = cell_props['orientations']  # Actual orientations in degrees
+                raw_orientations_deg = cell_props['orientations']  # Actual orientations in degrees
             else:
                 print(f"No orientation data found in history at index {hist_idx}")
                 continue
 
-            if not orientations_deg:
+            if not raw_orientations_deg:
                 continue
 
-            # Create histogram from historical data
+            # APPLY THE REQUESTED ANGLE CONVERSION LOGIC
+            alignment_angles = []
+            for angle in raw_orientations_deg:
+                angle_180 = angle % 180  # Normalize to 0-180° range
+                alignment_angle = min(angle_180, 180 - angle_180)  # Take acute angle
+                alignment_angles.append(alignment_angle)
+
+            # Now use the converted alignment angles (0-90° range)
+            orientations_deg = alignment_angles
+
+            # Create histogram from converted alignment angle data
             bins = np.linspace(0, 90, 19)  # 0-90 degrees (flow alignment range)
             hist, bin_edges = np.histogram(orientations_deg, bins=bins)
             bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
@@ -992,7 +1025,8 @@ class Plotter:
                 'cell_count': len(orientations_deg),
                 'shear_stress': state.get('input_value', 0),
                 'mean_orientation': np.mean(orientations_deg),
-                'time_minutes': state['time']
+                'time_minutes': state['time'],
+                'raw_mean_orientation': np.mean(raw_orientations_deg)  # Keep original for reference
             })
 
         if not time_data:
@@ -1000,7 +1034,10 @@ class Plotter:
             return None
 
         print(f"Creating orientation animation with {len(time_data)} frames...")
-        print(f"Orientation range: {time_data[0]['mean_orientation']:.1f}° → {time_data[-1]['mean_orientation']:.1f}°")
+        print(
+            f"Alignment angle range: {time_data[0]['mean_orientation']:.1f}° → {time_data[-1]['mean_orientation']:.1f}°")
+        print(
+            f"Raw orientation range: {time_data[0]['raw_mean_orientation']:.1f}° → {time_data[-1]['raw_mean_orientation']:.1f}°")
 
         # Create animation
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
@@ -1027,7 +1064,7 @@ class Plotter:
             # Add flow direction reference (0° = perfect alignment)
             ax.axvline(0, color='red', linewidth=3, alpha=0.8, label='Perfect Flow Alignment')
 
-            # Add mean orientation indicator
+            # Add mean orientation indicator (using converted alignment angle)
             mean_rad = np.radians(data['mean_orientation'])
             ax.axvline(mean_rad, color='orange', linewidth=2, alpha=0.8,
                        label=f'Mean: {data["mean_orientation"]:.1f}°')
@@ -1035,8 +1072,9 @@ class Plotter:
             # Update title with changing values
             ax.set_title(f'Hour {data["hour"]:.1f}: Cell Flow Alignment\n'
                          f'{data["cell_count"]} cells, {data["shear_stress"]:.2f} Pa\n'
-                         f'Mean alignment: {data["mean_orientation"]:.1f}°',
-                         fontsize=12, pad=20)
+                         f'Mean alignment: {data["mean_orientation"]:.1f}°\n'
+                         f'(Raw mean: {data["raw_mean_orientation"]:.1f}°)',
+                         fontsize=11, pad=20)
 
             # Set theta range (0-90 degrees for flow alignment)
             ax.set_thetamax(90)
@@ -1064,7 +1102,9 @@ class Plotter:
                 ani.save(save_path, writer=writer, dpi=150)
                 print(f"✅ Orientation animation saved to: {save_path}")
                 print(
-                    f"   Shows evolution from {time_data[0]['mean_orientation']:.1f}° to {time_data[-1]['mean_orientation']:.1f}°")
+                    f"   Shows alignment evolution from {time_data[0]['mean_orientation']:.1f}° to {time_data[-1]['mean_orientation']:.1f}°")
+                print(
+                    f"   (Raw orientations: {time_data[0]['raw_mean_orientation']:.1f}° to {time_data[-1]['raw_mean_orientation']:.1f}°)")
             else:
                 print("❌ ffmpeg not available - cannot save MP4")
         except Exception as e:
