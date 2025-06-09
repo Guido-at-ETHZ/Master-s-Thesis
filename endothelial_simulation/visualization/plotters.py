@@ -961,10 +961,16 @@ class Plotter:
 
         return fig
 
-    def create_polar_animation(self, simulator, save_path=None, fps=2):
+    def create_polar_animation(self, simulator, save_path=None, fps=2, show_comparison=True):
         """
-        Create MP4 animation of cell orientations evolving over time using historical target orientations.
-        Now includes proper 0-90° alignment angle conversion.
+        Create MP4 animation of cell orientations evolving over time.
+        FIXED: Shows 0-90° flow alignment angles only.
+
+        Parameters:
+            simulator: Simulator object with history
+            save_path: Path to save MP4
+            fps: Frames per second
+            show_comparison: If True, shows both target (blue) and actual (red) orientations
         """
         import matplotlib.animation as animation
 
@@ -972,116 +978,145 @@ class Plotter:
             print("No simulation history for animation")
             return None
 
-        # Extract HISTORICAL orientation data for each time point
+        # Extract orientation data for each time point
         time_data = []
-
-        # Use every 10th time point to reduce frames
         history_indices = list(range(0, len(simulator.history), 10))
         if history_indices[-1] != len(simulator.history) - 1:
             history_indices.append(len(simulator.history) - 1)
 
         for hist_idx in history_indices:
             state = simulator.history[hist_idx]
-
-            # Check if we have cell properties in history
             if 'cell_properties' not in state:
-                print(f"Warning: No cell properties in history at index {hist_idx}")
                 continue
 
             cell_props = state['cell_properties']
 
-            # Use HISTORICAL target orientations (this changes over time!)
+            # Get BOTH target and actual orientations
+            target_orientations = None
+            actual_orientations = None
+
             if 'target_orientations_degrees' in cell_props:
-                raw_orientations_deg = cell_props['target_orientations_degrees']
-            elif 'orientations' in cell_props:
-                raw_orientations_deg = cell_props['orientations']  # Actual orientations in degrees
-            else:
-                print(f"No orientation data found in history at index {hist_idx}")
+                target_orientations = cell_props['target_orientations_degrees']
+            elif 'target_orientations' in cell_props:
+                target_orientations = [np.degrees(a) for a in cell_props['target_orientations']]
+
+            if 'orientations' in cell_props:
+                actual_orientations = cell_props['orientations']
+
+            if not target_orientations and not actual_orientations:
                 continue
 
-            if not raw_orientations_deg:
-                continue
+            # FIXED: Convert to flow alignment angles (0-90°)
+            if target_orientations and show_comparison:
+                # Convert target orientations to flow alignment (0-90°)
+                target_orientations = [min(abs(angle) % 180, 180 - abs(angle) % 180)
+                                       for angle in target_orientations]
 
-            # APPLY THE REQUESTED ANGLE CONVERSION LOGIC
-            alignment_angles = []
-            for angle in raw_orientations_deg:
-                angle_180 = angle % 180  # Normalize to 0-180° range
-                alignment_angle = min(angle_180, 180 - angle_180)  # Take acute angle
-                alignment_angles.append(alignment_angle)
+            if actual_orientations:
+                # Convert actual orientations to flow alignment (0-90°)
+                actual_orientations = [min(abs(angle) % 180, 180 - abs(angle) % 180)
+                                       for angle in actual_orientations]
 
-            # Now use the converted alignment angles (0-90° range)
-            orientations_deg = alignment_angles
-
-            # Create histogram from converted alignment angle data
-            bins = np.linspace(0, 90, 19)  # 0-90 degrees (flow alignment range)
-            hist, bin_edges = np.histogram(orientations_deg, bins=bins)
-            bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-            bin_centers_rad = np.radians(bin_centers)
-
-            time_data.append({
+            # FIXED: Create histograms for 0-90° range only
+            bins = np.linspace(0, 90, 20)  # 0-90° 20 bins
+            data_entry = {
                 'hour': state['time'] / 60,
-                'bin_centers': bin_centers_rad,
-                'hist': hist,
-                'cell_count': len(orientations_deg),
                 'shear_stress': state.get('input_value', 0),
-                'mean_orientation': np.mean(orientations_deg),
-                'time_minutes': state['time'],
-                'raw_mean_orientation': np.mean(raw_orientations_deg)  # Keep original for reference
-            })
+                'time_minutes': state['time']
+            }
+
+            if target_orientations and show_comparison:
+                target_hist, _ = np.histogram(target_orientations, bins=bins)
+                target_centers = np.radians((bins[:-1] + bins[1:]) / 2)
+                data_entry.update({
+                    'target_hist': target_hist,
+                    'target_centers': target_centers,
+                    'target_mean': np.mean(target_orientations),
+                    'has_target': True
+                })
+            else:
+                data_entry['has_target'] = False
+
+            if actual_orientations:
+                actual_hist, _ = np.histogram(actual_orientations, bins=bins)
+                actual_centers = np.radians((bins[:-1] + bins[1:]) / 2)
+                data_entry.update({
+                    'actual_hist': actual_hist,
+                    'actual_centers': actual_centers,
+                    'actual_mean': np.mean(actual_orientations),
+                    'has_actual': True
+                })
+            else:
+                data_entry['has_actual'] = False
+
+            # Calculate deviation if both available
+            if target_orientations and actual_orientations and len(target_orientations) == len(actual_orientations):
+                deviation = np.mean([abs(t - a) for t, a in zip(target_orientations, actual_orientations)])
+                data_entry['deviation'] = deviation
+            else:
+                data_entry['deviation'] = None
+
+            time_data.append(data_entry)
 
         if not time_data:
-            print("No valid orientation data found in history")
+            print("No valid orientation data found")
             return None
 
-        print(f"Creating orientation animation with {len(time_data)} frames...")
-        print(
-            f"Alignment angle range: {time_data[0]['mean_orientation']:.1f}° → {time_data[-1]['mean_orientation']:.1f}°")
-        print(
-            f"Raw orientation range: {time_data[0]['raw_mean_orientation']:.1f}° → {time_data[-1]['raw_mean_orientation']:.1f}°")
+        print(f"Creating {'comparison ' if show_comparison else ''}animation with {len(time_data)} frames...")
 
         # Create animation
         fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
 
-        # Set consistent limits
-        max_hist = max(max(data['hist']) if len(data['hist']) > 0 else [1] for data in time_data) * 1.1
-        ax.set_ylim(0, max_hist)
-        ax.grid(True, alpha=0.3)
+        # Calculate max for consistent scale
+        all_hists = []
+        for data in time_data:
+            if data.get('has_target'): all_hists.extend(data['target_hist'])
+            if data.get('has_actual'): all_hists.extend(data['actual_hist'])
+        max_hist = max(all_hists) * 1.1 if all_hists else 10
 
         def animate(frame):
             data = time_data[frame]
-
-            # Clear previous bars
             ax.clear()
+
+            # FIXED: Restrict to 0-90° quadrant
+            ax.set_thetamax(90)  # Maximum angle: 90°
+            ax.set_thetamin(0)  # Minimum angle: 0°
+            ax.set_thetagrids([0, 15, 30, 45, 60, 75, 90],
+                              ['0°\n(Flow)', '15°', '30°', '45°', '60°', '75°', '90°\n(Perp)'])
+
             ax.set_ylim(0, max_hist)
             ax.grid(True, alpha=0.3)
+            ax.set_theta_zero_location('E')  # 0° at right
+            ax.set_theta_direction(1)  # Counterclockwise
 
-            # Plot histogram bars (if we have data)
-            if len(data['hist']) > 0 and np.sum(data['hist']) > 0:
-                width = np.radians(5)  # 5 degree width
-                bars = ax.bar(data['bin_centers'], data['hist'], width=width,
-                              alpha=0.7, color='skyblue', edgecolor='black')
+            width = np.radians(10)  # FIXED: Narrower bars for 0-90° range
 
-            # Add flow direction reference (0° = perfect alignment)
-            ax.axvline(0, color='red', linewidth=3, alpha=0.8, label='Perfect Flow Alignment')
+            # Plot target orientations (blue, behind)
+            if data.get('has_target') and show_comparison:
+                ax.bar(data['target_centers'], data['target_hist'], width=width,
+                       alpha=0.6, color='lightblue', edgecolor='blue',
+                       label=f'Target (mean: {data["target_mean"]:.1f}°)')
 
-            # Add mean orientation indicator (using converted alignment angle)
-            mean_rad = np.radians(data['mean_orientation'])
-            ax.axvline(mean_rad, color='orange', linewidth=2, alpha=0.8,
-                       label=f'Mean: {data["mean_orientation"]:.1f}°')
+            # Plot actual orientations (red, in front)
+            if data.get('has_actual'):
+                alpha = 0.8 if show_comparison else 0.7
+                color = 'lightcoral' if show_comparison else 'skyblue'
+                edge_color = 'darkred' if show_comparison else 'black'
+                label = f'Actual (mean: {data["actual_mean"]:.1f}°)' if show_comparison else f'Orientations (mean: {data["actual_mean"]:.1f}°)'
 
-            # Update title with changing values
-            ax.set_title(f'Hour {data["hour"]:.1f}: Cell Flow Alignment\n'
-                         f'{data["cell_count"]} cells, {data["shear_stress"]:.2f} Pa\n'
-                         f'Mean alignment: {data["mean_orientation"]:.1f}°\n'
-                         f'(Raw mean: {data["raw_mean_orientation"]:.1f}°)',
-                         fontsize=11, pad=20)
+                ax.bar(data['actual_centers'], data['actual_hist'], width=width,
+                       alpha=alpha, color=color, edgecolor=edge_color, label=label)
 
-            # Set theta range (0-90 degrees for flow alignment)
-            ax.set_thetamax(90)
-            ax.set_thetamin(0)
-            ax.set_thetagrids([0, 15, 30, 45, 60, 75, 90],
-                              ['0°\n(Perfect)', '15°', '30°', '45°', '60°', '75°', '90°\n(Perpendicular)'])
+            # Add flow direction reference
+            ax.axvline(0, color='green', linewidth=3, alpha=0.8, label='Flow Direction')
 
+            # Title with comparison info
+            if show_comparison and data['deviation'] is not None:
+                title = f'Hour {data["hour"]:.1f}: Target vs Actual Flow Alignment\nDeviation: {data["deviation"]:.1f}° | Shear: {data["shear_stress"]:.2f} Pa'
+            else:
+                title = f'Hour {data["hour"]:.1f}: Cell Flow Alignment\nShear: {data["shear_stress"]:.2f} Pa'
+
+            ax.set_title(title, fontsize=12, pad=20)
             ax.legend(loc='upper left', bbox_to_anchor=(0.0, 1.0), fontsize=9)
 
             return ax.patches + ax.lines
@@ -1089,24 +1124,24 @@ class Plotter:
         ani = animation.FuncAnimation(fig, animate, frames=len(time_data),
                                       interval=1000 / fps, blit=False, repeat=True)
 
-        # Save MP4
+        # Save animation
         if save_path is None:
             import time
             timestamp = time.strftime("%Y%m%d-%H%M%S")
-            save_path = os.path.join(self.config.plot_directory, f"orientation_animation_{timestamp}.mp4")
+            suffix = "_flow_alignment" if show_comparison else "_flow_alignment_single"
+            save_path = os.path.join(self.config.plot_directory, f"orientation_animation{suffix}_{timestamp}.mp4")
 
         try:
             if 'ffmpeg' in animation.writers.list():
                 Writer = animation.writers['ffmpeg']
                 writer = Writer(fps=fps, metadata=dict(artist='Endothelial Simulation'), bitrate=1800)
                 ani.save(save_path, writer=writer, dpi=150)
-                print(f"✅ Orientation animation saved to: {save_path}")
-                print(
-                    f"   Shows alignment evolution from {time_data[0]['mean_orientation']:.1f}° to {time_data[-1]['mean_orientation']:.1f}°")
-                print(
-                    f"   (Raw orientations: {time_data[0]['raw_mean_orientation']:.1f}° to {time_data[-1]['raw_mean_orientation']:.1f}°)")
+                print(f"✅ Animation saved to: {save_path}")
+                print(f"   Shows flow alignment angles (0-90°)")
+                if show_comparison:
+                    print(f"   Blue = Target alignment, Red = Actual alignment")
             else:
-                print("❌ ffmpeg not available - cannot save MP4")
+                print("❌ ffmpeg not available")
         except Exception as e:
             print(f"❌ Error saving animation: {e}")
 
