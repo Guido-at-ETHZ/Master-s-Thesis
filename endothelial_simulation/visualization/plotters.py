@@ -880,6 +880,180 @@ class Plotter:
         plt.tight_layout()
         return ani
 
+    def plot_polar_cell_distribution(self, simulator, save_path=None):
+        """
+        Simple polar plot showing cell distribution around grid center.
+        """
+        if not simulator.grid.cells:
+            print("No cells to plot")
+            return None
+
+        # Get grid center
+        center_x = simulator.grid.width / 2
+        center_y = simulator.grid.height / 2
+
+        # Calculate polar coordinates for each cell
+        angles = []
+        radii = []
+        colors = []
+
+        for cell in simulator.grid.cells.values():
+            # Get cell position (use centroid if available)
+            if cell.centroid is not None:
+                display_pos = simulator.grid._comp_to_display_coords(cell.centroid[0], cell.centroid[1])
+                x, y = display_pos
+            else:
+                x, y = cell.position
+
+            # Calculate polar coordinates
+            dx = x - center_x
+            dy = y - center_y
+            radius = np.sqrt(dx ** 2 + dy ** 2)
+            angle = np.arctan2(dy, dx)
+
+            angles.append(angle)
+            radii.append(radius)
+
+            # Set color based on cell type
+            if not cell.is_senescent:
+                colors.append('green')
+            elif cell.senescence_cause == 'telomere':
+                colors.append('red')
+            else:
+                colors.append('blue')
+
+        # Create polar plot
+        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+
+        # Plot cells
+        scatter = ax.scatter(angles, radii, c=colors, alpha=0.7, s=50)
+
+        # Customize plot
+        ax.set_title(f'Cell Distribution (Polar View)\n{len(simulator.grid.cells)} cells',
+                     fontsize=14, pad=20)
+        ax.grid(True, alpha=0.3)
+
+        # Add legend
+        from matplotlib.patches import Patch
+        legend_elements = [
+            Patch(facecolor='green', alpha=0.7, label='Healthy'),
+            Patch(facecolor='red', alpha=0.7, label='Telomere Senescent'),
+            Patch(facecolor='blue', alpha=0.7, label='Stress Senescent')
+        ]
+        ax.legend(handles=legend_elements, loc='upper left', bbox_to_anchor=(0.1, 1.1))
+
+        # Save if requested
+        if save_path is not None:
+            plt.tight_layout()
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+
+        return fig
+
+    def create_polar_animation(self, simulator, save_path=None, fps=2):
+        """
+        Create MP4 animation of polar plot evolving over time.
+        """
+        import matplotlib.animation as animation
+
+        if not simulator.history:
+            print("No simulation history for animation")
+            return None
+
+        # Get grid center
+        center_x = simulator.grid.width / 2
+        center_y = simulator.grid.height / 2
+
+        # Extract data for each hour
+        simulation_hours = int(simulator.time / 60) + 1
+        time_data = []
+
+        for hour in range(simulation_hours):
+            target_time = hour * 60
+
+            # Find closest time point in history
+            times = [state['time'] for state in simulator.history]
+            closest_idx = np.argmin([abs(t - target_time) for t in times])
+
+            # Use current cell positions (proxy for historical positions)
+            angles, radii, colors = [], [], []
+
+            for cell in simulator.grid.cells.values():
+                if cell.centroid is not None:
+                    display_pos = simulator.grid._comp_to_display_coords(cell.centroid[0], cell.centroid[1])
+                    x, y = display_pos
+                else:
+                    x, y = cell.position
+
+                dx, dy = x - center_x, y - center_y
+                radius = np.sqrt(dx ** 2 + dy ** 2)
+                angle = np.arctan2(dy, dx)
+
+                angles.append(angle)
+                radii.append(radius)
+
+                if not cell.is_senescent:
+                    colors.append('green')
+                elif cell.senescence_cause == 'telomere':
+                    colors.append('red')
+                else:
+                    colors.append('blue')
+
+            time_data.append({
+                'hour': hour,
+                'angles': angles,
+                'radii': radii,
+                'colors': colors,
+                'shear_stress': simulator.history[closest_idx].get('input_value', 0)
+            })
+
+        # Create animation
+        fig, ax = plt.subplots(figsize=(10, 10), subplot_kw=dict(projection='polar'))
+
+        # Set consistent limits
+        max_radius = max(max(data['radii']) if data['radii'] else [0] for data in time_data) * 1.1
+        ax.set_ylim(0, max_radius)
+        ax.grid(True, alpha=0.3)
+
+        # Initialize empty scatter plot
+        scat = ax.scatter([], [], s=50, alpha=0.7)
+        title_text = ax.set_title('', fontsize=14, pad=20)
+
+        def animate(frame):
+            data = time_data[frame]
+
+            if data['angles']:
+                # Update scatter plot
+                scat.set_offsets(np.column_stack([data['angles'], data['radii']]))
+                scat.set_color(data['colors'])
+
+            # Update title
+            title_text.set_text(f'Hour {data["hour"]}: Polar Cell Distribution\n'
+                                f'{len(data["angles"])} cells, {data["shear_stress"]:.2f} Pa')
+
+            return scat, title_text
+
+        ani = animation.FuncAnimation(fig, animate, frames=len(time_data),
+                                      interval=1000 / fps, blit=True, repeat=True)
+
+        # Save MP4
+        if save_path is None:
+            import time
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            save_path = os.path.join(self.config.plot_directory, f"polar_animation_{timestamp}.mp4")
+
+        try:
+            if 'ffmpeg' in animation.writers.list():
+                Writer = animation.writers['ffmpeg']
+                writer = Writer(fps=fps, metadata=dict(artist='Endothelial Simulation'), bitrate=1800)
+                ani.save(save_path, writer=writer, dpi=150)
+                print(f"Polar animation saved to: {save_path}")
+            else:
+                print("ffmpeg not available - cannot save MP4")
+        except Exception as e:
+            print(f"Error saving animation: {e}")
+
+        return ani
+
     def create_all_plots(self, simulator, history=None, prefix=None):
         """
         Create all available plots for the simulation.
@@ -968,5 +1142,19 @@ class Plotter:
             )
             if animated_fig:
                 print("Animated distributions created!")
+
+        # Polar distribution plot
+        polar_fig = self.plot_polar_cell_distribution(
+            simulator,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_polar.png")
+        )
+        if polar_fig:
+            figures.append(polar_fig)
+
+        polar_animation = self.create_polar_animation(
+            simulator,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_polar_animation.mp4"),
+            fps=2
+        )
 
         return figures
