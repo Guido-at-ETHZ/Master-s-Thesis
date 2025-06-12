@@ -5,6 +5,7 @@ Fixed to properly handle coordinate scaling and enhanced senescent cell growth.
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.cm as cm
+from matplotlib import animation
 from matplotlib.patches import Polygon
 from matplotlib.collections import PatchCollection
 import os
@@ -480,124 +481,210 @@ class Plotter:
 
         return fig
 
-    def plot_hourly_cell_distributions(self, simulator, save_path=None, max_hours=None):
+    def plot_cell_distributions(self, simulator, save_path=None, time_points='auto', show_evolution=True):
         """
-        Plot distributions of cell area, aspect ratio, and orientation every hour.
+        Plot cell property distributions at multiple time points or as evolution.
+        FIXED: No double conversion of orientation angles.
 
         Parameters:
             simulator: Simulator object with completed simulation
             save_path: Path to save the plot (default: auto-generated)
-            max_hours: Maximum number of hours to plot (default: all available)
+            time_points: 'auto' for automatic selection, 'hourly', or list of specific times
+            show_evolution: If True, show evolution plot; if False, show static snapshots
 
         Returns:
             Matplotlib figure
         """
-        from matplotlib.gridspec import GridSpec
-
         if not simulator.history:
             print("No simulation history available")
             return None
 
-        # Convert simulation time to hours
-        simulation_time_hours = simulator.time / 60 if self.config.time_unit == "minutes" else simulator.time
+        print("Creating enhanced cell distributions with FIXED orientation handling...")
 
-        # Determine hourly time points
-        if max_hours is None:
-            max_hours = int(simulation_time_hours) + 1
+        # Extract time data
+        times = [state['time'] for state in simulator.history]
+        max_time = max(times)
+        simulation_hours = max_time / 60 if self.config.time_unit == "minutes" else max_time
 
-        hourly_timepoints = list(range(0, min(max_hours, int(simulation_time_hours) + 1)))
+        # Determine time points to analyze
+        if time_points == 'auto':
+            # Automatic selection: start, 25%, 50%, 75%, end
+            selected_indices = [
+                0,
+                len(simulator.history) // 4,
+                len(simulator.history) // 2,
+                3 * len(simulator.history) // 4,
+                len(simulator.history) - 1
+            ]
+            selected_indices = sorted(list(set(selected_indices)))  # Remove duplicates
+        elif time_points == 'hourly':
+            # Hourly time points
+            target_hours = list(range(0, int(simulation_hours) + 1))
+            selected_indices = []
+            for target_hour in target_hours:
+                target_time = target_hour * 60
+                closest_idx = np.argmin([abs(t - target_time) for t in times])
+                selected_indices.append(closest_idx)
+            selected_indices = sorted(list(set(selected_indices)))
+        else:
+            # Custom time points
+            selected_indices = []
+            for target_time in time_points:
+                closest_idx = np.argmin([abs(t - target_time) for t in times])
+                selected_indices.append(closest_idx)
 
-        if not hourly_timepoints:
-            print("Simulation too short for hourly analysis")
-            return None
+        # Extract data for selected time points
+        time_data = []
+        for idx in selected_indices:
+            state = simulator.history[idx]
 
-        print(f"Creating distributions for {len(hourly_timepoints)} hourly time points...")
-
-        # Extract cell data for each hourly timepoint
-        hourly_data = []
-
-        for target_hour in hourly_timepoints:
-            target_time_minutes = target_hour * 60
-
-            # Find the closest recorded time point
-            times = [state['time'] for state in simulator.history]
-            closest_idx = np.argmin([abs(t - target_time_minutes) for t in times])
-            closest_time = times[closest_idx]
-
-            print(f"Hour {target_hour}: using data from t={closest_time:.1f} min ({closest_time / 60:.1f}h)")
-
-            historical_state = simulator.history[closest_idx]
-
-            # Check if historical cell properties exist
-            if 'cell_properties' not in historical_state:
-                print(f"Warning: No historical cell properties found for time {closest_time:.1f}")
+            if 'cell_properties' not in state:
+                print(f"Warning: No cell properties at time {state['time']:.1f}")
                 continue
 
-            # Extract historical properties
-            cell_props = historical_state['cell_properties']
+            cell_props = state['cell_properties']
+
+            # FIXED: No double conversion - orientations are already 0-90° alignment angles
             areas = cell_props['areas']
             aspect_ratios = cell_props['aspect_ratios']
-            raw_orientations_deg = cell_props['orientations']  # Renamed to "raw"
+            orientations = cell_props['orientations']  # Already 0-90° flow alignment angles!
 
-            # APPLY THE CONSISTENT 0-90° ALIGNMENT ANGLE CONVERSION
-            alignment_angles = []
-            for angle in raw_orientations_deg:
-                angle_180 = angle % 180  # Normalize to 0-180° range
-                alignment_angle = min(angle_180, 180 - angle_180)  # Take acute angle
-                alignment_angles.append(alignment_angle)
-
-            # Use the converted alignment angles
-            orientations_deg = alignment_angles
-
-            if not areas:  # Skip if no cells
-                continue
-
-            # Get shear stress for this time point
-            shear_stress = historical_state.get('input_value', 0)
-            # ================================================
-
-            hourly_data.append({
-                'hour': target_hour,
-                'time_minutes': closest_time,
+            time_data.append({
+                'time_minutes': state['time'],
+                'time_hours': state['time'] / 60,
+                'shear_stress': state.get('input_value', 0),
                 'areas': areas,
                 'aspect_ratios': aspect_ratios,
-                'orientations': orientations_deg,
-                'raw_orientations': raw_orientations_deg,
-                'cell_count': len(areas),
-                'shear_stress': shear_stress  # MAKE SURE this line uses the historical shear_stress
+                'orientations': orientations,  # No conversion needed!
+                'cell_count': len(areas)
             })
 
-        if not hourly_data:
-            print("No valid data points found")
+            print(f"  Time {state['time']:.1f}min: {len(areas)} cells, "
+                  f"orientation range {min(orientations):.1f}°-{max(orientations):.1f}°")
+
+        if not time_data:
+            print("No valid time points found")
             return None
 
-        # Create the figure with subplots
-        n_timepoints = len(hourly_data)
-        fig = plt.figure(figsize=(15, 4 * n_timepoints))
+        if show_evolution:
+            return self._create_evolution_plot(time_data, save_path)
+        else:
+            return self._create_snapshot_plot(time_data, save_path)
 
-        # Create a grid layout: rows = timepoints, columns = 3 properties
+    def _create_evolution_plot(self, time_data, save_path):
+        """Create a plot showing how distributions evolve over time."""
+        fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+        fig.suptitle('Cell Property Distribution Evolution\n(FIXED: Correct Flow Alignment Angles)',
+                     fontsize=16, y=0.95)
+
+        # Calculate statistics over time
+        time_stats = {
+            'times': [data['time_hours'] for data in time_data],
+            'mean_areas': [np.mean(data['areas']) for data in time_data],
+            'std_areas': [np.std(data['areas']) for data in time_data],
+            'mean_ars': [np.mean(data['aspect_ratios']) for data in time_data],
+            'std_ars': [np.std(data['aspect_ratios']) for data in time_data],
+            'mean_orients': [np.mean(data['orientations']) for data in time_data],
+            'std_orients': [np.std(data['orientations']) for data in time_data],
+            'cell_counts': [data['cell_count'] for data in time_data],
+            'shear_stresses': [data['shear_stress'] for data in time_data]
+        }
+
+        # 1. Area evolution
+        ax1 = axes[0, 0]
+        ax1.errorbar(time_stats['times'], time_stats['mean_areas'],
+                     yerr=time_stats['std_areas'],
+                     marker='o', linewidth=2, capsize=5, label='Mean ± Std')
+        ax1.set_xlabel('Time (hours)')
+        ax1.set_ylabel('Cell Area (pixels²)')
+        ax1.set_title('Area Distribution Evolution')
+        ax1.grid(True, alpha=0.3)
+        ax1.legend()
+
+        # 2. Aspect ratio evolution
+        ax2 = axes[0, 1]
+        ax2.errorbar(time_stats['times'], time_stats['mean_ars'],
+                     yerr=time_stats['std_ars'],
+                     marker='s', linewidth=2, capsize=5, label='Mean ± Std', color='red')
+        ax2.set_xlabel('Time (hours)')
+        ax2.set_ylabel('Aspect Ratio')
+        ax2.set_title('Aspect Ratio Evolution')
+        ax2.grid(True, alpha=0.3)
+        ax2.legend()
+
+        # 3. Flow alignment evolution (FIXED)
+        ax3 = axes[1, 0]
+        ax3.errorbar(time_stats['times'], time_stats['mean_orients'],
+                     yerr=time_stats['std_orients'],
+                     marker='^', linewidth=2, capsize=5, label='Mean ± Std', color='green')
+        ax3.set_xlabel('Time (hours)')
+        ax3.set_ylabel('Flow Alignment Angle (degrees)')
+        ax3.set_title('Flow Alignment Evolution\n(0° = perfect alignment, 90° = perpendicular)')
+        ax3.set_ylim(0, 90)
+        ax3.axhline(0, color='green', linestyle='--', alpha=0.5, label='Perfect alignment')
+        ax3.axhline(45, color='orange', linestyle='--', alpha=0.5, label='45° intermediate')
+        ax3.axhline(90, color='red', linestyle='--', alpha=0.5, label='Perpendicular')
+        ax3.grid(True, alpha=0.3)
+        ax3.legend()
+
+        # 4. Input stress and cell count
+        ax4 = axes[1, 1]
+        ax4_twin = ax4.twinx()
+
+        line1 = ax4.plot(time_stats['times'], time_stats['shear_stresses'],
+                         'b-', linewidth=2, marker='o', label='Shear Stress')
+        line2 = ax4_twin.plot(time_stats['times'], time_stats['cell_counts'],
+                              'r-', linewidth=2, marker='s', label='Cell Count')
+
+        ax4.set_xlabel('Time (hours)')
+        ax4.set_ylabel('Shear Stress (Pa)', color='blue')
+        ax4_twin.set_ylabel('Cell Count', color='red')
+        ax4.set_title('Input Stress & Cell Count')
+        ax4.grid(True, alpha=0.3)
+
+        # Combined legend
+        lines = line1 + line2
+        labels = [l.get_label() for l in lines]
+        ax4.legend(lines, labels, loc='upper right')
+
+        plt.tight_layout()
+
+        # Save plot
+        if save_path is None:
+            import time
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            save_path = os.path.join(self.config.plot_directory,
+                                     f"cell_distributions_evolution_{timestamp}.png")
+
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"✅ Evolution plot saved to: {save_path}")
+        print(f"   ✅ FIXED: Orientations are correctly displayed as 0-90° flow alignment")
+
+        return fig
+
+    def _create_snapshot_plot(self, time_data, save_path):
+        """Create snapshot plots at different time points."""
+        n_timepoints = len(time_data)
+        fig = plt.figure(figsize=(15, 4 * n_timepoints))
         gs = GridSpec(n_timepoints, 3, figure=fig, hspace=0.3, wspace=0.3)
 
-        # Color scheme for different cell properties
         colors = ['skyblue', 'lightcoral', 'lightgreen']
 
-        # Plot distributions for each hour
-        for row, data in enumerate(hourly_data):
-            hour = data['hour']
+        for row, data in enumerate(time_data):
+            time_hours = data['time_hours']
             areas = data['areas']
             aspect_ratios = data['aspect_ratios']
-            orientations = data['orientations']
+            orientations = data['orientations']  # Already 0-90° alignment angles
             cell_count = data['cell_count']
 
             # Area distribution
             ax_area = fig.add_subplot(gs[row, 0])
             ax_area.hist(areas, bins=20, color=colors[0], alpha=0.7, edgecolor='black')
-            ax_area.set_title(f'Hour {hour}: Area Distribution\n(n={cell_count} cells)', fontsize=10)
+            ax_area.set_title(f't={time_hours:.1f}h: Area Distribution\n(n={cell_count})', fontsize=10)
             ax_area.set_xlabel('Area (pixels²)', fontsize=9)
             ax_area.set_ylabel('Frequency', fontsize=9)
             ax_area.grid(True, alpha=0.3)
 
-            # Add statistics
             mean_area = np.mean(areas)
             ax_area.axvline(mean_area, color='red', linestyle='--', alpha=0.8,
                             label=f'Mean: {mean_area:.0f}')
@@ -606,289 +693,194 @@ class Plotter:
             # Aspect ratio distribution
             ax_ar = fig.add_subplot(gs[row, 1])
             ax_ar.hist(aspect_ratios, bins=20, color=colors[1], alpha=0.7, edgecolor='black')
-            ax_ar.set_title(f'Hour {hour}: Aspect Ratio Distribution', fontsize=10)
+            ax_ar.set_title(f't={time_hours:.1f}h: Aspect Ratio Distribution', fontsize=10)
             ax_ar.set_xlabel('Aspect Ratio', fontsize=9)
             ax_ar.set_ylabel('Frequency', fontsize=9)
             ax_ar.grid(True, alpha=0.3)
 
-            # Add statistics
             mean_ar = np.mean(aspect_ratios)
             ax_ar.axvline(mean_ar, color='red', linestyle='--', alpha=0.8,
                           label=f'Mean: {mean_ar:.1f}')
             ax_ar.legend(fontsize=8)
 
-            # Orientation distribution
+            # Flow alignment distribution (FIXED - no double conversion)
             ax_orient = fig.add_subplot(gs[row, 2])
             ax_orient.hist(orientations, bins=20, color=colors[2], alpha=0.7, edgecolor='black',
                            range=(0, 90))
-            ax_orient.set_title(f'Hour {hour}: Flow Alignment Distribution', fontsize=10)
+            ax_orient.set_title(f't={time_hours:.1f}h: Flow Alignment (FIXED)', fontsize=10)
             ax_orient.set_xlabel('Alignment Angle (degrees)', fontsize=9)
             ax_orient.set_ylabel('Frequency', fontsize=9)
             ax_orient.grid(True, alpha=0.3)
             ax_orient.set_xlim(0, 90)
 
             # Add alignment references
-            ax_orient.axvline(0, color='green', linestyle='-', alpha=0.8, linewidth=2,
-                              label='Perfect alignment')
-            ax_orient.axvline(45, color='orange', linestyle='--', alpha=0.6, linewidth=1,
-                              label='45° (intermediate)')
-            ax_orient.axvline(90, color='red', linestyle='-', alpha=0.8, linewidth=2,
-                              label='Perpendicular')
+            ax_orient.axvline(0, color='green', linestyle='-', alpha=0.8, linewidth=2)
+            ax_orient.axvline(90, color='red', linestyle='-', alpha=0.8, linewidth=2)
 
-            # Add statistics
             mean_orient = np.mean(orientations)
             ax_orient.axvline(mean_orient, color='red', linestyle='--', alpha=0.8,
                               label=f'Mean: {mean_orient:.1f}°')
             ax_orient.legend(fontsize=8)
 
-            # Add time and shear stress info as text
-            if row < len(simulator.history):
-                state_idx = min(row * len(simulator.history) // len(hourly_data), len(simulator.history) - 1)
-                shear_stress = simulator.history[state_idx].get('input_value', 0)
+            # Add info text
+            info_text = f'Shear: {data["shear_stress"]:.2f} Pa'
+            ax_area.text(0.02, 0.98, info_text, transform=ax_area.transAxes,
+                         fontsize=8, verticalalignment='top',
+                         bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
 
-                # Add info text to the first subplot of each row
-                info_text = f'Time: {data["time_minutes"]:.0f} min\nShear: {shear_stress:.2f} Pa'
-                ax_area.text(0.02, 0.98, info_text, transform=ax_area.transAxes,
-                             fontsize=8, verticalalignment='top',
-                             bbox=dict(boxstyle='round,pad=0.3', facecolor='white', alpha=0.8))
-
-        # Add overall title
-        fig.suptitle('Hourly Cell Property Distributions\nEndothelial Cell Mechanotransduction Simulation',
+        fig.suptitle('Cell Property Distributions at Multiple Time Points\n(FIXED: Correct Orientation Handling)',
                      fontsize=16, y=0.98)
 
-        # Add summary text
-        summary_text = (f'Simulation Duration: {simulation_time_hours:.1f} hours\n'
-                        f'Final Cell Count: {hourly_data[-1]["cell_count"] if hourly_data else 0}\n'
-                        f'Time Points: {len(hourly_data)} hours')
-
-        fig.text(0.02, 0.02, summary_text, fontsize=10,
-                 bbox=dict(boxstyle='round,pad=0.5', facecolor='lightgray', alpha=0.8))
-
-        # Save if path provided
+        # Save plot
         if save_path is None:
             import time
             timestamp = time.strftime("%Y%m%d-%H%M%S")
             save_path = os.path.join(self.config.plot_directory,
-                                     f"hourly_distributions_{timestamp}.png")
+                                     f"cell_distributions_snapshots_{timestamp}.png")
 
-        # Save the plot
-        #plt.tight_layout()
-        plt.savefig(save_path, dpi=300, bbox_inches='tight', facecolor='white')
-        print(f"Hourly distributions saved to: {save_path}")
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        print(f"✅ Snapshot plot saved to: {save_path}")
 
         return fig
 
-    def plot_animated_cell_distributions(self, simulator, save_path=None, max_hours=None, fps=2):
+    def create_distribution_animation(self, simulator, save_path=None, fps=2, max_timepoints=20):
         """
-        REPLACE your entire function with this FIXED version.
-        Create an animated video showing how cell property distributions evolve over time.
+        Create animated cell distributions with FIXED orientation handling.
         """
-        import matplotlib.animation as animation
-
         if not simulator.history:
             print("No simulation history available")
             return None
 
-        # Reuse the data extraction logic from the static method
-        print("Extracting data for animation...")
+        print("Creating FIXED distribution animation...")
 
-        # Convert simulation time to hours
-        simulation_time_hours = simulator.time / 60 if self.config.time_unit == "minutes" else simulator.time
+        # Select timepoints
+        total_points = len(simulator.history)
+        step = max(1, total_points // max_timepoints)
+        selected_indices = list(range(0, total_points, step))
+        if selected_indices[-1] != total_points - 1:
+            selected_indices.append(total_points - 1)
 
-        # Determine hourly time points
-        if max_hours is None:
-            max_hours = int(simulation_time_hours) + 1
-
-        hourly_timepoints = list(range(0, min(max_hours, int(simulation_time_hours) + 1)))
-
-        if not hourly_timepoints:
-            print("Simulation too short for animation")
-            return None
-
-        # Extract HISTORICAL data for each hourly timepoint
-        hourly_data = []
-
-        for target_hour in hourly_timepoints:
-            target_time_minutes = target_hour * 60
-
-            # Find the closest recorded time point
-            times = [state['time'] for state in simulator.history]
-            closest_idx = np.argmin([abs(t - target_time_minutes) for t in times])
-            closest_time = times[closest_idx]
-
-            print(f"Hour {target_hour}: using data from t={closest_time:.1f} min ({closest_time / 60:.1f}h)")
-
-            historical_state = simulator.history[closest_idx]
-
-            # Check if historical cell properties exist
-            if 'cell_properties' not in historical_state:
-                print(f"Warning: No historical cell properties found for animation at time {closest_time:.1f}")
+        # Extract data
+        animation_data = []
+        for idx in selected_indices:
+            state = simulator.history[idx]
+            if 'cell_properties' not in state:
                 continue
 
-            # Extract historical properties
-            cell_props = historical_state['cell_properties']
-            areas = cell_props['areas']
-            aspect_ratios = cell_props['aspect_ratios']
-            orientations_deg = cell_props['orientations']
+            cell_props = state['cell_properties']
 
-            if not areas:  # Skip if no cells
-                continue
-
-            # Get shear stress for this time point from historical data
-            shear_stress = historical_state.get('input_value', 0)
-
-            hourly_data.append({
-                'hour': target_hour,
-                'time_minutes': closest_time,
-                'areas': areas,
-                'aspect_ratios': aspect_ratios,
-                'orientations': orientations_deg,
-                'cell_count': len(areas),
-                'shear_stress': shear_stress
+            # FIXED: orientations are already 0-90° flow alignment angles
+            animation_data.append({
+                'time_hours': state['time'] / 60,
+                'shear_stress': state.get('input_value', 0),
+                'areas': cell_props['areas'],
+                'aspect_ratios': cell_props['aspect_ratios'],
+                'orientations': cell_props['orientations'],  # No conversion!
+                'cell_count': len(cell_props['areas'])
             })
 
-        if not hourly_data:
-            print("No valid data points found")
+        if not animation_data:
+            print("No valid data for animation")
             return None
 
-        print(f"Creating animation with {len(hourly_data)} frames...")
+        # Calculate ranges for consistent axes
+        all_areas = [area for data in animation_data for area in data['areas']]
+        all_ars = [ar for data in animation_data for ar in data['aspect_ratios']]
 
-        # Calculate global ranges for consistent axes
-        all_areas = [area for data in hourly_data for area in data['areas']]
-        all_aspect_ratios = [ar for data in hourly_data for ar in data['aspect_ratios']]
+        area_range = (min(all_areas) * 0.9, max(all_areas) * 1.1) if all_areas else (0, 1000)
+        ar_range = (min(all_ars) * 0.9, max(all_ars) * 1.1) if all_ars else (1, 3)
 
-        area_range = (min(all_areas) * 0.9, max(all_areas) * 1.1) if all_areas else (0, 100)
-        ar_range = (min(all_aspect_ratios) * 0.9, max(all_aspect_ratios) * 1.1) if all_aspect_ratios else (1, 5)
-
-        # Create figure with fixed layout
+        # Create figure
         fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-        fig.suptitle('Cell Property Distributions Over Time', fontsize=16)
+        fig.suptitle('FIXED Cell Property Distributions Over Time', fontsize=16)
 
-        # DEFINE COLORS FIRST (before using them)
-        colors = ['skyblue', 'lightcoral', 'lightgreen']
-
-        # Initialize empty plots (NO data plotting here, just setup)
-        axes[0].set_title('Area Distribution')
-        axes[0].set_xlabel('Area (pixels²)')
-        axes[0].set_ylabel('Frequency')
-        axes[0].set_xlim(area_range)
-        axes[0].grid(True, alpha=0.3)
-
-        axes[1].set_title('Aspect Ratio Distribution')
-        axes[1].set_xlabel('Aspect Ratio')
-        axes[1].set_ylabel('Frequency')
-        axes[1].set_xlim(ar_range)
-        axes[1].grid(True, alpha=0.3)
-
-        # FIXED: Just setup the third axis, don't plot data yet
-        axes[2].set_title('Flow Alignment Distribution')
-        axes[2].set_xlabel('Alignment Angle (degrees)')
-        axes[2].set_ylabel('Frequency')
-        axes[2].set_xlim(0, 90)  # FIXED: Use 0-90 range
-        axes[2].grid(True, alpha=0.3)
-
-        # Create text objects for dynamic info
+        # Time text
         time_text = fig.text(0.02, 0.95, '', fontsize=12,
                              bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
 
-        # FIXED Animation update function
         def update_frame(frame_idx):
-            # Clear all axes
             for ax in axes:
                 ax.clear()
 
-            # Get current data - THIS WAS THE MISSING LINE!
-            data = hourly_data[frame_idx]
+            data = animation_data[frame_idx]
 
-            # Plot Area distribution
-            axes[0].hist(data['areas'], bins=20, color=colors[0], alpha=0.7, edgecolor='black')
+            # Area distribution
+            axes[0].hist(data['areas'], bins=20, color='skyblue', alpha=0.7, edgecolor='black')
             axes[0].set_title('Area Distribution')
             axes[0].set_xlabel('Area (pixels²)')
             axes[0].set_ylabel('Frequency')
             axes[0].set_xlim(area_range)
             axes[0].grid(True, alpha=0.3)
 
-            # Add mean line for area
             if data['areas']:
                 mean_area = np.mean(data['areas'])
                 axes[0].axvline(mean_area, color='red', linestyle='--', alpha=0.8,
                                 label=f'Mean: {mean_area:.0f}')
-                axes[0].legend(fontsize=9)
+                axes[0].legend()
 
-            # Plot Aspect Ratio distribution
-            axes[1].hist(data['aspect_ratios'], bins=20, color=colors[1], alpha=0.7, edgecolor='black')
+            # Aspect ratio distribution
+            axes[1].hist(data['aspect_ratios'], bins=20, color='lightcoral', alpha=0.7, edgecolor='black')
             axes[1].set_title('Aspect Ratio Distribution')
             axes[1].set_xlabel('Aspect Ratio')
             axes[1].set_ylabel('Frequency')
             axes[1].set_xlim(ar_range)
             axes[1].grid(True, alpha=0.3)
 
-            # Add mean line for aspect ratio
             if data['aspect_ratios']:
                 mean_ar = np.mean(data['aspect_ratios'])
                 axes[1].axvline(mean_ar, color='red', linestyle='--', alpha=0.8,
                                 label=f'Mean: {mean_ar:.1f}')
-                axes[1].legend(fontsize=9)
+                axes[1].legend()
 
-            # FIXED: Plot Flow Alignment distribution (0-90° range)
-            axes[2].hist(data['orientations'], bins=20, color=colors[2], alpha=0.7, edgecolor='black',
-                         range=(0, 90))  # FIXED: Use 0-90 range
-            axes[2].set_title('Flow Alignment Distribution')
+            # FIXED Flow alignment distribution
+            axes[2].hist(data['orientations'], bins=20, color='lightgreen', alpha=0.7,
+                         edgecolor='black', range=(0, 90))
+            axes[2].set_title('Flow Alignment (FIXED)')
             axes[2].set_xlabel('Alignment Angle (degrees)')
             axes[2].set_ylabel('Frequency')
-            axes[2].set_xlim(0, 90)  # FIXED: Use 0-90 range
+            axes[2].set_xlim(0, 90)
             axes[2].grid(True, alpha=0.3)
 
-            # FIXED: Add alignment references (not flow direction)
-            axes[2].axvline(0, color='green', linestyle='-', alpha=0.8, linewidth=2,
-                            label='Perfect alignment')
-            axes[2].axvline(45, color='orange', linestyle='--', alpha=0.6, linewidth=1,
-                            label='45° (intermediate)')
-            axes[2].axvline(90, color='red', linestyle='-', alpha=0.8, linewidth=2,
-                            label='Perpendicular')
+            # Reference lines
+            axes[2].axvline(0, color='green', linestyle='-', alpha=0.8, linewidth=2, label='Perfect')
+            axes[2].axvline(90, color='red', linestyle='-', alpha=0.8, linewidth=2, label='Perpendicular')
 
-            # Add mean orientation
             if data['orientations']:
                 mean_orient = np.mean(data['orientations'])
                 axes[2].axvline(mean_orient, color='red', linestyle='--', alpha=0.8,
                                 label=f'Mean: {mean_orient:.1f}°')
-                axes[2].legend(fontsize=9)
+                axes[2].legend()
 
             # Update time text
-            time_str = (f"Hour {data['hour']} ({data['time_minutes']:.0f} min)\n"
-                        f"Shear Stress: {data['shear_stress']:.2f} Pa\n"
+            time_str = (f"t = {data['time_hours']:.1f}h\n"
+                        f"Shear: {data['shear_stress']:.2f} Pa\n"
                         f"Cells: {data['cell_count']}")
             time_text.set_text(time_str)
 
             return axes
 
         # Create animation
-        ani = animation.FuncAnimation(
-            fig, update_frame, frames=len(hourly_data),
-            interval=1000 / fps, repeat=True, blit=False
-        )
+        ani = animation.FuncAnimation(fig, update_frame, frames=len(animation_data),
+                                      interval=1000 / fps, repeat=True, blit=False)
 
-        # Generate save path if not provided
+        # Save animation
         if save_path is None:
             import time
             timestamp = time.strftime("%Y%m%d-%H%M%S")
             save_path = os.path.join(self.config.plot_directory,
-                                     f"historical_animated_distributions_{timestamp}.mp4")
+                                     f"FIXED_distribution_animation_{timestamp}.mp4")
 
-        # Save animation
-        print(f"Saving animation to {save_path}...")
+        try:
+            if 'ffmpeg' in animation.writers.list():
+                Writer = animation.writers['ffmpeg']
+                writer = Writer(fps=fps, metadata=dict(artist='Fixed Endothelial Simulation'), bitrate=1800)
+                ani.save(save_path, writer=writer, dpi=150)
+                print(f"✅ FIXED animation saved to: {save_path}")
+            else:
+                print("❌ ffmpeg not available")
+        except Exception as e:
+            print(f"❌ Error saving animation: {e}")
 
-        # Check if ffmpeg writer is available
-        if 'ffmpeg' in animation.writers.list():
-            Writer = animation.writers['ffmpeg']
-            writer = Writer(fps=fps, metadata=dict(artist='Endothelial Simulation'), bitrate=1800)
-            ani.save(save_path, writer=writer, dpi=150)
-            print(f"✅ Animation saved to: {save_path}")
-        else:
-            print("❌ Error: ffmpeg writer not available. Please install ffmpeg to save animations.")
-            print("You can install ffmpeg using: pip install ffmpeg-python")
-
-        plt.tight_layout()
         return ani
 
     def plot_polar_cell_distribution(self, simulator, save_path=None):
@@ -1208,22 +1200,32 @@ class Plotter:
         )
         figures.append(cell_vis_fig)
 
-        # Hourly distributions plot
-        hourly_fig = self.plot_hourly_cell_distributions(
+        #cell distribution
+        evolution_fig = self.plot_cell_distributions(
             simulator,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_hourly_distributions.png")
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_distributions_evolution.png"),
+            show_evolution=True
         )
-        if hourly_fig:
-            figures.append(hourly_fig)
+        if evolution_fig:
+            figures.append(evolution_fig)
 
-            # Animated distributions (add this after the static distributions)
-            animated_fig = self.plot_animated_cell_distributions(
-                simulator,
-                save_path=os.path.join(self.config.plot_directory, f"{prefix}_animated_distributions.mp4"),
-                max_hours=8
-            )
-            if animated_fig:
-                print("Animated distributions created!")
+        snapshot_fig = self.plot_cell_distributions(
+            simulator,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_distributions_snapshots.png"),
+            show_evolution=False,
+            time_points='auto'
+        )
+        if snapshot_fig:
+            figures.append(snapshot_fig)
+
+        # Enhanced animated distributions (FIXED)
+        animated_fig = self.create_distribution_animation(
+            simulator,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_FIXED_animated_distributions.mp4")
+        )
+        if animated_fig:
+            print("FIXED animated distributions created!")
+
 
         # Polar distribution plot
         polar_fig = self.plot_polar_cell_distribution(
