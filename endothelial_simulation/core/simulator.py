@@ -1253,3 +1253,11 @@ class Simulator:
             print("❌ Energy data saving not available in this grid version")
 
         return filepath
+
+    def plot_energy_evolution(self, save_path=None):
+        """Plot energy evolution if tracking is enabled."""
+        if self.energy_tracking_enabled:
+            return self.grid.plot_energy_evolution(save_path)
+        else:
+            print("Energy tracking not enabled")
+            return None
