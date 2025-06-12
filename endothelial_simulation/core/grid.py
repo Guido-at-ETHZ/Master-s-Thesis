@@ -351,7 +351,6 @@ class Grid:
 
         return adjustments
 
-
     def _calculate_repulsion_force(self, cell_id):
         """Calculate repulsion force from neighboring cells."""
         current_pos = np.array(self.cell_seeds[cell_id])
@@ -794,3 +793,307 @@ class Grid:
                     if centroid_dist < max_displacement * 2:
                         self.cell_seeds[cell.cell_id] = new_pos
                         cell.update_position(new_pos)
+
+    def enable_energy_tracking(self):
+        """
+        Enable comprehensive energy tracking for your existing Grid.
+        Call this method after creating your grid to start tracking energy.
+        """
+        import numpy as np
+
+        # Initialize energy tracking
+        self.energy_tracker = {
+            'history': [],
+            'detailed_history': [],
+            'optimization_iterations': [],
+            'weights': self.energy_weights.copy()
+        }
+
+        # Store original methods
+        self._original_update_biological_adaptation = self.update_biological_adaptation
+        self._original_run_adaptive_optimization = self._run_adaptive_optimization
+
+        # Replace with tracking versions
+        self.update_biological_adaptation = self._tracked_update_biological_adaptation
+        self._run_adaptive_optimization = self._tracked_run_adaptive_optimization
+
+        print("✅ Energy tracking enabled for Grid")
+
+    def get_detailed_energy_breakdown(self):
+        """
+        Get detailed energy breakdown by component and cell.
+
+        Returns:
+            Dictionary with comprehensive energy information
+        """
+        import numpy as np
+
+        breakdown = {
+            'total_energy': 0.0,
+            'area_energy': 0.0,
+            'aspect_ratio_energy': 0.0,
+            'orientation_energy': 0.0,
+            'per_cell_energies': [],
+            'energy_stats': {}
+        }
+
+        if not self.cells:
+            return breakdown
+
+        area_energies = []
+        ar_energies = []
+        orientation_energies = []
+
+        for cell_id, cell in self.cells.items():
+            cell_energy = {'cell_id': cell_id, 'is_senescent': cell.is_senescent}
+
+            # Area energy
+            if hasattr(cell, 'target_area') and cell.target_area > 0 and cell.actual_area > 0:
+                area_ratio = cell.actual_area / cell.target_area
+                area_energy = (area_ratio - 1.0) ** 2 * self.energy_weights['area']
+                cell_energy['area_energy'] = area_energy
+                area_energies.append(area_energy)
+            else:
+                cell_energy['area_energy'] = 0.0
+
+            # Aspect ratio energy
+            if hasattr(cell, 'target_aspect_ratio') and cell.target_aspect_ratio > 0:
+                ar_ratio = cell.actual_aspect_ratio / cell.target_aspect_ratio
+                ar_energy = (ar_ratio - 1.0) ** 2 * self.energy_weights['aspect_ratio']
+                cell_energy['ar_energy'] = ar_energy
+                ar_energies.append(ar_energy)
+            else:
+                cell_energy['ar_energy'] = 0.0
+
+            # Orientation energy
+            if hasattr(cell, 'target_orientation'):
+                target_align = self.to_alignment_angle(cell.target_orientation)
+                actual_align = self.to_alignment_angle(cell.actual_orientation)
+                angle_diff = abs(target_align - actual_align)
+                orientation_energy = (angle_diff / (np.pi / 2)) ** 2 * self.energy_weights['orientation']
+                cell_energy['orientation_energy'] = orientation_energy
+                orientation_energies.append(orientation_energy)
+            else:
+                cell_energy['orientation_energy'] = 0.0
+
+            # Total cell energy
+            cell_energy['total_energy'] = (cell_energy['area_energy'] +
+                                           cell_energy['ar_energy'] +
+                                           cell_energy['orientation_energy'])
+
+            breakdown['per_cell_energies'].append(cell_energy)
+
+        # Aggregate energies
+        breakdown['area_energy'] = sum(area_energies)
+        breakdown['aspect_ratio_energy'] = sum(ar_energies)
+        breakdown['orientation_energy'] = sum(orientation_energies)
+        breakdown['total_energy'] = (breakdown['area_energy'] +
+                                     breakdown['aspect_ratio_energy'] +
+                                     breakdown['orientation_energy'])
+
+        # Statistics
+        breakdown['energy_stats'] = {
+            'mean_area_energy': np.mean(area_energies) if area_energies else 0,
+            'mean_ar_energy': np.mean(ar_energies) if ar_energies else 0,
+            'mean_orientation_energy': np.mean(orientation_energies) if orientation_energies else 0,
+            'max_area_energy': np.max(area_energies) if area_energies else 0,
+            'max_ar_energy': np.max(ar_energies) if ar_energies else 0,
+            'max_orientation_energy': np.max(orientation_energies) if orientation_energies else 0,
+            'cell_count': len(self.cells)
+        }
+
+        return breakdown
+
+    def record_energy_state(self, time_step=None, label=""):
+        """
+        Record current energy state.
+
+        Parameters:
+            time_step: Current time step
+            label: Optional label for this energy recording
+        """
+        if not hasattr(self, 'energy_tracker'):
+            return
+
+        breakdown = self.get_detailed_energy_breakdown()
+        breakdown['time_step'] = time_step
+        breakdown['label'] = label
+        breakdown['timestamp'] = len(self.energy_tracker['history'])
+
+        self.energy_tracker['history'].append(breakdown)
+
+    def _tracked_update_biological_adaptation(self):
+        """Enhanced biological adaptation with energy tracking."""
+        # Record energy before adaptation
+        if hasattr(self, 'energy_tracker'):
+            self.record_energy_state(label="before_adaptation")
+
+        # Run original adaptation
+        result = self._original_update_biological_adaptation()
+
+        # Record energy after adaptation
+        if hasattr(self, 'energy_tracker'):
+            self.record_energy_state(label="after_adaptation")
+
+        return result
+
+    def _tracked_run_adaptive_optimization(self, intensity, initial_energy):
+        """Enhanced adaptive optimization with detailed energy tracking."""
+        if hasattr(self, 'energy_tracker'):
+            # Record optimization start
+            breakdown = self.get_detailed_energy_breakdown()
+            breakdown['optimization_intensity'] = intensity
+            breakdown['iteration'] = 0
+            breakdown['phase'] = 'start'
+            self.energy_tracker['optimization_iterations'].append(breakdown)
+
+        # Run original optimization
+        result = self._original_run_adaptive_optimization(intensity, initial_energy)
+
+        if hasattr(self, 'energy_tracker'):
+            # Record optimization end
+            breakdown = self.get_detailed_energy_breakdown()
+            breakdown['optimization_intensity'] = intensity
+            breakdown['iteration'] = 1
+            breakdown['phase'] = 'end'
+            self.energy_tracker['optimization_iterations'].append(breakdown)
+
+        return result
+
+    def get_energy_summary(self):
+        """
+        Get a summary of current energy state.
+
+        Returns:
+            Dictionary with energy summary
+        """
+        if not hasattr(self, 'energy_tracker'):
+            return {"error": "Energy tracking not enabled. Call enable_energy_tracking() first."}
+
+        breakdown = self.get_detailed_energy_breakdown()
+
+        summary = {
+            'current_total_energy': breakdown['total_energy'],
+            'current_area_energy': breakdown['area_energy'],
+            'current_ar_energy': breakdown['aspect_ratio_energy'],
+            'current_orientation_energy': breakdown['orientation_energy'],
+            'energy_per_cell': breakdown['total_energy'] / max(1, len(self.cells)),
+            'cell_count': len(self.cells),
+            'recordings_count': len(self.energy_tracker['history']) if hasattr(self, 'energy_tracker') else 0,
+            'optimization_iterations': len(self.energy_tracker['optimization_iterations']) if hasattr(self,
+                                                                                                      'energy_tracker') else 0
+        }
+
+        # Add component breakdown percentages
+        total = breakdown['total_energy']
+        if total > 0:
+            summary['component_percentages'] = {
+                'area_percent': (breakdown['area_energy'] / total) * 100,
+                'ar_percent': (breakdown['aspect_ratio_energy'] / total) * 100,
+                'orientation_percent': (breakdown['orientation_energy'] / total) * 100
+            }
+        else:
+            summary['component_percentages'] = {'area_percent': 0, 'ar_percent': 0, 'orientation_percent': 0}
+
+        # Energy trends
+        if hasattr(self, 'energy_tracker') and len(self.energy_tracker['history']) > 1:
+            recent_energies = [h['total_energy'] for h in self.energy_tracker['history'][-5:]]
+            summary['recent_trend'] = 'decreasing' if recent_energies[-1] < recent_energies[0] else 'increasing'
+            summary['energy_change'] = recent_energies[-1] - recent_energies[0]
+
+        return summary
+
+    def plot_energy_evolution(self, save_path=None):
+        """
+        Create a simple energy evolution plot.
+
+        Parameters:
+            save_path: Path to save the plot
+
+        Returns:
+            matplotlib.Figure
+        """
+        if not hasattr(self, 'energy_tracker') or not self.energy_tracker['history']:
+            print("No energy history available. Enable tracking and run simulation first.")
+            return None
+
+        import matplotlib.pyplot as plt
+
+        # Extract data
+        history = self.energy_tracker['history']
+        timestamps = [h['timestamp'] for h in history]
+        total_energies = [h['total_energy'] for h in history]
+        area_energies = [h['area_energy'] for h in history]
+        ar_energies = [h['aspect_ratio_energy'] for h in history]
+        orientation_energies = [h['orientation_energy'] for h in history]
+
+        # Create plot
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=True)
+
+        # Total energy
+        ax1.plot(timestamps, total_energies, 'k-', linewidth=2, label='Total Energy')
+        ax1.set_ylabel('Total Energy')
+        ax1.set_title('Energy Evolution Over Time')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+
+        # Component energies
+        ax2.plot(timestamps, area_energies, 'b-', linewidth=2, label='Area')
+        ax2.plot(timestamps, ar_energies, 'r-', linewidth=2, label='Aspect Ratio')
+        ax2.plot(timestamps, orientation_energies, 'g-', linewidth=2, label='Orientation')
+        ax2.set_xlabel('Recording Number')
+        ax2.set_ylabel('Component Energy')
+        ax2.set_title('Energy by Component')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+
+        plt.tight_layout()
+
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"Energy evolution plot saved to: {save_path}")
+
+        return fig
+
+    def print_energy_report(self):
+        """Print a comprehensive energy report."""
+        import numpy as np
+
+        if not hasattr(self, 'energy_tracker'):
+            print("❌ Energy tracking not enabled. Call grid.enable_energy_tracking() first.")
+            return
+
+        summary = self.get_energy_summary()
+
+        print("\n" + "=" * 50)
+        print("ENERGY ANALYSIS REPORT")
+        print("=" * 50)
+        print(f"Total Energy: {summary['current_total_energy']:.4f}")
+        print(f"Energy per Cell: {summary['energy_per_cell']:.4f}")
+        print(f"Cell Count: {summary['cell_count']}")
+        print(f"Recordings: {summary['recordings_count']}")
+        print(f"Optimization Iterations: {summary['optimization_iterations']}")
+
+        print(f"\nComponent Breakdown:")
+        print(
+            f"  Area Energy: {summary['current_area_energy']:.4f} ({summary['component_percentages']['area_percent']:.1f}%)")
+        print(
+            f"  Aspect Ratio Energy: {summary['current_ar_energy']:.4f} ({summary['component_percentages']['ar_percent']:.1f}%)")
+        print(
+            f"  Orientation Energy: {summary['current_orientation_energy']:.4f} ({summary['component_percentages']['orientation_percent']:.1f}%)")
+
+        if 'recent_trend' in summary:
+            print(f"\nRecent Trend: {summary['recent_trend']} (Δ{summary['energy_change']:+.4f})")
+
+        # Find highest energy cells
+        breakdown = self.get_detailed_energy_breakdown()
+        if breakdown['per_cell_energies']:
+            sorted_cells = sorted(breakdown['per_cell_energies'],
+                                  key=lambda x: x['total_energy'], reverse=True)
+            print(f"\nTop 3 Highest Energy Cells:")
+            for i, cell in enumerate(sorted_cells[:3]):
+                print(f"  {i + 1}. Cell {cell['cell_id']}: {cell['total_energy']:.4f} "
+                      f"(A:{cell['area_energy']:.3f}, AR:{cell['ar_energy']:.3f}, O:{cell['orientation_energy']:.3f}) "
+                      f"{'[SEN]' if cell['is_senescent'] else '[HEALTHY]'}")
+
+        print("=" * 50)
