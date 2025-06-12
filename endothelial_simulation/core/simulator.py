@@ -926,7 +926,7 @@ class Simulator:
 
         # Process each cell
         for cell in self.grid.cells.values():
-            # === ACTUAL VALUES (existing code) ===
+
 
             # Scale area back to display units
             area = cell.actual_area * (self.grid.computation_scale ** 2)
@@ -935,10 +935,12 @@ class Simulator:
             cell_properties['aspect_ratios'].append(cell.actual_aspect_ratio)
 
             # Convert orientation to degrees and normalize
-            # Convert to alignment angle (0-90°: 0° = aligned with flow, 90° = perpendicular)
-            orientation_rad = cell.actual_orientation
-            alignment_angle = np.abs(orientation_rad) % (np.pi / 2)  # Map to [0, π/2]
-            alignment_deg = np.degrees(alignment_angle)  # Convert to [0, 90] degrees
+            orientation_rad = cell.actual_orientation  # Raw radians from np.arctan2
+            orientation_deg = np.degrees(orientation_rad)  # Convert to degrees (-180° to 180°)
+            angle_180 = orientation_deg % 180  # Map to [0°, 180°)
+            alignment_deg = min(angle_180, 180 - angle_180)  # Get acute angle [0°, 90°]
+
+            # Store the corrected flow alignment angle
             cell_properties['orientations'].append(alignment_deg)
 
             cell_properties['is_senescent'].append(cell.is_senescent)

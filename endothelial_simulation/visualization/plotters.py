@@ -726,21 +726,10 @@ class Plotter:
                 continue
 
             # Extract historical properties
-            # Extract historical properties
             cell_props = historical_state['cell_properties']
             areas = cell_props['areas']
             aspect_ratios = cell_props['aspect_ratios']
-            raw_orientations_deg = cell_props['orientations']  # Renamed to "raw"
-
-            # APPLY THE CONSISTENT 0-90° ALIGNMENT ANGLE CONVERSION
-            alignment_angles = []
-            for angle in raw_orientations_deg:
-                angle_180 = angle % 180  # Normalize to 0-180° range
-                alignment_angle = min(angle_180, 180 - angle_180)  # Take acute angle
-                alignment_angles.append(alignment_angle)
-
-            # Use the converted alignment angles
-            orientations_deg = alignment_angles
+            orientations_deg = cell_props['orientations']
 
             if not areas:  # Skip if no cells
                 continue

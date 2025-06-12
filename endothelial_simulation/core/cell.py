@@ -236,6 +236,9 @@ class Cell:
 
                     # Principal axis gives orientation
                     principal_axis = eigenvecs[:, 0]
+                    if principal_axis[0] < 0:  # If pointing left
+                        principal_axis = -principal_axis  # Flip to point right
+
                     self.actual_orientation = np.arctan2(principal_axis[1], principal_axis[0])
 
                     # Aspect ratio from eigenvalues
@@ -251,6 +254,7 @@ class Cell:
                 self._calculate_geometry_simple()
         else:
             self._calculate_geometry_simple()
+
 
     def _calculate_geometry_simple(self):
         """Simple fallback geometry calculation - real parameters only."""
