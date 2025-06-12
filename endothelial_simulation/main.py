@@ -50,7 +50,6 @@ def run_single_step_simulation(config, initial_value, final_value, step_time, du
     """Run a simulation with a single step input."""
     simulator = Simulator(config)
     simulator.initialize()
-    simulator.grid.enable_energy_tracking()
     simulator.set_step_input(initial_value, final_value, step_time)
 
     print(f"Running single-step simulation:")

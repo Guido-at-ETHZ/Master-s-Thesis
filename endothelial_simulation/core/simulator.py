@@ -36,6 +36,14 @@ class Simulator:
             config=config
         )
 
+        # Automatically enable energy tracking if biological optimization is active
+        if getattr(config, 'biological_optimization_enabled', True):
+            print("🔋 Enabling automatic energy tracking for biological optimization...")
+            self.grid.enable_energy_tracking()
+            self.energy_tracking_enabled = True
+        else:
+            self.energy_tracking_enabled = False
+
         # Initialize model components based on configuration
         self.models = {}
 
@@ -103,6 +111,11 @@ class Simulator:
 
         # Record initial state
         self._record_state()
+
+        # Record initial energy state if tracking is enabled
+        if self.energy_tracking_enabled:
+            print("🔋 Recording initial energy state...")
+            self.grid.record_energy_state(self.step_count, label="initialization")
 
     def _initialize_cell_properties_for_pressure(self):
         """
@@ -1208,3 +1221,35 @@ class Simulator:
             'orientation_adaptation': 1.0 - np.mean([abs(a - t) for a, t in zip(orientations, target_orientations)]) / np.pi if orientations else 0,
             'grid_statistics': grid_stats
         }
+
+    def get_energy_summary(self):
+        """Get energy summary if tracking is enabled."""
+        if not self.energy_tracking_enabled:
+            return {"error": "Energy tracking not enabled"}
+        return self.grid.get_energy_summary()
+
+    def print_energy_report(self):
+        """Print comprehensive energy report if tracking is enabled."""
+        if not self.energy_tracking_enabled:
+            print("❌ Energy tracking not enabled")
+            return
+        self.grid.print_energy_report()
+
+    def save_energy_data(self, filename=None):
+        """Save energy data if tracking is enabled."""
+        if not self.energy_tracking_enabled:
+            print("❌ Energy tracking not enabled - no data to save")
+            return None
+
+        if filename is None:
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            filename = f"energy_data_{timestamp}.csv"
+
+        filepath = os.path.join(self.config.plot_directory, filename)
+
+        if hasattr(self.grid, 'save_energy_data'):
+            self.grid.save_energy_data(filepath)
+        else:
+            print("❌ Energy data saving not available in this grid version")
+
+        return filepath
