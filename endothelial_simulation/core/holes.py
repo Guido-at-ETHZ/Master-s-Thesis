@@ -126,48 +126,50 @@ class HoleManager:
             # Fallback values
             self.min_hole_radius = 10 / self.grid.computation_scale
             self.max_hole_radius = 50 / self.grid.computation_scale
-    
+
     def should_create_hole(self) -> bool:
         """
-        Determine if a hole should be created based on current conditions.
-        
+        Determine if a hole should be created based on OR conditions.
+
         Returns:
             True if a hole should be created, False otherwise
         """
         # Check if we've reached the maximum number of holes
         if len(self.holes) >= self.max_holes:
             return False
-        
+
         # Get current cell statistics
         cell_counts = self.grid.count_cells_by_type()
         total_cells = cell_counts['total']
         senescent_cells = cell_counts['telomere_senescent'] + cell_counts['stress_senescent']
-        
-        # Check conditions for hole creation
-        if total_cells >= self.hole_creation_threshold_cells:
+
+        # Check conditions
+        senescence_fraction = senescent_cells / total_cells if total_cells > 0 else 0
+        condition1_low_cells = total_cells <= self.hole_creation_threshold_cells  # ← NEW: OR logic
+        condition2_high_senescence = senescence_fraction >= self.hole_creation_threshold_senescence  # ← NEW: OR logic
+
+        # NEW: OR instead of AND
+        if not (condition1_low_cells or condition2_high_senescence):  # ← KEY CHANGE
             return False
-        
-        if total_cells == 0:
-            senescence_fraction = 0
+
+        # Calculate probability factors
+        cell_factor = max(0, (
+                    self.hole_creation_threshold_cells - total_cells) / self.hole_creation_threshold_cells) if condition1_low_cells else 0
+        senescence_factor = min(1.0,
+                                senescence_fraction / self.hole_creation_threshold_senescence) if condition2_high_senescence else 0
+
+        # Probability boost based on conditions met
+        if condition1_low_cells and condition2_high_senescence:
+            # Both conditions: synergy bonus
+            probability_multiplier = 1.0 + cell_factor + senescence_factor + (cell_factor * senescence_factor)
         else:
-            senescence_fraction = senescent_cells / total_cells
-        
-        if senescence_fraction < self.hole_creation_threshold_senescence:
-            return False
-        
-        # Calculate probability based on severity of conditions
-        cell_factor = max(0, (self.hole_creation_threshold_cells - total_cells) / self.hole_creation_threshold_cells)
-        senescence_factor = min(1.0, senescence_fraction / self.hole_creation_threshold_senescence)
-        
-        # Combined probability (higher when conditions are more severe)
-        probability = self.hole_creation_probability_base * cell_factor * senescence_factor
-        
-        # Increase probability if we have very few holes and conditions are met
-        if len(self.holes) < 2:
-            probability *= 1.5
-        
-        return random.random() < probability
-    
+            # Single condition: double the individual factor
+            probability_multiplier = 1.0 + max(cell_factor, senescence_factor) * 2.0
+
+        final_probability = min(0.8, self.hole_creation_probability_base * probability_multiplier)
+
+        return random.random() < final_probability
+
     def should_fill_holes(self) -> bool:
         """
         Determine if holes should be filled based on current conditions.
