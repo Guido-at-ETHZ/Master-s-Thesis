@@ -1128,7 +1128,7 @@ class Plotter:
 
         return ani
 
-    def create_all_plots(self, simulator, history=None, prefix=None):
+    def create_all_plots_old(self, simulator, history=None, prefix=None):
         """
         Create all available plots for the simulation.
 
@@ -1242,3 +1242,243 @@ class Plotter:
         )
 
         return figures
+
+
+    def create_all_plots(self, simulator, history=None, prefix=None):
+        """
+        Create all available plots for the simulation.
+        MODIFIED: Now automatically includes energy analysis.
+
+        Parameters:
+            simulator: Simulator object with current state
+            history: List of state dictionaries (default: from simulator)
+            prefix: Prefix for filenames (default: auto-generated timestamp)
+
+        Returns:
+            List of created figure objects
+        """
+        # Use simulator history if not provided
+        if history is None:
+            history = simulator.history
+
+        # Use timestamp prefix if not provided
+        if prefix is None:
+            import time
+            prefix = time.strftime("%Y%m%d-%H%M%S")
+
+        # Create output directory
+        os.makedirs(self.config.plot_directory, exist_ok=True)
+
+        # Create figures
+        figures = []
+
+        # Cell population plot
+        pop_fig = self.plot_cell_population(
+            history,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_population.png")
+        )
+        figures.append(pop_fig)
+
+        # Input pattern plot
+        input_fig = self.plot_input_pattern(
+            history,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_input.png")
+        )
+        figures.append(input_fig)
+
+        # Spatial metrics plot (if available)
+        spatial_fig = self.plot_spatial_metrics(
+            history,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_spatial.png")
+        )
+        if spatial_fig:
+            figures.append(spatial_fig)
+
+        # Mosaic metrics plot (if available)
+        mosaic_fig = self.plot_mosaic_metrics(
+            history,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_mosaic.png")
+        )
+        if mosaic_fig:
+            figures.append(mosaic_fig)
+
+        # Senescent growth metrics plot (if available)
+        growth_fig = self.plot_senescent_growth_metrics(
+            history,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_senescent_growth.png")
+        )
+        if growth_fig:
+            figures.append(growth_fig)
+
+        # Cell visualization
+        cell_vis_fig = self.plot_cell_visualization(
+            simulator,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_cells.png")
+        )
+        figures.append(cell_vis_fig)
+
+        # Cell distribution plots
+        evolution_fig = self.plot_cell_distributions(
+            simulator,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_distributions_evolution.png"),
+            show_evolution=True
+        )
+        if evolution_fig:
+            figures.append(evolution_fig)
+
+        snapshot_fig = self.plot_cell_distributions(
+            simulator,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_distributions_snapshots.png"),
+            show_evolution=False,
+            time_points='auto'
+        )
+        if snapshot_fig:
+            figures.append(snapshot_fig)
+
+        # Polar distribution plot
+        polar_fig = self.plot_polar_cell_distribution(
+            simulator,
+            save_path=os.path.join(self.config.plot_directory, f"{prefix}_polar.png")
+        )
+        if polar_fig:
+            figures.append(polar_fig)
+
+        # === NEW: AUTOMATIC ENERGY ANALYSIS ===
+
+        try:
+            print("🔋 Adding energy analysis...")
+
+            # Enable energy tracking if not already enabled
+            if not hasattr(simulator.grid, 'energy_tracker'):
+                simulator.grid.enable_energy_tracking()
+                simulator.grid.record_energy_state(simulator.step_count, label="final_state")
+
+            # Create energy analysis plot
+            energy_fig = self._plot_energy_analysis(
+                simulator,
+                save_path=os.path.join(self.config.plot_directory, f"{prefix}_energy_analysis.png")
+            )
+            if energy_fig:
+                figures.append(energy_fig)
+                print("✅ Energy analysis plot created")
+
+            # Print energy summary to console
+            if hasattr(simulator.grid, 'print_energy_report'):
+                print("\n" + "=" * 50)
+                print("ENERGY REPORT")
+                print("=" * 50)
+                simulator.grid.print_energy_report()
+
+        except Exception as e:
+            print(f"⚠️  Energy analysis skipped: {e}")
+
+        return figures
+
+    def _plot_energy_analysis(self, simulator, save_path=None):
+        """
+        NEW METHOD: Add this to your Plotter class.
+        Creates energy analysis plot using existing energy system.
+        """
+        try:
+            import matplotlib.pyplot as plt
+            from matplotlib.gridspec import GridSpec
+
+            # Get energy summary
+            summary = simulator.grid.get_energy_summary()
+
+            if 'error' in summary:
+                print(f"Energy tracking not available: {summary['error']}")
+                return None
+
+            # Create figure
+            fig = plt.figure(figsize=(14, 10))
+            gs = GridSpec(2, 3, figure=fig, hspace=0.3, wspace=0.3)
+
+            # 1. Energy breakdown pie chart
+            ax1 = fig.add_subplot(gs[0, 0])
+
+            area_energy = summary.get('current_area_energy', 0)
+            ar_energy = summary.get('current_ar_energy', 0)
+            orient_energy = summary.get('current_orientation_energy', 0)
+            total_energy = summary.get('current_total_energy', 0)
+
+            if total_energy > 0:
+                energies = [area_energy, ar_energy, orient_energy]
+                labels = ['Area', 'Aspect Ratio', 'Orientation']
+                colors = ['skyblue', 'lightcoral', 'lightgreen']
+
+                # Remove zeros
+                non_zero = [(e, l, c) for e, l, c in zip(energies, labels, colors) if e > 0]
+                if non_zero:
+                    energies, labels, colors = zip(*non_zero)
+                    ax1.pie(energies, labels=labels, colors=colors, autopct='%1.1f%%')
+
+            ax1.set_title(f'Energy Breakdown\nTotal: {total_energy:.4f}')
+
+            # 2. Energy per cell
+            ax2 = fig.add_subplot(gs[0, 1])
+            cell_count = summary.get('cell_count', 1)
+            energy_per_cell = summary.get('energy_per_cell', 0)
+
+            ax2.bar(['Energy per Cell'], [energy_per_cell], color='orange', alpha=0.7)
+            ax2.set_title(f'Energy Efficiency\n({cell_count} cells)')
+            ax2.set_ylabel('Energy per Cell')
+
+            # 3. Component percentages
+            ax3 = fig.add_subplot(gs[0, 2])
+            if 'component_breakdown' in summary:
+                comp = summary['component_breakdown']
+                categories = ['Area', 'Aspect Ratio', 'Orientation']
+                percentages = [comp.get('area_fraction', 0) * 100,
+                               comp.get('ar_fraction', 0) * 100,
+                               comp.get('orientation_fraction', 0) * 100]
+
+                ax3.bar(categories, percentages, color=['blue', 'red', 'green'], alpha=0.7)
+                ax3.set_ylabel('Percentage (%)')
+                ax3.set_title('Component Distribution')
+                ax3.set_ylim(0, 100)
+
+            # 4. Energy evolution (bottom spanning all columns)
+            ax4 = fig.add_subplot(gs[1, :])
+
+            if hasattr(simulator.grid, 'energy_tracker') and simulator.grid.energy_tracker['history']:
+                history = simulator.grid.energy_tracker['history']
+
+                if len(history) > 1:
+                    times = [h.get('timestamp', i) for i, h in enumerate(history)]
+                    total_energies = [h.get('total_energy', 0) for h in history]
+                    area_energies = [h.get('area_energy', 0) for h in history]
+                    ar_energies = [h.get('aspect_ratio_energy', 0) for h in history]
+                    orient_energies = [h.get('orientation_energy', 0) for h in history]
+
+                    ax4.plot(times, total_energies, 'k-', linewidth=3, label='Total')
+                    ax4.plot(times, area_energies, 'b-', linewidth=2, label='Area', alpha=0.7)
+                    ax4.plot(times, ar_energies, 'r-', linewidth=2, label='Aspect Ratio', alpha=0.7)
+                    ax4.plot(times, orient_energies, 'g-', linewidth=2, label='Orientation', alpha=0.7)
+
+                    ax4.set_xlabel('Recording Number')
+                    ax4.set_ylabel('Energy')
+                    ax4.set_title('Energy Evolution Over Time')
+                    ax4.legend()
+                    ax4.grid(True, alpha=0.3)
+                else:
+                    ax4.text(0.5, 0.5, f'Current Energy: {total_energy:.4f}',
+                             ha='center', va='center', transform=ax4.transAxes, fontsize=14)
+                    ax4.set_title('Energy State')
+            else:
+                ax4.text(0.5, 0.5, f'Current Energy: {total_energy:.4f}',
+                         ha='center', va='center', transform=ax4.transAxes, fontsize=14)
+                ax4.set_title('Energy State')
+
+            plt.suptitle('Biological Energy Analysis', fontsize=16)
+
+            # Save if requested
+            if save_path:
+                plt.savefig(save_path, dpi=300, bbox_inches='tight')
+                print(f"Energy analysis saved to: {save_path}")
+
+            return fig
+
+        except Exception as e:
+            print(f"Error creating energy plot: {e}")
+            return None
