@@ -456,6 +456,8 @@ class Simulator:
             if self.step_count % 6 == 0:
                 self.grid.optimize_cell_positions(iterations=2)
 
+        # Update hole system
+        self.grid.update_holes(dt)
 
         # Update mosaic structure periodically
         self._update_mosaic_structure()
@@ -1129,8 +1131,15 @@ class Simulator:
                     'max_senescent_size': 1.0
                 })
 
+        # Add hole statistics
+        hole_stats = self.grid.get_hole_statistics()
+        state['hole_count'] = hole_stats['hole_count']
+        state['hole_area_fraction'] = hole_stats['hole_area_fraction']
+        state['holes'] = hole_stats['holes']
+
         # Add to history
         self.history.append(state)
+
 
         # Optional: Print debug info for time dynamics (can be disabled)
         if hasattr(self.config, 'debug_time_dynamics') and self.config.debug_time_dynamics:

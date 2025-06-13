@@ -4,7 +4,9 @@ Enhanced Grid module with biological energy minimization that integrates with ex
 import numpy as np
 from scipy.spatial.distance import cdist
 from .cell import Cell
+from .holes import Hole, HoleManager
 import random
+from typing import List, Tuple, Dict, Optional
 
 
 class Grid:
@@ -37,8 +39,8 @@ class Grid:
         # Biological optimization parameters
         self.energy_weights = {
             'area': 1.0,  # Weight for area deviation
-            'aspect_ratio': 0.5,  # Weight for aspect ratio deviation
-            'orientation': 2.0,  # Weight for orientation deviation
+            'aspect_ratio': 5.5,  # Weight for aspect ratio deviation
+            'orientation': 5.0,  # Weight for orientation deviation
             'overlap': 2.0,  # Weight for preventing overlap
             'boundary': 0.1  # Weight for staying within bounds
         }
@@ -92,6 +94,20 @@ class Grid:
 
         # Initialize step counter
         self._adaptation_step_counter = 0
+
+        # Hole management system
+        self.hole_manager = HoleManager(self) if getattr(config, 'enable_holes', True) else None
+        self.holes_enabled = getattr(config, 'enable_holes', True)
+
+        if self.holes_enabled:
+            print(f"🕳️  Hole management enabled (max {getattr(config, 'max_holes', 5)} holes)")
+
+        # Hole management system
+        self.hole_manager = HoleManager(self) if getattr(config, 'enable_holes', True) else None
+        self.holes_enabled = getattr(config, 'enable_holes', True)
+
+        if self.holes_enabled:
+            print(f"🕳️  Hole management enabled (max {getattr(config, 'max_holes', 5)} holes)")
 
     def add_cell(self, position=None, divisions=0, is_senescent=False, senescence_cause=None, target_area=100.0):
         """Add a new cell with biological properties."""
@@ -389,6 +405,16 @@ class Grid:
         cell_ids = []
         cell_weights = []
 
+        # UPDATE PIXEL COORDINATES TO EXCLUDE HOLES
+        if self.holes_enabled and self.hole_manager:
+            self.pixel_coords = self._create_pixel_coordinate_grid_with_holes()
+
+            # Mark hole pixels in ownership map
+            hole_pixels = self.hole_manager.get_hole_pixels()
+            for x, y in hole_pixels:
+                if 0 <= x < self.comp_width and 0 <= y < self.comp_height:
+                    self.pixel_ownership[y, x] = -999  # Special value for holes
+
         for cell_id, display_pos in self.cell_seeds.items():
             comp_pos = self._display_to_comp_coords(display_pos[0], display_pos[1])
             seed_points.append(comp_pos)
@@ -652,12 +678,16 @@ class Grid:
         aspect_ratios = [cell.actual_aspect_ratio for cell in self.cells.values()]
         orientations = [cell.actual_orientation for cell in self.cells.values()]
 
+        # Add hole statistics
+        hole_stats = self.get_hole_statistics()
+
         return {
             'cell_counts': cell_counts,
             'global_pressure': self.global_pressure,
             'packing_efficiency': self.calculate_packing_efficiency(),
             'biological_fitness': biological_fitness,
             'biological_energy': biological_energy,
+            'hole_statistics': hole_stats,
             'area_stats': {
                 'mean_target_area': np.mean(target_areas),
                 'mean_actual_area': np.mean(actual_areas),
@@ -1097,3 +1127,38 @@ class Grid:
                       f"{'[SEN]' if cell['is_senescent'] else '[HEALTHY]'}")
 
         print("=" * 50)
+
+        def update_holes(self, dt):
+            """Update hole system for one timestep."""
+            if self.holes_enabled and self.hole_manager:
+                self.hole_manager.update(dt)
+
+        def get_hole_statistics(self):
+            """Get current hole statistics."""
+            if self.holes_enabled and self.hole_manager:
+                return self.hole_manager.get_hole_statistics()
+            return {
+                'hole_count': 0,
+                'total_hole_area': 0,
+                'average_hole_size': 0,
+                'hole_area_fraction': 0,
+                'holes': []
+            }
+
+        def _create_pixel_coordinate_grid_with_holes(self):
+            """Create pixel coordinate grid excluding hole areas."""
+            # Get all pixel coordinates
+            y_coords, x_coords = np.mgrid[0:self.comp_height, 0:self.comp_width]
+            all_coords = np.column_stack([x_coords.ravel(), y_coords.ravel()])
+
+            if not self.holes_enabled or not self.hole_manager or not self.hole_manager.holes:
+                return all_coords
+
+            # Filter out hole pixels
+            valid_coords = []
+            for coord in all_coords:
+                x, y = coord
+                if not self.hole_manager.is_point_in_hole(x, y):
+                    valid_coords.append(coord)
+
+            return np.array(valid_coords) if valid_coords else all_coords

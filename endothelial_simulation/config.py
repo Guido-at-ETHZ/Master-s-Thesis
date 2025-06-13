@@ -106,6 +106,22 @@ class SimulationConfig:
         self.energy_weight_aspect_ratio = 0.5
         self.energy_weight_orientation = 0.5
 
+        # ----------------
+        # Hole system parameters
+        # ----------------
+        self.enable_holes = True
+        self.max_holes = 5
+        self.hole_creation_probability_base = 0.02  # 2% base probability per timestep
+        self.hole_creation_threshold_cells = 10
+        self.hole_creation_threshold_senescence = 0.30  # 30%
+
+        # Hole size parameters
+        self.hole_size_min_factor = 0.2  # 1/5 of cell size
+        self.hole_size_max_factor = 1.0  # Same as cell size
+
+        # Hole compression parameters
+        self.hole_compression_reference_density = 15
+
     def disable_all_but_temporal(self):
         """Configure to focus only on temporal dynamics."""
         self.enable_population_dynamics = False
@@ -160,6 +176,7 @@ class SimulationConfig:
         status.append(f"- Senescence: {'✓' if self.enable_senescence else '✗'}")
         status.append(f"- Senolytics: {'✓' if self.enable_senolytics else '✗'}")
         status.append(f"- Stem cells: {'✓' if self.enable_stem_cells else '✗'}")
+        status.append(f"- Holes: {'✓' if self.enable_holes else '✗'}")
 
         return "\n".join(status)
 
@@ -194,3 +211,4 @@ def create_full_config():
     config = SimulationConfig()
     #config.enable_all()
     return config
+
