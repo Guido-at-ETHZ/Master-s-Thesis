@@ -102,12 +102,6 @@ class Grid:
         if self.holes_enabled:
             print(f"🕳️  Hole management enabled (max {getattr(config, 'max_holes', 5)} holes)")
 
-        # Hole management system
-        self.hole_manager = HoleManager(self) if getattr(config, 'enable_holes', True) else None
-        self.holes_enabled = getattr(config, 'enable_holes', True)
-
-        if self.holes_enabled:
-            print(f"🕳️  Hole management enabled (max {getattr(config, 'max_holes', 5)} holes)")
 
     def add_cell(self, position=None, divisions=0, is_senescent=False, senescence_cause=None, target_area=100.0):
         """Add a new cell with biological properties."""
@@ -1127,13 +1121,14 @@ class Grid:
                       f"{'[SEN]' if cell['is_senescent'] else '[HEALTHY]'}")
 
         print("=" * 50)
+        return
 
-        def update_holes(self, dt):
+    def update_holes(self, dt):
             """Update hole system for one timestep."""
             if self.holes_enabled and self.hole_manager:
                 self.hole_manager.update(dt)
 
-        def get_hole_statistics(self):
+    def get_hole_statistics(self):
             """Get current hole statistics."""
             if self.holes_enabled and self.hole_manager:
                 return self.hole_manager.get_hole_statistics()
@@ -1145,20 +1140,20 @@ class Grid:
                 'holes': []
             }
 
-        def _create_pixel_coordinate_grid_with_holes(self):
-            """Create pixel coordinate grid excluding hole areas."""
-            # Get all pixel coordinates
-            y_coords, x_coords = np.mgrid[0:self.comp_height, 0:self.comp_width]
-            all_coords = np.column_stack([x_coords.ravel(), y_coords.ravel()])
+    def _create_pixel_coordinate_grid_with_holes(self):
+        """Create pixel coordinate grid excluding hole areas."""
+        # Get all pixel coordinates
+        y_coords, x_coords = np.mgrid[0:self.comp_height, 0:self.comp_width]
+        all_coords = np.column_stack([x_coords.ravel(), y_coords.ravel()])
 
-            if not self.holes_enabled or not self.hole_manager or not self.hole_manager.holes:
-                return all_coords
+        if not self.holes_enabled or not self.hole_manager or not self.hole_manager.holes:
+            return all_coords
 
-            # Filter out hole pixels
-            valid_coords = []
-            for coord in all_coords:
-                x, y = coord
-                if not self.hole_manager.is_point_in_hole(x, y):
-                    valid_coords.append(coord)
+        # Filter out hole pixels
+        valid_coords = []
+        for coord in all_coords:
+            x, y = coord
+            if not self.hole_manager.is_point_in_hole(x, y):
+                valid_coords.append(coord)
 
-            return np.array(valid_coords) if valid_coords else all_coords
+        return np.array(valid_coords) if valid_coords else all_coords
