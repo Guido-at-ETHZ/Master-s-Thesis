@@ -1173,7 +1173,17 @@ class Simulator:
         if self.history:
             for key in self.history[0].keys():
                 values = [state.get(key) for state in self.history]
-                history_data[key] = np.array(values)
+
+                # Handle complex hole data structures
+                if key in ['holes', 'hole_statistics']:
+                    history_data[key] = np.array(values, dtype=object)
+                else:
+                    try:
+                        history_data[key] = np.array(values)
+                    except ValueError:
+                        # Skip data that can't be converted to arrays
+                        print(f"Warning: Skipping {key} due to complex structure")
+                        continue
 
         # Save data
         np.savez(
@@ -1270,3 +1280,105 @@ class Simulator:
         else:
             print("Energy tracking not enabled")
             return None
+        return
+
+    def initialize_with_multiple_configurations(self, cell_count=None, num_configurations=10,
+                                                optimization_iterations=3, save_analysis=True):
+        """
+        Initialize the simulation by testing multiple configurations and selecting the best one.
+
+        Parameters:
+            cell_count: Number of cells to create (default: from config)
+            num_configurations: Number of configurations to test
+            optimization_iterations: Optimization steps per configuration
+            save_analysis: Whether to save detailed analysis
+
+        Returns:
+            Dictionary with configuration selection results
+        """
+        if cell_count is None:
+            cell_count = self.config.initial_cell_count
+
+        print(f"🚀 Initializing simulation with multi-configuration selection:")
+        print(f"   Target cells: {cell_count}")
+        print(f"   Configurations to test: {num_configurations}")
+        print(f"   Optimization iterations per config: {optimization_iterations}")
+
+        # Calculate base area per cell for distribution
+        total_area = self.grid.width * self.grid.height
+        base_area_per_cell = total_area / cell_count
+
+        # Create area distribution function
+        def area_distribution():
+            return np.random.uniform(base_area_per_cell * 0.7, base_area_per_cell * 1.3)
+
+        # Create division distribution function
+        def division_distribution():
+            max_div = self.config.max_divisions
+            r = np.random.random()
+            return int(max_div * (1 - np.sqrt(r)))
+
+        # Generate and test multiple configurations
+        config_results = self.grid.generate_multiple_initial_configurations(
+            cell_count=cell_count,
+            num_configurations=num_configurations,
+            division_distribution=division_distribution,
+            area_distribution=area_distribution,
+            optimization_iterations=optimization_iterations,
+            verbose=True
+        )
+
+        # Initialize cell properties for current pressure
+        self._initialize_cell_properties_for_pressure()
+
+        # Final adaptation
+        self.grid.adapt_cell_properties()
+
+        # Record initial state
+        self._record_state()
+
+        # Record initial energy state if tracking is enabled
+        if self.energy_tracking_enabled:
+            print("🔋 Recording initial energy state...")
+            self.grid.record_energy_state(self.step_count, label="initialization_best_config")
+
+        # Save analysis if requested
+        if save_analysis:
+            self.grid.save_configuration_analysis(config_results)
+
+        print(f"\n✅ Initialization complete with best configuration selected!")
+        print(f"   Final energy: {config_results['best_config']['energy']:.4f}")
+        print(f"   Energy improvement: {config_results['energy_improvement']:.4f}")
+
+        return config_results
+
+    def initialize_smart(self, cell_count=None, **kwargs):
+        """
+        Smart initialization that automatically chooses between single and multi-configuration.
+        Uses multi-configuration for larger simulations or when explicitly requested.
+
+        Parameters:
+            cell_count: Number of cells (default: from config)
+            **kwargs: Additional arguments passed to multi-configuration initialization
+        """
+        if cell_count is None:
+            cell_count = self.config.initial_cell_count
+
+        # Use multi-configuration for larger simulations or if requested
+        use_multi_config = (
+                cell_count >= 50 or  # Large simulations benefit more
+                kwargs.get('force_multi_config', False) or
+                getattr(self.config, 'use_multi_config_init', False)
+        )
+
+        if use_multi_config:
+            # Set reasonable defaults based on simulation size
+            default_configs = min(20, max(5, cell_count // 10))  # Scale with size
+            kwargs.setdefault('num_configurations', default_configs)
+            kwargs.setdefault('optimization_iterations', 3)
+
+            return self.initialize_with_multiple_configurations(cell_count, **kwargs)
+        else:
+            # Use standard initialization for smaller simulations
+            print(f"🚀 Using standard initialization for {cell_count} cells")
+            return self.initialize(cell_count)

@@ -122,6 +122,12 @@ class SimulationConfig:
         # Hole compression parameters
         self.hole_compression_reference_density = 15
 
+        # Multi-configuration initialization settings
+        self.use_multi_config_init = True  # Enable by default
+        self.multi_config_count = 10  # Number of configurations to test
+        self.multi_config_optimization_steps = 3  # Optimization per config
+        self.multi_config_save_analysis = True  # Save detailed analysis
+
     def disable_all_but_temporal(self):
         """Configure to focus only on temporal dynamics."""
         self.enable_population_dynamics = False

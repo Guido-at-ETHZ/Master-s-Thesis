@@ -1,6 +1,9 @@
 """
 Enhanced Grid module with biological energy minimization that integrates with existing temporal dynamics.
 """
+import os
+import time
+
 import numpy as np
 from scipy.spatial.distance import cdist
 from .cell import Cell
@@ -1157,3 +1160,245 @@ class Grid:
                 valid_coords.append(coord)
 
         return np.array(valid_coords) if valid_coords else all_coords
+
+    def generate_multiple_initial_configurations(self, cell_count, num_configurations=10,
+                                                 division_distribution=None, area_distribution=None,
+                                                 optimization_iterations=3, verbose=True):
+        """
+        Generate multiple initial configurations and select the one with lowest energy.
+
+        Parameters:
+            cell_count: Number of cells to create
+            num_configurations: Number of different initial configurations to try
+            division_distribution: Function to generate division counts
+            area_distribution: Function to generate target areas
+            optimization_iterations: Number of optimization steps for each configuration
+            verbose: Whether to print progress information
+
+        Returns:
+            Dictionary with best configuration info and all results
+        """
+        if verbose:
+            print(f"🔬 Generating {num_configurations} initial configurations...")
+
+        # Store original state
+        original_cells = self.cells.copy()
+        original_seeds = self.cell_seeds.copy()
+        original_territories = self.territory_map.copy()
+
+        configurations = []
+
+        for config_idx in range(num_configurations):
+            if verbose and config_idx % max(1, num_configurations // 5) == 0:
+                print(f"   Testing configuration {config_idx + 1}/{num_configurations}...")
+
+            # Clear current state
+            self.cells.clear()
+            self.cell_seeds.clear()
+            self.territory_map.clear()
+            self.pixel_ownership.fill(-1)
+            self.next_cell_id = 0
+
+            # Generate new configuration
+            created_cells = self.populate_grid(
+                cell_count,
+                division_distribution=division_distribution,
+                area_distribution=area_distribution
+            )
+
+            # Run optimization to settle the configuration
+            for _ in range(optimization_iterations):
+                self.update_biological_adaptation()
+                self.optimize_cell_positions(iterations=1)
+
+            # Calculate energy
+            energy = self.calculate_biological_energy()
+            fitness = self.get_biological_fitness()
+
+            # Get detailed statistics
+            grid_stats = self.get_grid_statistics()
+
+            # Store configuration data
+            config_data = {
+                'config_idx': config_idx,
+                'energy': energy,
+                'fitness': fitness,
+                'cell_count': len(self.cells),
+                'packing_efficiency': grid_stats.get('packing_efficiency', 0),
+                'biological_fitness': grid_stats.get('biological_fitness', 0),
+                'global_pressure': grid_stats.get('global_pressure', 1.0),
+                # Store cell positions and properties for reconstruction
+                'cell_data': {
+                    cell_id: {
+                        'position': cell.position,
+                        'divisions': cell.divisions,
+                        'is_senescent': cell.is_senescent,
+                        'senescence_cause': cell.senescence_cause,
+                        'target_area': cell.target_area,
+                        'target_orientation': getattr(cell, 'target_orientation', 0.0),
+                        'target_aspect_ratio': getattr(cell, 'target_aspect_ratio', 1.0)
+                    }
+                    for cell_id, cell in self.cells.items()
+                },
+                'grid_stats': grid_stats
+            }
+
+            configurations.append(config_data)
+
+        # Find best configuration (lowest energy)
+        best_config = min(configurations, key=lambda x: x['energy'])
+        best_idx = best_config['config_idx']
+
+        if verbose:
+            print(f"\n✅ Best configuration found:")
+            print(f"   Configuration #{best_idx + 1}")
+            print(f"   Energy: {best_config['energy']:.4f}")
+            print(f"   Fitness: {best_config['fitness']:.4f}")
+            print(f"   Packing efficiency: {best_config['packing_efficiency']:.3f}")
+
+            # Show energy distribution
+            energies = [c['energy'] for c in configurations]
+            print(f"\n📊 Energy distribution across {num_configurations} configurations:")
+            print(f"   Best: {min(energies):.4f}")
+            print(f"   Worst: {max(energies):.4f}")
+            print(f"   Mean: {np.mean(energies):.4f}")
+            print(f"   Std: {np.std(energies):.4f}")
+            print(f"   Improvement: {((max(energies) - min(energies)) / max(energies) * 100):.1f}%")
+
+        # Reconstruct best configuration
+        self._reconstruct_configuration(best_config['cell_data'])
+
+        return {
+            'best_config': best_config,
+            'all_configurations': configurations,
+            'energy_improvement': (max(c['energy'] for c in configurations) - best_config['energy']),
+            'selected_idx': best_idx
+        }
+
+    def _reconstruct_configuration(self, cell_data):
+        """
+        Reconstruct a specific configuration from stored cell data.
+
+        Parameters:
+            cell_data: Dictionary with cell information
+        """
+        # Clear current state
+        self.cells.clear()
+        self.cell_seeds.clear()
+        self.territory_map.clear()
+        self.pixel_ownership.fill(-1)
+        self.next_cell_id = 0
+
+        # Recreate cells
+        for cell_id, data in cell_data.items():
+            # Create cell
+            cell = self.add_cell(
+                position=data['position'],
+                divisions=data['divisions'],
+                is_senescent=data['is_senescent'],
+                senescence_cause=data['senescence_cause'],
+                target_area=data['target_area']
+            )
+
+            # Set target properties
+            cell.target_orientation = data['target_orientation']
+            cell.target_aspect_ratio = data['target_aspect_ratio']
+            cell.target_area = data['target_area']
+
+        # Update tessellation
+        self._update_voronoi_tessellation()
+
+        # Run brief optimization to settle
+        self.optimize_cell_positions(iterations=2)
+
+    def save_configuration_analysis(self, configurations_data, filename=None):
+        """
+        Save detailed analysis of configuration comparison.
+
+        Parameters:
+            configurations_data: Result from generate_multiple_initial_configurations
+            filename: Optional filename for saving
+        """
+        import pandas as pd
+        import matplotlib.pyplot as plt
+
+        if filename is None:
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            filename = f"configuration_analysis_{timestamp}"
+
+        configurations = configurations_data['all_configurations']
+
+        # Create DataFrame for analysis
+        df_data = []
+        for config in configurations:
+            row = {
+                'config_idx': config['config_idx'],
+                'energy': config['energy'],
+                'fitness': config['fitness'],
+                'packing_efficiency': config['packing_efficiency'],
+                'biological_fitness': config['biological_fitness'],
+                'global_pressure': config['global_pressure'],
+                'cell_count': config['cell_count']
+            }
+            df_data.append(row)
+
+        df = pd.DataFrame(df_data)
+
+        # Save CSV
+        csv_path = os.path.join(self.config.plot_directory, f"{filename}.csv")
+        df.to_csv(csv_path, index=False)
+
+        # Create analysis plots
+        fig, axes = plt.subplots(2, 2, figsize=(12, 10))
+
+        # Energy distribution
+        axes[0, 0].hist(df['energy'], bins=min(10, len(configurations) // 2), alpha=0.7, color='blue')
+        axes[0, 0].axvline(configurations_data['best_config']['energy'], color='red', linestyle='--',
+                           label=f"Best: {configurations_data['best_config']['energy']:.4f}")
+        axes[0, 0].set_xlabel('Energy')
+        axes[0, 0].set_ylabel('Frequency')
+        axes[0, 0].set_title('Energy Distribution')
+        axes[0, 0].legend()
+        axes[0, 0].grid(True, alpha=0.3)
+
+        # Energy vs Fitness
+        axes[0, 1].scatter(df['energy'], df['fitness'], alpha=0.7)
+        best_idx = configurations_data['selected_idx']
+        axes[0, 1].scatter(df.loc[best_idx, 'energy'], df.loc[best_idx, 'fitness'],
+                           color='red', s=100, label='Selected')
+        axes[0, 1].set_xlabel('Energy')
+        axes[0, 1].set_ylabel('Fitness')
+        axes[0, 1].set_title('Energy vs Fitness')
+        axes[0, 1].legend()
+        axes[0, 1].grid(True, alpha=0.3)
+
+        # Energy vs Packing Efficiency
+        axes[1, 0].scatter(df['energy'], df['packing_efficiency'], alpha=0.7)
+        axes[1, 0].scatter(df.loc[best_idx, 'energy'], df.loc[best_idx, 'packing_efficiency'],
+                           color='red', s=100, label='Selected')
+        axes[1, 0].set_xlabel('Energy')
+        axes[1, 0].set_ylabel('Packing Efficiency')
+        axes[1, 0].set_title('Energy vs Packing Efficiency')
+        axes[1, 0].legend()
+        axes[1, 0].grid(True, alpha=0.3)
+
+        # Configuration ranking
+        df_sorted = df.sort_values('energy')
+        axes[1, 1].plot(range(len(df_sorted)), df_sorted['energy'], 'b-o', alpha=0.7)
+        axes[1, 1].set_xlabel('Configuration Rank')
+        axes[1, 1].set_ylabel('Energy')
+        axes[1, 1].set_title('Configuration Ranking by Energy')
+        axes[1, 1].grid(True, alpha=0.3)
+
+        plt.tight_layout()
+
+        # Save plot
+        plot_path = os.path.join(self.config.plot_directory, f"{filename}.png")
+        plt.savefig(plot_path, dpi=300, bbox_inches='tight')
+        plt.close()
+
+        print(f"📊 Configuration analysis saved:")
+        print(f"   Data: {csv_path}")
+        print(f"   Plot: {plot_path}")
+
+        return csv_path, plot_path

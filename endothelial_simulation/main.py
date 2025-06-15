@@ -46,7 +46,7 @@ def parse_schedule_string(schedule_str):
         raise ValueError(f"Invalid schedule format. Use 'time1,value1;time2,value2;...' format. Error: {e}")
 
 
-def run_single_step_simulation(config, initial_value, final_value, step_time, duration=None):
+def run_single_step_simulation_old(config, initial_value, final_value, step_time, duration=None):
     """Run a simulation with a single step input."""
     simulator = Simulator(config)
     simulator.initialize()
@@ -60,6 +60,29 @@ def run_single_step_simulation(config, initial_value, final_value, step_time, du
     results = simulator.run(duration)
     return simulator
 
+
+def run_single_step_simulation(config, initial_value, final_value, step_time, duration=None):
+    """Run a simulation with a single step input."""
+    simulator = Simulator(config)
+
+    # OLD: simulator.initialize()
+    # NEW: Use multi-configuration initialization
+    config_results = simulator.initialize_with_multiple_configurations(
+        cell_count=config.initial_cell_count,
+        num_configurations=getattr(config, 'multi_config_count', 10),
+        optimization_iterations=getattr(config, 'multi_config_optimization_steps', 3)
+    )
+
+    simulator.set_step_input(initial_value, final_value, step_time)
+
+    print(f"Running single-step simulation:")
+    print(f"  Initial: {initial_value} Pa")
+    print(f"  Final: {final_value} Pa")
+    print(f"  Step at: {step_time} minutes")
+    print(f"  Selected config energy: {config_results['best_config']['energy']:.4f}")
+
+    results = simulator.run(duration)
+    return simulator
 
 def run_multi_step_simulation(config, schedule, duration=None):
     """Run a simulation with multi-step input."""
