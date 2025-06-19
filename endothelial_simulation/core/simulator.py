@@ -27,6 +27,12 @@ class Simulator:
         Parameters:
             config: SimulationConfig object with parameter settings
         """
+        # Adding a random seed depending on the time
+        import time, random, numpy as np
+        seed = int(time.time_ns() % (2 ** 32))
+        random.seed(seed)
+        np.random.seed(seed)
+
         self.config = config
 
         # Create grid for spatial representation with mosaic structure
@@ -116,6 +122,78 @@ class Simulator:
         if self.energy_tracking_enabled:
             print("🔋 Recording initial energy state...")
             self.grid.record_energy_state(self.step_count, label="initialization")
+
+    def get_best_config_parameters(self, save_excel=False, excel_path=None):
+        """
+        Show parameters for ALL configurations in the requested format.
+        """
+        if not hasattr(self, '_config_results') or not self._config_results:
+            print("❌ No configuration results available.")
+            return None
+
+        configurations = self._config_results['all_configurations']
+        best_idx = self._config_results['selected_idx']
+
+        print("🎯 ALL CONFIGURATION PARAMETERS")
+        print("=" * 50)
+
+        # Sort by energy for better display
+        sorted_configs = sorted(configurations, key=lambda x: x['energy'])
+
+        for config in sorted_configs:
+            cell_data = config['cell_data']
+
+            # Calculate averages for this configuration
+            areas = []
+            aspect_ratios = []
+            orientations_deg = []
+
+            for cell_props in cell_data.values():
+                area = cell_props.get('target_area', 0)
+                ar = cell_props.get('target_aspect_ratio', 1.0)
+                orientation_rad = cell_props.get('target_orientation', 0.0)
+
+                display_area = area * (self.grid.computation_scale ** 2)
+                orientation_deg = np.degrees(orientation_rad) % 180
+                if orientation_deg > 90:
+                    orientation_deg = 180 - orientation_deg
+
+                areas.append(display_area)
+                aspect_ratios.append(ar)
+                orientations_deg.append(orientation_deg)
+
+            # Print in the format you requested
+            status = "⭐ BEST CONFIGURATION" if config['config_idx'] == best_idx else "CONFIGURATION"
+            print(f"{status} #{config['config_idx'] + 1}")
+            print("-" * 25)
+            print(f"Area: {np.mean(areas):.1f} pixels²")
+            print(f"Aspect Ratio: {np.mean(aspect_ratios):.2f}")
+            print(f"Orientation: {np.mean(orientations_deg):.1f}° (flow alignment)")
+            print(f"Energy: {config['energy']:.4f}")
+            print(f"Fitness: {config['fitness']:.3f}")
+            print()
+
+        print("=" * 50)
+
+        # Return the best one for compatibility
+        best_config = next(c for c in configurations if c['config_idx'] == best_idx)
+        best_cell_data = best_config['cell_data']
+
+        best_areas = [cell_props.get('target_area', 0) * (self.grid.computation_scale ** 2)
+                      for cell_props in best_cell_data.values()]
+        best_ars = [cell_props.get('target_aspect_ratio', 1.0)
+                    for cell_props in best_cell_data.values()]
+        best_orients = [np.degrees(cell_props.get('target_orientation', 0.0)) % 180
+                        for cell_props in best_cell_data.values()]
+        best_orients = [o if o <= 90 else 180 - o for o in best_orients]
+
+        return {
+            'averages': {
+                'area': np.mean(best_areas),
+                'aspect_ratio': np.mean(best_ars),
+                'orientation_degrees': np.mean(best_orients)
+            }
+        }
 
     def _initialize_cell_properties_for_pressure(self):
         """

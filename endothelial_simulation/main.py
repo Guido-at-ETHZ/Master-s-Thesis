@@ -49,21 +49,6 @@ def parse_schedule_string(schedule_str):
 def run_single_step_simulation_old(config, initial_value, final_value, step_time, duration=None):
     """Run a simulation with a single step input."""
     simulator = Simulator(config)
-    simulator.initialize()
-    simulator.set_step_input(initial_value, final_value, step_time)
-
-    print(f"Running single-step simulation:")
-    print(f"  Initial: {initial_value} Pa")
-    print(f"  Final: {final_value} Pa")
-    print(f"  Step at: {step_time} minutes")
-
-    results = simulator.run(duration)
-    return simulator
-
-
-def run_single_step_simulation(config, initial_value, final_value, step_time, duration=None):
-    """Run a simulation with a single step input."""
-    simulator = Simulator(config)
 
     # OLD: simulator.initialize()
     # NEW: Use multi-configuration initialization
@@ -85,6 +70,52 @@ def run_single_step_simulation(config, initial_value, final_value, step_time, du
     print(f"  Selected config energy: {config_results['best_config']['energy']:.4f}")
 
     results = simulator.run(duration)
+    return simulator
+
+
+def run_single_step_simulation(config, initial_value, final_value, step_time, duration=None):
+    """Run a simulation with a single step input."""
+    simulator = Simulator(config)
+
+    # Multi-configuration initialization
+    config_results = simulator.initialize_with_multiple_configurations(
+        cell_count=config.initial_cell_count,
+        num_configurations=getattr(config, 'multi_config_count', 10),
+        optimization_iterations=getattr(config, 'multi_config_optimization_steps', 3)
+    )
+
+    # STORE the config results on the simulator object so plotting can access them
+    simulator._config_results = config_results
+
+    simulator.set_step_input(initial_value, final_value, step_time)
+
+    print(f"Running single-step simulation:")
+    print(f"  Initial: {initial_value} Pa")
+    print(f"  Final: {final_value} Pa")
+    print(f"  Step at: {step_time} minutes")
+    print(f"  Selected config energy: {config_results['best_config']['energy']:.4f}")
+
+    results = simulator.run(duration)
+
+    # 🎯 ADD THIS SECTION HERE - Extract parameters immediately after simulation
+    print("\n" + "=" * 50)
+    print("EXTRACTING BEST CONFIGURATION PARAMETERS")
+    print("=" * 50)
+
+    # Get the parameters with Excel export
+    best_params = simulator.get_best_config_parameters(save_excel=True)
+
+    # Extract the 3 key numbers for easy access
+    area = best_params['averages']['area']
+    aspect_ratio = best_params['averages']['aspect_ratio']
+    orientation = best_params['averages']['orientation_degrees']
+
+    print(f"\n📊 The 3 key numbers:")
+    print(f"   Area: {area:.1f} pixels²")
+    print(f"   Aspect Ratio: {aspect_ratio:.2f}")
+    print(f"   Orientation: {orientation:.1f}°")
+    print("=" * 50)
+
     return simulator
 
 def run_multi_step_simulation(config, schedule, duration=None):

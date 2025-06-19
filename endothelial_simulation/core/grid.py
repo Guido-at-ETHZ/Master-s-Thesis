@@ -1313,7 +1313,8 @@ class Grid:
 
     def save_configuration_analysis(self, configurations_data, filename=None):
         """
-        Save detailed analysis of configuration comparison.
+        Save detailed analysis of configuration comparison with cell parameters.
+        ENHANCED: Now includes average area, aspect ratio, and orientation for each config.
 
         Parameters:
             configurations_data: Result from generate_multiple_initial_configurations
@@ -1328,9 +1329,10 @@ class Grid:
 
         configurations = configurations_data['all_configurations']
 
-        # Create DataFrame for analysis
+        # Create DataFrame for analysis with ENHANCED cell parameters
         df_data = []
         for config in configurations:
+            # Original metrics
             row = {
                 'config_idx': config['config_idx'],
                 'energy': config['energy'],
@@ -1340,21 +1342,73 @@ class Grid:
                 'global_pressure': config['global_pressure'],
                 'cell_count': config['cell_count']
             }
+
+            # NEW: Calculate average cell parameters for this configuration
+            cell_data = config['cell_data']
+            areas = []
+            aspect_ratios = []
+            orientations_deg = []
+
+            for cell_id, cell_props in cell_data.items():
+                # Extract cell parameters
+                area = cell_props.get('target_area', 0)
+                ar = cell_props.get('target_aspect_ratio', 1.0)
+                orientation_rad = cell_props.get('target_orientation', 0.0)
+
+                # Convert to display units and flow alignment angle
+                display_area = area * (self.computation_scale ** 2)
+                orientation_deg = np.degrees(orientation_rad) % 180
+                if orientation_deg > 90:
+                    orientation_deg = 180 - orientation_deg
+
+                areas.append(display_area)
+                aspect_ratios.append(ar)
+                orientations_deg.append(orientation_deg)
+
+            # Add average cell parameters to the row
+            row.update({
+                'avg_area_pixels': np.mean(areas) if areas else 0,
+                'avg_aspect_ratio': np.mean(aspect_ratios) if aspect_ratios else 1.0,
+                'avg_orientation_degrees': np.mean(orientations_deg) if orientations_deg else 0.0,
+                'is_selected': config['config_idx'] == configurations_data['selected_idx']
+            })
+
             df_data.append(row)
 
         df = pd.DataFrame(df_data)
+
+        # Sort by energy (best first) for easy reading
+        df = df.sort_values('energy').reset_index(drop=True)
 
         # Save CSV
         csv_path = os.path.join(self.config.plot_directory, f"{filename}.csv")
         df.to_csv(csv_path, index=False)
 
-        # Create analysis plots
+        # Print summary showing ALL configurations like the user requested
+        print(f"\n🎯 ALL CONFIGURATION PARAMETERS")
+        print("=" * 60)
+
+        for _, row in df.iterrows():
+            status = "⭐ SELECTED" if row['is_selected'] else f"Config #{int(row['config_idx']) + 1}"
+            print(f"{status}")
+            print("-" * 25)
+            print(f"Area: {row['avg_area_pixels']:.1f} pixels²")
+            print(f"Aspect Ratio: {row['avg_aspect_ratio']:.2f}")
+            print(f"Orientation: {row['avg_orientation_degrees']:.1f}° (flow alignment)")
+            print(f"Energy: {row['energy']:.4f}")
+            print(f"Fitness: {row['fitness']:.3f}")
+            print()
+
+        print("=" * 60)
+        print(f"📊 Complete analysis saved to: {csv_path}")
+
+        # Create the existing plots (unchanged)
         fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
         # Energy distribution
         axes[0, 0].hist(df['energy'], bins=min(10, len(configurations) // 2), alpha=0.7, color='blue')
-        axes[0, 0].axvline(configurations_data['best_config']['energy'], color='red', linestyle='--',
-                           label=f"Best: {configurations_data['best_config']['energy']:.4f}")
+        axes[0, 0].axvline(df[df['is_selected']]['energy'].iloc[0], color='red', linestyle='--',
+                           label=f"Selected: {df[df['is_selected']]['energy'].iloc[0]:.4f}")
         axes[0, 0].set_xlabel('Energy')
         axes[0, 0].set_ylabel('Frequency')
         axes[0, 0].set_title('Energy Distribution')
@@ -1362,9 +1416,9 @@ class Grid:
         axes[0, 0].grid(True, alpha=0.3)
 
         # Energy vs Fitness
+        selected_row = df[df['is_selected']].iloc[0]
         axes[0, 1].scatter(df['energy'], df['fitness'], alpha=0.7)
-        best_idx = configurations_data['selected_idx']
-        axes[0, 1].scatter(df.loc[best_idx, 'energy'], df.loc[best_idx, 'fitness'],
+        axes[0, 1].scatter(selected_row['energy'], selected_row['fitness'],
                            color='red', s=100, label='Selected')
         axes[0, 1].set_xlabel('Energy')
         axes[0, 1].set_ylabel('Fitness')
@@ -1372,13 +1426,13 @@ class Grid:
         axes[0, 1].legend()
         axes[0, 1].grid(True, alpha=0.3)
 
-        # Energy vs Packing Efficiency
-        axes[1, 0].scatter(df['energy'], df['packing_efficiency'], alpha=0.7)
-        axes[1, 0].scatter(df.loc[best_idx, 'energy'], df.loc[best_idx, 'packing_efficiency'],
+        # NEW: Aspect Ratio vs Orientation
+        axes[1, 0].scatter(df['avg_aspect_ratio'], df['avg_orientation_degrees'], alpha=0.7)
+        axes[1, 0].scatter(selected_row['avg_aspect_ratio'], selected_row['avg_orientation_degrees'],
                            color='red', s=100, label='Selected')
-        axes[1, 0].set_xlabel('Energy')
-        axes[1, 0].set_ylabel('Packing Efficiency')
-        axes[1, 0].set_title('Energy vs Packing Efficiency')
+        axes[1, 0].set_xlabel('Average Aspect Ratio')
+        axes[1, 0].set_ylabel('Average Orientation (degrees)')
+        axes[1, 0].set_title('Aspect Ratio vs Orientation')
         axes[1, 0].legend()
         axes[1, 0].grid(True, alpha=0.3)
 
@@ -1397,9 +1451,7 @@ class Grid:
         plt.savefig(plot_path, dpi=300, bbox_inches='tight')
         plt.close()
 
-        print(f"📊 Configuration analysis saved:")
-        print(f"   Data: {csv_path}")
-        print(f"   Plot: {plot_path}")
+        print(f"📊 Configuration plot saved: {plot_path}")
 
         return csv_path, plot_path
 
