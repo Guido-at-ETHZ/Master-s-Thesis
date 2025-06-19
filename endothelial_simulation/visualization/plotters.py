@@ -1128,6 +1128,198 @@ class Plotter:
 
         return ani
 
+    def plot_configuration_mosaic(self, grid, configuration_data, save_path=None, title_suffix=""):
+        """
+        Plot a single configuration's mosaic using the existing cell visualization.
+
+        Parameters:
+            grid: Grid object
+            configuration_data: Single configuration dict from generate_multiple_initial_configurations
+            save_path: Path to save the plot
+            title_suffix: Additional text for title
+
+        Returns:
+            Matplotlib figure
+        """
+        # Store original state
+        original_cells = grid.cells.copy()
+        original_seeds = grid.cell_seeds.copy()
+        original_territories = grid.territory_map.copy()
+
+        try:
+            # Reconstruct this configuration
+            grid._reconstruct_configuration(configuration_data['cell_data'])
+
+            # Create a mock simulator object for plot_cell_visualization
+            class MockSimulator:
+                def __init__(self, grid, config_data):
+                    self.grid = grid
+                    self.time = 0.0
+                    self.config = grid.config
+                    self.input_pattern = {'value': 0.0}
+                    self._config_energy = config_data['energy']
+                    self._config_fitness = config_data['fitness']
+                    self._config_idx = config_data['config_idx']
+
+            mock_sim = MockSimulator(grid, configuration_data)
+
+            # Use existing visualization function
+            fig = self.plot_cell_visualization(mock_sim, save_path=None, show_boundaries=True)
+
+            # Update title to include configuration info
+            current_title = fig._suptitle.get_text() if fig._suptitle else "Cell Mosaic"
+            new_title = (f"{current_title} - Config #{configuration_data['config_idx'] + 1}\n"
+                         f"Energy: {configuration_data['energy']:.3f} | "
+                         f"Fitness: {configuration_data['fitness']:.3f}{title_suffix}")
+            fig.suptitle(new_title, fontsize=14)
+
+            # Save if requested
+            if save_path:
+                fig.savefig(save_path, dpi=300, bbox_inches='tight')
+
+            return fig
+
+        finally:
+            # Always restore original state
+            grid.cells = original_cells
+            grid.cell_seeds = original_seeds
+            grid.territory_map = original_territories
+            grid._update_voronoi_tessellation()
+
+    def plot_configuration_mosaics_grid(self, grid, configurations_data, save_path=None,
+                                        show_top_n=6, cols=3):
+        """
+        Plot multiple configuration mosaics in a grid layout.
+
+        Parameters:
+            grid: Grid object
+            configurations_data: Result from generate_multiple_initial_configurations
+            save_path: Path to save the plot
+            show_top_n: Number of configurations to show
+            cols: Number of columns in grid
+
+        Returns:
+            Matplotlib figure
+        """
+        import matplotlib.pyplot as plt
+
+        configurations = configurations_data['all_configurations']
+        best_idx = configurations_data['selected_idx']
+
+        # Sort by energy and take top N
+        sorted_configs = sorted(configurations, key=lambda x: x['energy'])[:show_top_n]
+
+        # Calculate grid layout
+        rows = (len(sorted_configs) + cols - 1) // cols
+
+        # Store original state
+        original_cells = grid.cells.copy()
+        original_seeds = grid.cell_seeds.copy()
+        original_territories = grid.territory_map.copy()
+
+        try:
+            # Create figure
+            fig, axes = plt.subplots(rows, cols, figsize=(6 * cols, 6 * rows))
+            if len(sorted_configs) == 1:
+                axes = [axes]
+            elif rows == 1:
+                axes = [axes] if cols == 1 else list(axes)
+            else:
+                axes = axes.flatten()
+
+            for i, config in enumerate(sorted_configs):
+                if i >= len(axes):
+                    break
+
+                ax = axes[i]
+
+                # Reconstruct configuration
+                grid._reconstruct_configuration(config['cell_data'])
+
+                # Get display territories using existing grid method
+                display_territories = grid.get_display_territories()
+
+                # Plot using similar logic to plot_cell_visualization but simplified
+                ax.set_xlim(0, grid.width)
+                ax.set_ylim(0, grid.height)
+                ax.set_aspect('equal')
+
+                # Plot cell territories
+                for cell_id, cell in grid.cells.items():
+                    if cell_id not in display_territories:
+                        continue
+
+                    display_pixels = display_territories[cell_id]
+                    if not display_pixels:
+                        continue
+
+                    # Color determination (same as plot_cell_visualization)
+                    if not cell.is_senescent:
+                        color = 'green'
+                        alpha = 0.6
+                    else:
+                        growth_factor = getattr(cell, 'senescent_growth_factor', 1.0)
+                        if cell.senescence_cause == 'telomere':
+                            color = '#DC143C' if growth_factor <= 1.5 else '#B22222'
+                        else:
+                            color = '#4169E1' if growth_factor <= 1.5 else '#000080'
+                        alpha = 0.7 + 0.1 * min(1.0, (growth_factor - 1.0) / 2.0)
+
+                    # Plot territory (simplified)
+                    if len(display_pixels) > 10:
+                        try:
+                            from scipy.spatial import ConvexHull
+                            points = np.array(display_pixels)
+                            if len(points) > 100:  # Sample for performance
+                                indices = np.random.choice(len(points), 100, replace=False)
+                                points = points[indices]
+                            hull = ConvexHull(points)
+                            hull_points = points[hull.vertices]
+
+                            polygon = plt.Polygon(hull_points, facecolor=color, alpha=alpha,
+                                                  edgecolor='black', linewidth=0.5)
+                            ax.add_patch(polygon)
+                        except:
+                            # Fallback to scatter
+                            points = np.array(display_pixels[:100])  # Limit for performance
+                            ax.scatter(points[:, 0], points[:, 1], c=color, alpha=alpha, s=1, marker='s')
+
+                # Title and formatting
+                is_selected = config['config_idx'] == best_idx
+                title_prefix = "★ SELECTED ★\n" if is_selected else ""
+                title = (f"{title_prefix}Config #{config['config_idx'] + 1}\n"
+                         f"Energy: {config['energy']:.3f}")
+
+                ax.set_title(title, fontsize=10)
+                ax.set_xticks([])
+                ax.set_yticks([])
+
+                # Highlight selected configuration
+                if is_selected:
+                    for spine in ax.spines.values():
+                        spine.set_edgecolor('gold')
+                        spine.set_linewidth(3)
+
+            # Hide unused subplots
+            for j in range(len(sorted_configs), len(axes)):
+                axes[j].set_visible(False)
+
+            # Main title
+            fig.suptitle(f'Configuration Mosaics (Top {len(sorted_configs)} by Energy)', fontsize=16)
+            plt.tight_layout()
+
+            if save_path:
+                plt.savefig(save_path, dpi=300, bbox_inches='tight')
+                print(f"Configuration mosaics saved to: {save_path}")
+
+            return fig
+
+        finally:
+            # Restore original state
+            grid.cells = original_cells
+            grid.cell_seeds = original_seeds
+            grid.territory_map = original_territories
+            grid._update_voronoi_tessellation()
 
     def create_all_plots(self, simulator, history=None, prefix=None):
         """
@@ -1252,6 +1444,29 @@ class Plotter:
                     figures.append(energy_landscape_fig)
                     print("✅ Energy landscape plot created")
 
+                print("🎨 Creating configuration mosaic plots...")
+
+                mosaic_grid_fig = self.plot_configuration_mosaics_grid(
+                    simulator.grid,
+                    simulator._config_results,
+                    save_path=os.path.join(self.config.plot_directory, f"{prefix}_config_mosaics.png"),
+                    show_top_n=6
+                )
+                if mosaic_grid_fig:
+                    figures.append(mosaic_grid_fig)
+                    print("✅ Configuration mosaics grid created")
+
+                best_config = simulator._config_results['best_config']
+                selected_mosaic_fig = self.plot_configuration_mosaic(
+                    simulator.grid,
+                    best_config,
+                    save_path=os.path.join(self.config.plot_directory, f"{prefix}_selected_config_mosaic.png"),
+                    title_suffix=" (SELECTED)"
+                )
+                if selected_mosaic_fig:
+                    figures.append(selected_mosaic_fig)
+                    print("✅ Selected configuration detailed mosaic created")
+
                 # Configuration animation (optional)
                 if len(simulator._config_results['all_configurations']) <= 15:
                     print("🎬 Creating configuration animation...")
@@ -1297,6 +1512,8 @@ class Plotter:
 
         except Exception as e:
             print(f"⚠️  Energy analysis skipped: {e}")
+
+
 
 
         return figures

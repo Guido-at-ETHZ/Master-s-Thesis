@@ -73,6 +73,9 @@ def run_single_step_simulation(config, initial_value, final_value, step_time, du
         optimization_iterations=getattr(config, 'multi_config_optimization_steps', 3)
     )
 
+    # STORE the config results on the simulator object so plotting can access them
+    simulator._config_results = config_results
+
     simulator.set_step_input(initial_value, final_value, step_time)
 
     print(f"Running single-step simulation:")
