@@ -1402,3 +1402,5 @@ class Grid:
         print(f"   Plot: {plot_path}")
 
         return csv_path, plot_path
+
+

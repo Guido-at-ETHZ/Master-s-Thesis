@@ -1128,121 +1128,6 @@ class Plotter:
 
         return ani
 
-    def create_all_plots_old(self, simulator, history=None, prefix=None):
-        """
-        Create all available plots for the simulation.
-
-        Parameters:
-            simulator: Simulator object with current state
-            history: List of state dictionaries (default: from simulator)
-            prefix: Prefix for filenames (default: auto-generated timestamp)
-
-        Returns:
-            List of created figure objects
-        """
-        # Use simulator history if not provided
-        if history is None:
-            history = simulator.history
-
-        # Use timestamp prefix if not provided
-        if prefix is None:
-            import time
-            prefix = time.strftime("%Y%m%d-%H%M%S")
-
-        # Create output directory
-        os.makedirs(self.config.plot_directory, exist_ok=True)
-
-        # Create figures
-        figures = []
-
-        # Cell population plot
-        pop_fig = self.plot_cell_population(
-            history,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_population.png")
-        )
-        figures.append(pop_fig)
-
-        # Input pattern plot
-        input_fig = self.plot_input_pattern(
-            history,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_input.png")
-        )
-        figures.append(input_fig)
-
-        # Spatial metrics plot (if available)
-        spatial_fig = self.plot_spatial_metrics(
-            history,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_spatial.png")
-        )
-        if spatial_fig:
-            figures.append(spatial_fig)
-
-        # Mosaic metrics plot (if available)
-        mosaic_fig = self.plot_mosaic_metrics(
-            history,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_mosaic.png")
-        )
-        if mosaic_fig:
-            figures.append(mosaic_fig)
-
-        # Senescent growth metrics plot (if available)
-        growth_fig = self.plot_senescent_growth_metrics(
-            history,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_senescent_growth.png")
-        )
-        if growth_fig:
-            figures.append(growth_fig)
-
-        # Cell visualization
-        cell_vis_fig = self.plot_cell_visualization(
-            simulator,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_cells.png")
-        )
-        figures.append(cell_vis_fig)
-
-        #cell distribution
-        evolution_fig = self.plot_cell_distributions(
-            simulator,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_distributions_evolution.png"),
-            show_evolution=True
-        )
-        if evolution_fig:
-            figures.append(evolution_fig)
-
-        snapshot_fig = self.plot_cell_distributions(
-            simulator,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_distributions_snapshots.png"),
-            show_evolution=False,
-            time_points='auto'
-        )
-        if snapshot_fig:
-            figures.append(snapshot_fig)
-
-        # Enhanced animated distributions (FIXED)
-        animated_fig = self.create_distribution_animation(
-            simulator,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_FIXED_animated_distributions.mp4")
-        )
-        if animated_fig:
-            print("FIXED animated distributions created!")
-
-
-        # Polar distribution plot
-        polar_fig = self.plot_polar_cell_distribution(
-            simulator,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_polar.png")
-        )
-        if polar_fig:
-            figures.append(polar_fig)
-
-        polar_animation = self.create_polar_animation(
-            simulator,
-            save_path=os.path.join(self.config.plot_directory, f"{prefix}_polar_animation.mp4"),
-            fps=2
-        )
-
-        return figures
-
 
     def create_all_plots(self, simulator, history=None, prefix=None):
         """
@@ -1343,8 +1228,49 @@ class Plotter:
         if polar_fig:
             figures.append(polar_fig)
 
-        # === NEW: AUTOMATIC ENERGY ANALYSIS ===
+        if hasattr(simulator, '_config_results') and simulator._config_results:
+            try:
+                print("📊 Adding configuration comparison plots...")
 
+                # Configuration comparison plot
+                config_comparison_fig = self.visualize_all_configurations(
+                    simulator.grid,
+                    simulator._config_results,
+                    save_path=os.path.join(self.config.plot_directory, f"{prefix}_config_comparison.png")
+                )
+                if config_comparison_fig:
+                    figures.append(config_comparison_fig)
+                    print("✅ Configuration comparison plot created")
+
+                # Energy landscape plot
+                energy_landscape_fig = self.create_energy_landscape_plot(
+                    simulator.grid,
+                    simulator._config_results,
+                    save_path=os.path.join(self.config.plot_directory, f"{prefix}_energy_landscape.png")
+                )
+                if energy_landscape_fig:
+                    figures.append(energy_landscape_fig)
+                    print("✅ Energy landscape plot created")
+
+                # Configuration animation (optional)
+                if len(simulator._config_results['all_configurations']) <= 15:
+                    print("🎬 Creating configuration animation...")
+                    config_animation = self.create_configuration_animation(
+                        simulator.grid,
+                        simulator._config_results,
+                        save_path=os.path.join(self.config.plot_directory, f"{prefix}_config_animation.mp4"),
+                        show_top_n=min(10, len(simulator._config_results['all_configurations'])),
+                        fps=2
+                    )
+                    print("✅ Configuration animation created")
+                else:
+                    print(
+                        f"⏩ Skipping animation (too many configs: {len(simulator._config_results['all_configurations'])})")
+
+            except Exception as e:
+                print(f"⚠️  Configuration visualization skipped: {e}")
+
+        # === NEW: AUTOMATIC ENERGY ANALYSIS ===
         try:
             print("🔋 Adding energy analysis...")
 
@@ -1371,6 +1297,7 @@ class Plotter:
 
         except Exception as e:
             print(f"⚠️  Energy analysis skipped: {e}")
+
 
         return figures
 
@@ -1482,3 +1409,408 @@ class Plotter:
         except Exception as e:
             print(f"Error creating energy plot: {e}")
             return None
+        return None
+
+    def visualize_all_configurations(self, grid, configurations_data, save_path=None, show_top_n=None):
+        """
+        Create a visual comparison of all generated configurations.
+
+        Parameters:
+            grid: Grid object containing the configurations
+            configurations_data: Result from generate_multiple_initial_configurations
+            save_path: Path to save the visualization
+            show_top_n: Show only the top N configurations (None = show all)
+
+        Returns:
+            matplotlib.Figure object
+        """
+        import matplotlib.pyplot as plt
+        import matplotlib.patches as patches
+        from matplotlib.patches import Polygon
+        import numpy as np  # Add this import
+        import time
+
+        configurations = configurations_data['all_configurations']
+        best_idx = configurations_data['selected_idx']
+
+        # Sort configurations by energy for better visualization
+        sorted_configs = sorted(configurations, key=lambda x: x['energy'])
+        if show_top_n:
+            sorted_configs = sorted_configs[:show_top_n]
+
+        n_configs = len(sorted_configs)
+
+        # Calculate grid layout
+        cols = min(4, n_configs)  # Max 4 columns
+        rows = (n_configs + cols - 1) // cols
+
+        # Create figure
+        fig, axes = plt.subplots(rows, cols, figsize=(4 * cols, 4 * rows))
+        if n_configs == 1:
+            axes = [axes]
+        elif rows == 1:
+            axes = [axes] if cols == 1 else list(axes)
+        else:
+            axes = axes.flatten()
+
+        # Color map for energy levels
+        energies = [config['energy'] for config in sorted_configs]
+        min_energy, max_energy = min(energies), max(energies)
+
+        # Store original state
+        original_cells = grid.cells.copy()
+        original_seeds = grid.cell_seeds.copy()
+        original_territories = grid.territory_map.copy()
+
+        for i, config in enumerate(sorted_configs):
+            if i >= len(axes):
+                break
+
+            ax = axes[i]
+
+            # Reconstruct this configuration temporarily
+            grid._reconstruct_configuration(config['cell_data'])
+
+            # Clear axis
+            ax.clear()
+            ax.set_xlim(0, grid.width)
+            ax.set_ylim(0, grid.height)
+            ax.set_aspect('equal')
+
+            # Get display territories
+            display_territories = grid.get_display_territories()
+
+            # Color mapping
+            cell_colors = {'healthy': 'lightgreen', 'telomere': 'lightcoral', 'stress': 'lightblue'}
+
+            # Plot each cell's territory
+            for cell_id, territory_pixels in display_territories.items():
+                if cell_id in grid.cells:
+                    cell = grid.cells[cell_id]
+
+                    # Determine cell color
+                    if not cell.is_senescent:
+                        color = cell_colors['healthy']
+                    elif cell.senescence_cause == 'telomere':
+                        color = cell_colors['telomere']
+                    else:
+                        color = cell_colors['stress']
+
+                    # Plot territory as scatter (simplified for speed)
+                    if len(territory_pixels) > 0:
+                        pixels_array = np.array(territory_pixels)
+                        ax.scatter(pixels_array[:, 0], pixels_array[:, 1],
+                                   c=color, alpha=0.6, s=0.5, marker='s')
+
+                    # Plot cell center
+                    cx, cy = cell.position
+                    ax.plot(cx, cy, 'ko', markersize=3, alpha=0.8)
+
+            # Energy-based border color
+            if max_energy > min_energy:
+                energy_norm = (config['energy'] - min_energy) / (max_energy - min_energy)
+                border_color = plt.cm.RdYlBu_r(energy_norm)  # Red = high energy, Blue = low energy
+            else:
+                border_color = 'blue'
+
+            # Highlight best configuration
+            if config['config_idx'] == best_idx:
+                # Thick gold border for selected configuration
+                for spine in ax.spines.values():
+                    spine.set_edgecolor('gold')
+                    spine.set_linewidth(4)
+                title_prefix = "★ SELECTED ★\n"
+            else:
+                # Colored border based on energy
+                for spine in ax.spines.values():
+                    spine.set_edgecolor(border_color)
+                    spine.set_linewidth(2)
+                title_prefix = ""
+
+            # Title with key metrics
+            title = (f"{title_prefix}Config #{config['config_idx'] + 1}\n"
+                     f"Energy: {config['energy']:.3f}\n"
+                     f"Fitness: {config['fitness']:.3f}\n"
+                     f"Packing: {config['packing_efficiency']:.3f}")
+
+            ax.set_title(title, fontsize=8, pad=10)
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+        # Hide unused subplots
+        for j in range(i + 1, len(axes)):
+            axes[j].set_visible(False)
+
+        # Add overall title
+        energy_improvement = configurations_data['energy_improvement']
+        improvement_pct = (energy_improvement / max_energy * 100) if max_energy > 0 else 0
+
+        main_title = (f"Initial Configuration Comparison\n"
+                      f"Tested {len(configurations)} configurations | "
+                      f"Best energy: {min_energy:.3f} | "
+                      f"Improvement: {improvement_pct:.1f}%")
+
+        fig.suptitle(main_title, fontsize=14, y=0.98)
+
+        # Add legend
+        legend_elements = [
+            patches.Patch(color='lightgreen', label='Healthy Cells'),
+            patches.Patch(color='lightcoral', label='Telomere-Senescent'),
+            patches.Patch(color='lightblue', label='Stress-Senescent'),
+            patches.Patch(color='gold', label='Selected Configuration'),
+            plt.Line2D([0], [0], marker='o', color='w', markerfacecolor='black',
+                       markersize=6, label='Cell Centers')
+        ]
+
+        fig.legend(handles=legend_elements, loc='lower center', ncol=5,
+                   bbox_to_anchor=(0.5, 0.02), fontsize=10)
+
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.93, bottom=0.08)
+
+        # Save if path provided
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"📊 Configuration comparison saved to: {save_path}")
+
+        # Restore original state
+        grid.cells = original_cells
+        grid.cell_seeds = original_seeds
+        grid.territory_map = original_territories
+        grid._update_voronoi_tessellation()
+
+        return fig
+
+    def create_configuration_animation(self, grid, configurations_data, save_path=None,
+                                       show_top_n=10, fps=2):
+        """
+        Create an animation showing the progression of configurations by energy rank.
+
+        Parameters:
+            grid: Grid object containing the configurations
+            configurations_data: Result from generate_multiple_initial_configurations
+            save_path: Path to save animation (should end in .mp4 or .gif)
+            show_top_n: Number of top configurations to animate
+            fps: Frames per second for animation
+        """
+        try:
+            import matplotlib.animation as animation
+            import matplotlib.pyplot as plt
+            import numpy as np  # Add this import
+            import time
+
+            configurations = configurations_data['all_configurations']
+            best_idx = configurations_data['selected_idx']
+
+            # Sort by energy (best to worst)
+            sorted_configs = sorted(configurations, key=lambda x: x['energy'])[:show_top_n]
+
+            # Store original state
+            original_cells = grid.cells.copy()
+            original_seeds = grid.cell_seeds.copy()
+            original_territories = grid.territory_map.copy()
+
+            # Create figure
+            fig, ax = plt.subplots(figsize=(12, 10))
+
+            def update_frame(frame_idx):
+                ax.clear()
+                ax.set_xlim(0, grid.width)
+                ax.set_ylim(0, grid.height)
+                ax.set_aspect('equal')
+
+                if frame_idx < len(sorted_configs):
+                    config = sorted_configs[frame_idx]
+
+                    # Reconstruct configuration
+                    grid._reconstruct_configuration(config['cell_data'])
+
+                    # Get display territories
+                    display_territories = grid.get_display_territories()
+
+                    # Color mapping
+                    cell_colors = {'healthy': 'lightgreen', 'telomere': 'lightcoral', 'stress': 'lightblue'}
+
+                    # Plot each cell's territory
+                    for cell_id, territory_pixels in display_territories.items():
+                        if cell_id in grid.cells:
+                            cell = grid.cells[cell_id]
+
+                            # Determine cell color
+                            if not cell.is_senescent:
+                                color = cell_colors['healthy']
+                            elif cell.senescence_cause == 'telomere':
+                                color = cell_colors['telomere']
+                            else:
+                                color = cell_colors['stress']
+
+                            # Plot territory
+                            if len(territory_pixels) > 0:
+                                pixels_array = np.array(territory_pixels)
+                                ax.scatter(pixels_array[:, 0], pixels_array[:, 1],
+                                           c=color, alpha=0.7, s=1, marker='s')
+
+                            # Plot cell center
+                            cx, cy = cell.position
+                            ax.plot(cx, cy, 'ko', markersize=4, alpha=0.9)
+
+                    # Title with ranking and metrics
+                    rank = frame_idx + 1
+                    is_selected = config['config_idx'] == best_idx
+                    selected_text = " ★ SELECTED ★" if is_selected else ""
+
+                    title = (f"Configuration Ranking - #{rank}/{len(sorted_configs)}{selected_text}\n"
+                             f"Config #{config['config_idx'] + 1} | "
+                             f"Energy: {config['energy']:.3f} | "
+                             f"Fitness: {config['fitness']:.3f} | "
+                             f"Packing: {config['packing_efficiency']:.3f}")
+
+                    ax.set_title(title, fontsize=14, pad=20)
+
+                    # Color border based on selection
+                    border_color = 'gold' if is_selected else 'black'
+                    border_width = 4 if is_selected else 2
+                    for spine in ax.spines.values():
+                        spine.set_edgecolor(border_color)
+                        spine.set_linewidth(border_width)
+
+                ax.set_xticks([])
+                ax.set_yticks([])
+
+            # Create animation
+            anim = animation.FuncAnimation(
+                fig, update_frame, frames=len(sorted_configs),
+                interval=1000 // fps, repeat=True, blit=False
+            )
+
+            # Save animation
+            if save_path:
+                if save_path.endswith('.gif'):
+                    anim.save(save_path, writer='pillow', fps=fps)
+                else:
+                    if 'ffmpeg' in animation.writers.list():
+                        Writer = animation.writers['ffmpeg']
+                        writer = Writer(fps=fps, metadata=dict(artist='Configuration Comparison'), bitrate=1800)
+                        anim.save(save_path, writer=writer)
+                    else:
+                        print("Warning: ffmpeg not available, saving as GIF instead")
+                        gif_path = save_path.rsplit('.', 1)[0] + '.gif'
+                        anim.save(gif_path, writer='pillow', fps=fps)
+
+                print(f"🎬 Configuration animation saved to: {save_path}")
+
+            # Restore original state
+            grid.cells = original_cells
+            grid.cell_seeds = original_seeds
+            grid.territory_map = original_territories
+            grid._update_voronoi_tessellation()
+
+            return fig, anim
+
+        except ImportError:
+            print("Animation requires matplotlib.animation - creating static plot instead")
+            return self.visualize_all_configurations(grid, configurations_data, save_path)
+        except Exception as e:
+            print(f"Error creating animation: {e}")
+            return self.visualize_all_configurations(grid, configurations_data, save_path)
+
+    def create_energy_landscape_plot(self, grid, configurations_data, save_path=None):
+        """
+        Create a detailed energy landscape visualization.
+
+        Parameters:
+            grid: Grid object (not used directly but for consistency)
+            configurations_data: Result from generate_multiple_initial_configurations
+            save_path: Path to save the plot
+        """
+        import matplotlib.pyplot as plt
+        import numpy as np
+
+        configurations = configurations_data['all_configurations']
+        best_idx = configurations_data['selected_idx']
+
+        # Extract data
+        config_indices = [c['config_idx'] for c in configurations]
+        energies = [c['energy'] for c in configurations]
+        fitnesses = [c['fitness'] for c in configurations]
+        packing_effs = [c['packing_efficiency'] for c in configurations]
+
+        # Create figure with subplots
+        fig, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(15, 12))
+
+        # 1. Energy vs Configuration Index
+        colors = ['gold' if i == best_idx else 'blue' for i in config_indices]
+        ax1.scatter(config_indices, energies, c=colors, s=60, alpha=0.7)
+        ax1.axhline(y=configurations_data['best_config']['energy'],
+                    color='red', linestyle='--', alpha=0.7, label='Selected Energy')
+        ax1.set_xlabel('Configuration Index')
+        ax1.set_ylabel('Energy')
+        ax1.set_title('Energy by Configuration')
+        ax1.legend()
+        ax1.grid(True, alpha=0.3)
+
+        # 2. Energy Distribution
+        ax2.hist(energies, bins=min(15, len(configurations) // 2), alpha=0.7, color='skyblue', edgecolor='black')
+        ax2.axvline(x=configurations_data['best_config']['energy'],
+                    color='red', linestyle='--', linewidth=2, label='Selected')
+        ax2.set_xlabel('Energy')
+        ax2.set_ylabel('Frequency')
+        ax2.set_title('Energy Distribution')
+        ax2.legend()
+        ax2.grid(True, alpha=0.3)
+
+        # 3. Energy vs Fitness
+        scatter = ax3.scatter(energies, fitnesses, c=config_indices, cmap='viridis', s=60, alpha=0.7)
+        # Highlight selected
+        selected_config = configurations[best_idx]
+        ax3.scatter([selected_config['energy']], [selected_config['fitness']],
+                    c='red', s=120, marker='*', label='Selected', edgecolor='black', linewidth=1)
+        ax3.set_xlabel('Energy')
+        ax3.set_ylabel('Fitness')
+        ax3.set_title('Energy vs Fitness')
+        ax3.legend()
+        ax3.grid(True, alpha=0.3)
+        plt.colorbar(scatter, ax=ax3, label='Config Index')
+
+        # 4. Multi-metric comparison
+        sorted_configs = sorted(configurations, key=lambda x: x['energy'])
+        ranks = list(range(1, len(sorted_configs) + 1))
+        sorted_energies = [c['energy'] for c in sorted_configs]
+        sorted_fitnesses = [c['fitness'] for c in sorted_configs]
+        sorted_packing = [c['packing_efficiency'] for c in sorted_configs]
+
+        ax4.plot(ranks, sorted_energies, 'b-o', label='Energy', alpha=0.7)
+        ax4_twin = ax4.twinx()
+        ax4_twin.plot(ranks, sorted_fitnesses, 'g-s', label='Fitness', alpha=0.7)
+        ax4_twin.plot(ranks, sorted_packing, 'r-^', label='Packing Eff.', alpha=0.7)
+
+        # Mark selected configuration
+        selected_rank = next(i for i, c in enumerate(sorted_configs) if c['config_idx'] == best_idx) + 1
+        ax4.axvline(x=selected_rank, color='gold', linestyle='--', linewidth=3, alpha=0.8, label='Selected')
+
+        ax4.set_xlabel('Configuration Rank (by Energy)')
+        ax4.set_ylabel('Energy', color='blue')
+        ax4_twin.set_ylabel('Fitness / Packing Efficiency', color='green')
+        ax4.set_title('Metrics by Configuration Rank')
+
+        # Combine legends
+        lines1, labels1 = ax4.get_legend_handles_labels()
+        lines2, labels2 = ax4_twin.get_legend_handles_labels()
+        ax4.legend(lines1 + lines2, labels1 + labels2, loc='center right')
+        ax4.grid(True, alpha=0.3)
+
+        # Main title
+        main_title = (f"Configuration Energy Landscape Analysis\n"
+                      f"Configurations: {len(configurations)} | "
+                      f"Best Energy: {min(energies):.3f} | "
+                      f"Energy Range: {max(energies) - min(energies):.3f}")
+        fig.suptitle(main_title, fontsize=16, y=0.98)
+
+        plt.tight_layout()
+        plt.subplots_adjust(top=0.93)
+
+        if save_path:
+            plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            print(f"📊 Energy landscape plot saved to: {save_path}")
+
+        return fig
