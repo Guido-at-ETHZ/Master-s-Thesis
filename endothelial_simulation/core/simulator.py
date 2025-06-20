@@ -831,35 +831,6 @@ class Simulator:
         # Apply to cells
         self.grid.apply_shear_stress_field(shear_stress_function, duration)
 
-    def _update_models(self, current_input, dt):
-        """
-        REPLACE this method in your existing simulator.py
-        """
-        # Update temporal dynamics if enabled (UNCHANGED from your original)
-        if 'temporal' in self.models and self.config.enable_temporal_dynamics:
-            model = self.models['temporal']
-            model.update_cell_responses(self.grid.cells, current_input, dt)
-
-        # Update spatial properties if enabled (CHANGED - now uses temporal dynamics)
-        if 'spatial' in self.models and self.config.enable_spatial_properties:
-            model = self.models['spatial']
-            # NEW: Use temporal dynamics for all cells
-            for cell in self.grid.cells.values():
-                # This now uses temporal dynamics instead of instant calculation
-                dynamics_result = model.update_cell_properties(cell, current_input, dt, self.grid.cells)
-
-                # Optional: Store dynamics info for monitoring/debugging
-                if hasattr(cell, 'last_dynamics_info'):
-                    cell.last_dynamics_info = dynamics_result.get('dynamics_info', {})
-
-        # Update population dynamics if enabled (UNCHANGED from your original)
-        if 'population' in self.models and self.config.enable_population_dynamics:
-            model = self.models['population']
-            stem_cell_rate = 10 if self.config.enable_stem_cells else 0
-            model.update_from_cells(self.grid.cells, dt, current_input, stem_cell_rate)
-            actions = model.synchronize_cells(self.grid.cells)
-            self._execute_population_actions(actions)
-
     def _execute_population_actions(self, actions):
         """
         Execute population actions returned by the population dynamics model.
@@ -943,7 +914,11 @@ class Simulator:
 
                 # Make it senescent
                 cause = senescence_action.get('cause', 'stress')
-                cell.induce_senescence(cause)
+                success = cell.induce_senescence(cause)
+
+                # ADD THIS DEBUG LINE to see when senescence happens:
+                if success:
+                    print(f"🔄 Cell {cell_id} became {cause}-senescent at t={self.time:.1f} min ({self.time/60:.1f}h)")
 
     def _update_models(self, current_input, dt):
         """
@@ -972,6 +947,20 @@ class Simulator:
             # Optimize positions every 6 steps (as in your original)
             if self.step_count % 6 == 0:
                 self.grid.optimize_cell_positions(iterations=2)
+
+            # DEBUG: Monitor senescence every 5 steps (5 minutes)
+            if self.step_count % 5 == 0:
+                cell_counts = self.grid.count_cells_by_type()
+                total_cells = cell_counts['total']
+                sen_fraction = (cell_counts['telomere_senescent'] + cell_counts['stress_senescent']) / max(1,
+                                                                                                           total_cells)
+
+                print(f"t={self.time / 60:.1f}h: Healthy={cell_counts['normal']}, "
+                      f"Tel-Sen={cell_counts['telomere_senescent']}, "
+                      f"Stress-Sen={cell_counts['stress_senescent']}, "
+                      f"Sen%={sen_fraction:.1%}, "
+                      f"Shear={current_input:.2f}Pa")
+
 
         # Update population dynamics if enabled (UNCHANGED - your original system)
         if 'population' in self.models and self.config.enable_population_dynamics:

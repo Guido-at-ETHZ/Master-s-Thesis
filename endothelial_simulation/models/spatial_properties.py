@@ -93,14 +93,13 @@ class SpatialPropertiesModel:
             base_ratio = self.interpolate_pressure_effect(self.senescent_params['aspect_ratio'], pressure)
             # REMOVED: artificial variability
             result = max(1.0, base_ratio)
-            print(f"Senescent AR: pressure={pressure}, deterministic result={result:.1f}")
             return result
         else:
             # Control cells: USE EXACT EXPERIMENTAL VALUES
             base_ratio = self.interpolate_pressure_effect(self.control_params['aspect_ratio'], pressure)
             # REMOVED: artificial variability
             result = max(1.0, base_ratio)
-            print(f"Control AR: pressure={pressure}, deterministic result={result:.1f}")
+
             return result
 
     def calculate_target_orientation(self, pressure, is_senescent):
@@ -116,7 +115,7 @@ class SpatialPropertiesModel:
             # Convert to radians - USE MEAN DIRECTLY
             mean_rad = np.radians(mean_deg)
 
-            print(f"Senescent orientation: pressure={pressure}, deterministic mean={mean_deg:.1f}°")
+            #print(f"Senescent orientation: pressure={pressure}, deterministic mean={mean_deg:.1f}°")
             return mean_rad
         else:
             # Normal cells: use MEAN orientation only
@@ -125,7 +124,7 @@ class SpatialPropertiesModel:
             # Convert to radians - USE MEAN DIRECTLY
             mean_rad = np.radians(mean_deg)
 
-            print(f"Control orientation: pressure={pressure}, deterministic mean={mean_deg:.1f}°")
+            #print(f"Control orientation: pressure={pressure}, deterministic mean={mean_deg:.1f}°")
             return mean_rad
 
     def calculate_target_area(self, pressure, is_senescent, senescence_cause=None):
@@ -141,14 +140,14 @@ class SpatialPropertiesModel:
             else:
                 result = self.senescent_params['area_small']
             # REMOVED: artificial variability
-            print(f"Senescent area: deterministic result={result:.0f}")
+            #print(f"Senescent area: deterministic result={result:.0f}")
             return result
         else:
             # Control cells: use deterministic experimental area
             base_area = self.interpolate_pressure_effect(self.control_params['area'], pressure)
             # REMOVED: artificial biological variability
             result = max(1000, base_area)  # Minimum 1000 pixels²
-            print(f"Control area: pressure={pressure}, deterministic result={result:.0f}")
+            #print(f"Control area: pressure={pressure}, deterministic result={result:.0f}")
             return result
 
     def update_cell_properties(self, cell, pressure, dt, cells_dict=None):

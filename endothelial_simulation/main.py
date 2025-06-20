@@ -177,7 +177,7 @@ Examples:
     parser.add_argument('--duration', type=float, default=1080,
                         help='Simulation duration in minutes (default: 1080 = 18 hours)')
 
-    parser.add_argument('--cells', type=int, default=6,
+    parser.add_argument('--cells', type=int, default=100,
                         help='Initial cell count (default: 200)')
 
     # Input type selection (mutually exclusive)

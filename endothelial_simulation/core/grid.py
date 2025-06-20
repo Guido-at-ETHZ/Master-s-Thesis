@@ -723,8 +723,9 @@ class Grid:
         if division_distribution is None:
             max_div = self.config.max_divisions
             def division_distribution():
+                # Start cells at 0-50% of max divisions (avoid immediate senescence)
                 r = np.random.random()
-                return int(max_div * (1 - np.sqrt(r)))
+                return int(max_div * 0.5 * (1 - np.sqrt(r)))
 
         if area_distribution is None:
             def area_distribution():
@@ -745,13 +746,14 @@ class Grid:
             is_senescent = False
             senescence_cause = None
 
+            """ To see how it would perform without - exclude at the moment
             if divisions >= self.config.max_divisions:
                 is_senescent = True
                 senescence_cause = 'telomere'
             elif np.random.random() < 0.05:
                 is_senescent = True
                 senescence_cause = 'stress'
-
+            """
             cell = self.add_cell(position, divisions, is_senescent, senescence_cause, target_area)
             created_cells.append(cell)
 

@@ -137,6 +137,8 @@ class PopulationDynamicsModel:
         return telomere_length
 
     def calculate_shear_stress_effect(self, tau):
+        return 0.1  # 100% per minute - guaranteed immediate senescence
+    def calculate_shear_stress_effect_old(self, tau):
         """
         Calculate the effect of shear stress on senescence induction.
 
@@ -147,12 +149,12 @@ class PopulationDynamicsModel:
             Senescence induction rate
         """
         # Implementation from thesis model
-        if tau <= 10:  # Low shear stress
-            return 0.002 + tau * 0.0005  # Very minor effect
-        elif tau <= 20:  # Moderate shear stress
-            return 0.007 + (tau - 10) * 0.001  # Slight increase
+        if tau <= 1:  # Low shear stress
+            return 0.002 + tau * 0.05  # Very minor effect - changed to try
+        elif tau <= 2:  # Moderate shear stress
+            return 0.007 + (tau - 1) * 0.1  # Slight increase
         else:  # High shear stress
-            return 0.017 + (tau - 20) * 0.005  # More rapid increase
+            return 0.017 + (tau - 2) * 0.5  # More rapid increase
 
     def calculate_senolytic_effect(self, concentration, efficacy_factor=1.0):
         """

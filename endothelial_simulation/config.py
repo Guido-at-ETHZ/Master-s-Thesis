@@ -33,7 +33,7 @@ class SimulationConfig:
         self.death_rate_healthy = 0.0001
         self.death_rate_senescent_tel = 0.00033
         self.death_rate_senescent_stress = 0.00042
-        self.senescence_induction_factor = 0.0000008
+        self.senescence_induction_factor = 0.00008
         self.senolytic_concentration = 5.0
         self.senolytic_efficacy_tel = 1.0
         self.senolytic_efficacy_stress = 1.2
