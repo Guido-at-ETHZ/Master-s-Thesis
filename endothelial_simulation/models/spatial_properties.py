@@ -154,6 +154,8 @@ class SpatialPropertiesModel:
         """
         FIXED VERSION: Ensure temporal dynamics actually work.
         """
+
+
         # Calculate deterministic instantaneous target values for current pressure
         instant_target_area = self.calculate_target_area(pressure, cell.is_senescent, cell.senescence_cause)
         instant_target_aspect_ratio = self.calculate_target_aspect_ratio(pressure, cell.is_senescent)

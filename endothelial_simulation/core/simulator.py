@@ -16,6 +16,24 @@ from endothelial_simulation.visualization.animations import create_detailed_cell
 
 class Simulator:
     """
+    Wrapper that delegates to either Legacy or EventDriven simulator
+    based on configuration.
+    """
+
+    def __init__(self, config):
+        use_event_driven = getattr(config, 'use_event_driven_system', False)
+
+        if use_event_driven:
+            from .event_driven_simulator import EventDrivenSimulator
+            self._impl = EventDrivenSimulator(config)
+        else:
+            self._impl = LegacySimulator(config)
+
+    def __getattr__(self, name):
+        return getattr(self._impl, name)
+
+class LegacySimulator:
+    """
     Main simulator class that integrates different model components and handles time evolution
     with mosaic cell structure.
     """
@@ -949,7 +967,7 @@ class Simulator:
                 self.grid.optimize_cell_positions(iterations=2)
 
             # DEBUG: Monitor senescence every 5 steps (5 minutes)
-            if self.step_count % 5 == 0:
+            if self.step_count % 1 == 0:
                 cell_counts = self.grid.count_cells_by_type()
                 total_cells = cell_counts['total']
                 sen_fraction = (cell_counts['telomere_senescent'] + cell_counts['stress_senescent']) / max(1,

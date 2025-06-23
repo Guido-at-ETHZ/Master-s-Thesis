@@ -105,6 +105,10 @@ class Grid:
         if self.holes_enabled:
             print(f"🕳️  Hole management enabled (max {getattr(config, 'max_holes', 5)} holes)")
 
+        # Disable continuous biological adaptation
+        self.biological_optimization_enabled = False
+        self.continuous_adaptation_disabled = True
+
 
     def add_cell(self, position=None, divisions=0, is_senescent=False, senescence_cause=None, target_area=100.0):
         """Add a new cell with biological properties."""
@@ -169,25 +173,26 @@ class Grid:
         # Always use gradient-based adaptive optimization
         self.optimize_biological_tessellation()
 
-    def optimize_biological_tessellation(self):
+    def preserve_current_configuration(self):
         """
-        Gradient-based adaptive optimization - responds to energy trajectory.
+        Preserve the current configuration for transition purposes.
         """
-        if len(self.cells) < 2:
-            return
+        return {
+            'cells': self.cells.copy(),
+            'seeds': self.cell_seeds.copy(),
+            'territories': self.territory_map.copy(),
+            'energy': self.calculate_biological_energy(),
+            'timestamp': time.time()
+        }
 
-        current_energy = self.calculate_biological_energy()
-        self.energy_history.append(current_energy)
-
-        # Keep only recent history
-        if len(self.energy_history) > self.energy_window:
-            self.energy_history.pop(0)
-
-        # Calculate optimization intensity based on energy trajectory
-        intensity = self._calculate_optimization_intensity(current_energy)
-
-        # Apply optimization with calculated intensity
-        self._run_adaptive_optimization(intensity, current_energy)
+    def apply_configuration(self, config_data):
+        """
+        Apply a stored configuration to the grid.
+        """
+        self.cells = config_data['cells']
+        self.cell_seeds = config_data['seeds']
+        self.territory_map = config_data['territories']
+        self._update_voronoi_tessellation()
 
     def _calculate_optimization_intensity(self, current_energy):
         """Calculate optimization intensity based on energy dynamics."""
@@ -228,162 +233,8 @@ class Grid:
             self.stuck_counter = 0
             return 'moderate'
 
-    def _run_adaptive_optimization(self, intensity, initial_energy):
-        """Run optimization with specified intensity parameters."""
 
-        if intensity not in self.optimization_params:
-            intensity = 'moderate'  # Fallback
 
-        params = self.optimization_params[intensity]
-
-        if hasattr(self.config, 'debug_adaptive') and self.config.debug_adaptive:
-            print(f"Step {self._adaptation_step_counter}: Energy={initial_energy:.2f} → {intensity} mode")
-
-        # Run optimization with adaptive parameters
-        for step in range(params['max_steps']):
-            position_adjustments = self._calculate_local_position_adjustments()
-
-            # Apply adaptive scaling
-            movements_applied = 0
-            for cell_id, adjustment in position_adjustments.items():
-                scaled_adjustment = adjustment * params['displacement_scale']
-
-                # Apply movement threshold from adaptive parameters
-                if np.linalg.norm(scaled_adjustment) > params['movement_threshold']:
-                    current_pos = np.array(self.cell_seeds[cell_id])
-                    new_pos = current_pos + scaled_adjustment
-
-                    # Constrain to grid bounds
-                    new_pos[0] = max(20, min(self.width - 20, new_pos[0]))
-                    new_pos[1] = max(20, min(self.height - 20, new_pos[1]))
-
-                    self.cell_seeds[cell_id] = tuple(new_pos)
-                    self.cells[cell_id].update_position(tuple(new_pos))
-                    movements_applied += 1
-
-            if movements_applied == 0:
-                if hasattr(self.config, 'debug_adaptive') and self.config.debug_adaptive:
-                    print(f"    Converged at step {step} (no movements)")
-                break
-
-            # Update tessellation after movements
-            self._update_voronoi_tessellation()
-
-            # Check convergence
-            current_energy = self.calculate_biological_energy()
-            improvement = initial_energy - current_energy
-
-            if hasattr(self.config, 'debug_adaptive') and self.config.debug_adaptive:
-                print(f"    Step {step}: energy {current_energy:.2f} (Δ{improvement:+.3f})")
-
-            if improvement < params['convergence_threshold']:
-                if hasattr(self.config, 'debug_adaptive') and self.config.debug_adaptive:
-                    print(f"    Converged at step {step} (energy threshold)")
-                break
-
-            initial_energy = current_energy
-
-    def _calculate_local_position_adjustments(self):
-        """
-        Calculate position adjustments for each cell based on biological targets.
-        These targets are evolving via your temporal dynamics system.
-        """
-        adjustments = {}
-
-        for cell_id, cell in self.cells.items():
-            if not hasattr(cell, 'target_area') or cell.target_area is None:
-                adjustments[cell_id] = np.array([0.0, 0.0])
-                continue
-
-            total_force = np.array([0.0, 0.0])
-
-            # Force from area mismatch
-            if cell.actual_area > 0 and cell.target_area > 0:
-                area_ratio = cell.actual_area / cell.target_area
-
-                if area_ratio < 0.9:  # Cell needs to grow
-                    # Move away from neighbors to claim more space
-                    repulsion_force = self._calculate_repulsion_force(cell_id)
-                    total_force += self.adaptation_strength * repulsion_force
-
-                elif area_ratio > 1.1:  # Cell needs to shrink
-                    # Move toward centroid to reduce territory
-                    if cell.centroid is not None:
-                        current_pos = np.array(self.cell_seeds[cell_id])
-                        display_centroid = self._comp_to_display_coords(cell.centroid[0], cell.centroid[1])
-                        centroid_force = np.array(display_centroid) - current_pos
-                        total_force += self.adaptation_strength * centroid_force * 0.5
-
-            # Force from aspect ratio mismatch
-            if (hasattr(cell, 'target_aspect_ratio') and hasattr(cell, 'target_orientation') and
-                cell.target_aspect_ratio > 0):
-
-                ar_error = cell.target_aspect_ratio - cell.actual_aspect_ratio
-
-                if abs(ar_error) > 0.2:
-                    # Move in direction that promotes desired aspect ratio
-                    stretch_direction = np.array([
-                        np.cos(cell.target_orientation),
-                        np.sin(cell.target_orientation)
-                    ])
-
-                    # Scale force for extreme aspect ratios (like your 200.3 value)
-                    ar_force_magnitude = np.tanh(ar_error * 0.05) * 6  # Reduced for extreme values
-                    ar_force = ar_force_magnitude * stretch_direction
-                    total_force += ar_force
-
-            # Force from orientation mismatch (ALIGNMENT-AWARE)
-            if hasattr(cell, 'target_orientation') and cell.territory_pixels:
-                # Convert to alignment angles for comparison
-                target_align = np.abs(cell.target_orientation) % (np.pi / 2)
-                actual_align = np.abs(cell.actual_orientation) % (np.pi / 2)
-
-                alignment_error = target_align - actual_align
-
-                if abs(alignment_error) > np.radians(5):  # ~5 degrees threshold
-                    # Move perpendicular to current orientation to change it
-                    perp_direction = np.array([
-                        -np.sin(cell.actual_orientation),
-                        np.cos(cell.actual_orientation)
-                    ])
-
-                    if alignment_error < 0:
-                        perp_direction = -perp_direction
-
-                    orientation_force_magnitude = abs(alignment_error) * 4
-                    orientation_force = orientation_force_magnitude * perp_direction
-                    total_force += orientation_force
-
-            # Limit maximum displacement per step
-            force_magnitude = np.linalg.norm(total_force)
-            max_displacement = 12.0  # Reasonable default
-            if force_magnitude > max_displacement:
-                total_force = total_force / force_magnitude * max_displacement
-
-            adjustments[cell_id] = total_force
-
-        return adjustments
-
-    def _calculate_repulsion_force(self, cell_id):
-        """Calculate repulsion force from neighboring cells."""
-        current_pos = np.array(self.cell_seeds[cell_id])
-        repulsion_force = np.array([0.0, 0.0])
-
-        for other_id, other_pos in self.cell_seeds.items():
-            if other_id == cell_id:
-                continue
-
-            other_pos_array = np.array(other_pos)
-            distance_vector = current_pos - other_pos_array
-            distance = np.linalg.norm(distance_vector)
-
-            if distance > 0:
-                # Repulsion inversely proportional to distance
-                repulsion_magnitude = min(40.0 / distance, 15.0)
-                repulsion_direction = distance_vector / distance
-                repulsion_force += repulsion_magnitude * repulsion_direction
-
-        return repulsion_force
 
     def to_alignment_angle(self, angle_rad):
         """Convert any angle to [0, π/2] flow alignment angle"""

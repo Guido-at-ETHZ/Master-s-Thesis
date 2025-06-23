@@ -128,6 +128,20 @@ class SimulationConfig:
         self.multi_config_optimization_steps = 3  # Optimization per config
         self.multi_config_save_analysis = True  # Save detailed analysis
 
+        # NEW: Event-driven system toggle
+        self.use_event_driven_system = False  # Set to True to use new system
+
+        # Event-driven parameters
+        self.min_reconfiguration_interval = 30.0  # minutes
+        self.pressure_change_threshold = 0.1  # Pa
+        self.senescence_threshold_change = 0.05  # 5%
+        self.cell_count_change_threshold = 5  # cells
+
+        # Transition parameters
+        self.max_compression_ratio = 0.7  # Cells can compress to 70%
+        self.transition_completion_threshold = 0.95
+        self.trajectory_checkpoint_interval = 20.0  # minutes
+
     def disable_all_but_temporal(self):
         """Configure to focus only on temporal dynamics."""
         self.enable_population_dynamics = False
