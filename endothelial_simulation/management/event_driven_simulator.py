@@ -7,16 +7,16 @@ import time
 import os
 from typing import Dict, List, Optional
 
-# Import existing classes (these would be from your existing modules)
-# from endothelial_simulation.core.grid import Grid
-# from endothelial_simulation.models.temporal_dynamics import TemporalDynamicsModel
-# from endothelial_simulation.models.population_dynamics import PopulationDynamicsModel
-# from endothelial_simulation.models.spatial_properties import SpatialPropertiesModel
+#Import existing classes (these would be from your existing modules)
+from endothelial_simulation.core.grid import Grid
+from endothelial_simulation.models.temporal_dynamics import TemporalDynamicsModel
+from endothelial_simulation.models.population_dynamics import PopulationDynamicsModel
+from endothelial_simulation.models.spatial_properties import SpatialPropertiesModel
 
 # Import our new components
-# from .event_system import EventDetector, ConfigurationEvent, EventType
-# from .configuration_manager import ConfigurationManager
-# from .transition_controller import TransitionController
+from endothelial_simulation.core.event_system import EventDetector, ConfigurationEvent, EventType
+from .configuration_manager import ConfigurationManager
+from .transition_controller import TransitionController
 
 
 class EventDrivenSimulator:

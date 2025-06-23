@@ -225,6 +225,10 @@ Examples:
     parser.add_argument('--no-save', action='store_true',
                         help='Do not save plots to files')
 
+    # Add this new argument after line with parser.add_argument('--cells', ...)
+    parser.add_argument('--event-driven', action='store_true',
+                        help='Use event-driven configuration system')
+
     args = parser.parse_args()
 
     # Create configuration based on mode
