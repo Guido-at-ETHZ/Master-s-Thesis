@@ -142,6 +142,37 @@ class SimulationConfig:
         self.transition_completion_threshold = 0.95
         self.trajectory_checkpoint_interval = 20.0  # minutes
 
+        # Event-driven system parameters
+        self.use_event_driven_system = True  # Enable by default
+        self.biological_optimization_enabled = False  # Disable force-based system
+
+        # Debug options
+        self.debug_events = False
+        self.debug_transitions = False
+
+    def enable_event_driven_system(self):
+        """Enable event-driven configuration system."""
+        self.use_event_driven_system = True
+        self.biological_optimization_enabled = False  # Disable continuous forces
+
+    def configure_event_sensitivity(self,
+                                    pressure_threshold=0.1,
+                                    senescence_threshold=0.05,
+                                    cell_change_threshold=5):
+        """Configure event detection sensitivity."""
+        self.pressure_change_threshold = pressure_threshold
+        self.senescence_threshold_change = senescence_threshold
+        self.cell_count_change_threshold = cell_change_threshold
+
+    def configure_transitions(self,
+                              completion_threshold=0.95,
+                              max_compression=0.7,
+                              checkpoint_interval=20.0):
+        """Configure transition behavior."""
+        self.transition_completion_threshold = completion_threshold
+        self.max_compression_ratio = max_compression
+        self.trajectory_checkpoint_interval = checkpoint_interval
+
     def disable_all_but_temporal(self):
         """Configure to focus only on temporal dynamics."""
         self.enable_population_dynamics = False

@@ -152,62 +152,58 @@ class SpatialPropertiesModel:
 
     def update_cell_properties(self, cell, pressure, dt, cells_dict=None):
         """
-        FIXED VERSION: Ensure temporal dynamics actually work.
+        Updated for event-driven system - only update during transitions or initial setup.
         """
+        # Check if we're in a transition or during initial setup
+        in_transition = hasattr(self, '_in_transition_mode') and self._in_transition_mode
+        is_initial_setup = not hasattr(cell, 'target_area') or cell.target_area is None
 
+        if not in_transition and not is_initial_setup:
+            # In steady state - targets don't change, just return current values
+            return {
+                'target_orientation': getattr(cell, 'target_orientation', cell.actual_orientation),
+                'target_area': getattr(cell, 'target_area', cell.actual_area),
+                'target_aspect_ratio': getattr(cell, 'target_aspect_ratio', cell.actual_aspect_ratio),
+                'actual_orientation': cell.actual_orientation,
+                'actual_area': cell.actual_area,
+                'actual_aspect_ratio': cell.actual_aspect_ratio,
+                'dynamics_info': {'event_driven_mode': True, 'steady_state': True}
+            }
 
-        # Calculate deterministic instantaneous target values for current pressure
+        # During transitions or initial setup - use temporal dynamics to evolve toward targets
+        dynamics_info = {
+            'event_driven_mode': True,
+            'transitioning': in_transition,
+            'initial_setup': is_initial_setup
+        }
+        dt_minutes = dt  # dt is already in minutes
+
+        # Calculate what targets should be for current pressure (instant response)
         instant_target_area = self.calculate_target_area(pressure, cell.is_senescent, cell.senescence_cause)
-        instant_target_aspect_ratio = self.calculate_target_aspect_ratio(pressure, cell.is_senescent)
         instant_target_orientation = self.calculate_target_orientation(pressure, cell.is_senescent)
+        instant_target_aspect_ratio = self.calculate_target_aspect_ratio(pressure, cell.is_senescent)
 
-        # Initialize cell target properties if not already set - CRITICAL FIX
-        if not hasattr(cell, 'target_orientation') or cell.target_orientation is None:
-            # CHANGED: Initialize to different value to create driving force
-            if pressure > 0:
-                # Start from baseline (0 Pa) values to ensure adaptation occurs
-                cell.target_orientation = self.calculate_target_orientation(0.0, cell.is_senescent)
-                cell.target_area = self.calculate_target_area(0.0, cell.is_senescent, cell.senescence_cause)
-                cell.target_aspect_ratio = self.calculate_target_aspect_ratio(0.0, cell.is_senescent)
-                print(f"INIT Cell {cell.cell_id}: Starting from baseline, will adapt to P={pressure:.1f}")
-            else:
-                cell.target_orientation = instant_target_orientation
-                cell.target_area = instant_target_area
-                cell.target_aspect_ratio = instant_target_aspect_ratio
-
-        # For senescent cells, targets don't adapt (they're mechanically impaired)
-        if cell.is_senescent:
-            cell.target_orientation = instant_target_orientation
-            cell.target_area = instant_target_area
-            cell.target_aspect_ratio = instant_target_aspect_ratio
-            dynamics_info = {'adaptation_disabled': True}
+        # Get time constants from temporal model
+        if self.temporal_model:
+            tau_area = self.temporal_model.calculate_tau_area()
+            tau_orient = self.temporal_model.calculate_tau_orientation()
+            tau_ar = self.temporal_model.calculate_tau_aspect_ratio()
         else:
-            # Normal cells adapt with temporal dynamics toward deterministic targets
-            dynamics_info = {}
+            # Default time constants if no temporal model
+            tau_area = 30.0  # 30 minutes
+            tau_orient = 20.0  # 20 minutes
+            tau_ar = 25.0  # 25 minutes
 
-            # Get time constants from temporal model
-            if self.temporal_model:
-                tau_unified, _ = self.temporal_model.get_scaled_tau_and_amax(pressure, 'biochemical')
-                tau_area = tau_unified
-                tau_orient = tau_unified
-                tau_ar = tau_unified
-            else:
-                tau_unified = 30.0  # 30 minutes default
-                tau_area = tau_orient = tau_ar = tau_unified
-
-            # CRITICAL FIX: Apply temporal dynamics with proper exponential integration
-            dt_minutes = dt  # Ensure dt is in minutes
-
-            # 1. Area evolution using first-order dynamics: dy/dt = (target - y) / tau
+        # Apply first-order dynamics to evolve targets
+        if hasattr(cell, 'target_area') and cell.target_area is not None and not is_initial_setup:
+            # Area evolution
             area_diff = instant_target_area - cell.target_area
             if abs(area_diff) > 10:  # Only if significant difference
-                # Exponential approach: y_new = target + (y_old - target) * exp(-dt/tau)
                 decay_factor = np.exp(-dt_minutes / tau_area)
                 cell.target_area = instant_target_area + (cell.target_area - instant_target_area) * decay_factor
-                dynamics_info['tau_area'] = tau_area
                 dynamics_info['area_change'] = area_diff
 
-            # 2. Orientation evolution
+            # Orientation evolution
             orientation_diff = instant_target_orientation - cell.target_orientation
             # Handle angle wrapping
             while orientation_diff > np.pi:
@@ -219,25 +215,35 @@ class SpatialPropertiesModel:
                 decay_factor = np.exp(-dt_minutes / tau_orient)
                 cell.target_orientation = instant_target_orientation + (
                             cell.target_orientation - instant_target_orientation) * decay_factor
-                dynamics_info['tau_orientation'] = tau_orient
                 dynamics_info['orientation_change'] = np.degrees(orientation_diff)
 
-            # 3. Aspect ratio evolution
+            # Aspect ratio evolution
             ar_diff = instant_target_aspect_ratio - cell.target_aspect_ratio
             if abs(ar_diff) > 0.02:  # Significant difference
                 decay_factor = np.exp(-dt_minutes / tau_ar)
                 cell.target_aspect_ratio = instant_target_aspect_ratio + (
                             cell.target_aspect_ratio - instant_target_aspect_ratio) * decay_factor
                 cell.target_aspect_ratio = max(1.0, cell.target_aspect_ratio)  # Ensure >= 1.0
-                dynamics_info['tau_aspect_ratio'] = tau_ar
                 dynamics_info['ar_change'] = ar_diff
+        else:
+            # Initial setup or first time - set initial targets directly
+            cell.target_area = instant_target_area
+            cell.target_orientation = instant_target_orientation
+            cell.target_aspect_ratio = instant_target_aspect_ratio
+            dynamics_info['initial_target_set'] = True
 
-        # Update the cell's target properties
-        cell.update_target_properties(
-            cell.target_orientation,
-            cell.target_aspect_ratio,
-            cell.target_area
-        )
+        # Update the cell's target properties using the existing method
+        if hasattr(cell, 'update_target_properties'):
+            cell.update_target_properties(
+                cell.target_orientation,
+                cell.target_aspect_ratio,
+                cell.target_area
+            )
+        else:
+            # Fallback: set properties directly
+            cell.target_orientation = cell.target_orientation
+            cell.target_aspect_ratio = cell.target_aspect_ratio
+            cell.target_area = cell.target_area
 
         return {
             'target_orientation': cell.target_orientation,
