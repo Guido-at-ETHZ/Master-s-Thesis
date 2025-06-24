@@ -48,49 +48,6 @@ class Grid:
             'boundary': 0.1  # Weight for staying within bounds
         }
 
-        # NEW: Gradient-based optimization parameters
-        self.energy_history = []
-        self.energy_window = 5  # Track last 5 energy values
-        self.stuck_threshold = 3  # Steps with minimal improvement = "stuck"
-        self.stuck_counter = 0
-
-        # NEW: Intensity-based optimization parameters
-        self.optimization_params = {
-            'gentle': {
-                'max_steps': 1,
-                'displacement_scale': 0.3,
-                'convergence_threshold': 0.001,
-                'movement_threshold': 1.5
-            },
-            'moderate': {
-                'max_steps': 2,
-                'displacement_scale': 0.6,
-                'convergence_threshold': 0.01,
-                'movement_threshold': 1.0
-            },
-            'active': {
-                'max_steps': 4,
-                'displacement_scale': 0.9,
-                'convergence_threshold': 0.05,
-                'movement_threshold': 0.5
-            },
-            'crisis': {
-                'max_steps': 6,
-                'displacement_scale': 1.2,
-                'convergence_threshold': 0.1,
-                'movement_threshold': 0.3
-            },
-            'escape': {  # Special mode for escaping local minima
-                'max_steps': 8,
-                'displacement_scale': 1.5,
-                'convergence_threshold': 0.2,
-                'movement_threshold': 0.1
-            }
-        }
-
-        # Adaptation parameters
-        self.adaptation_strength = 0.25  # How strongly cells adapt toward targets
-
         # Keep original grid parameters for compatibility
         self.global_pressure = 1.0
         self.adaptation_rate = 0.1
@@ -166,12 +123,16 @@ class Grid:
 
     def update_biological_adaptation(self):
         """
-        Update biological adaptation with gradient-based optimization.
+        DISABLED for event-driven system.
+        In event-driven mode, adaptations happen during transitions only.
         """
         self._adaptation_step_counter += 1
+        pass
 
-        # Always use gradient-based adaptive optimization
-        self.optimize_biological_tessellation()
+    def is_event_driven_mode(self):
+        """Check if grid is in event-driven mode."""
+        return (hasattr(self.config, 'use_event_driven_system') and
+                self.config.use_event_driven_system) or self.continuous_adaptation_disabled
 
     def preserve_current_configuration(self):
         """
@@ -193,48 +154,6 @@ class Grid:
         self.cell_seeds = config_data['seeds']
         self.territory_map = config_data['territories']
         self._update_voronoi_tessellation()
-
-    def _calculate_optimization_intensity(self, current_energy):
-        """Calculate optimization intensity based on energy dynamics."""
-
-        if len(self.energy_history) < 3:
-            return 'moderate'  # Default for early steps
-
-        # Calculate energy gradient (rate of change)
-        recent_energies = self.energy_history[-3:]
-        energy_gradient = (recent_energies[-1] - recent_energies[0]) / 2
-        energy_variance = np.var(recent_energies)
-
-        # Debug output if enabled
-        if hasattr(self.config, 'debug_adaptive') and self.config.debug_adaptive:
-            print(f"  Energy gradient: {energy_gradient:.4f}, variance: {energy_variance:.4f}")
-
-        # Detect different scenarios
-        if energy_gradient > 0.1:  # Energy increasing - crisis!
-            self.stuck_counter = 0
-            return 'crisis'
-
-        elif abs(energy_gradient) < 0.01 and energy_variance < 0.001:  # Stuck/oscillating
-            self.stuck_counter += 1
-            if self.stuck_counter > self.stuck_threshold:
-                return 'escape'  # Special mode to escape local minima
-            else:
-                return 'active'
-
-        elif energy_gradient < -0.05:  # Rapidly improving
-            self.stuck_counter = 0
-            return 'gentle'  # Don't interfere with good progress
-
-        elif current_energy < 1.0:  # Already quite good
-            self.stuck_counter = 0
-            return 'gentle'
-
-        else:  # Moderate improvement needed
-            self.stuck_counter = 0
-            return 'moderate'
-
-
-
 
     def to_alignment_angle(self, angle_rad):
         """Convert any angle to [0, π/2] flow alignment angle"""
@@ -401,32 +320,28 @@ class Grid:
 
     def optimize_cell_positions(self, iterations=2):
         """
-        Enhanced version that combines original Lloyd algorithm with biological optimization.
+        Clean Lloyd algorithm for event-driven system.
+        Moves cell seeds toward their territory centroids.
         """
         for iteration in range(iterations):
             position_updates = {}
 
             for cell_id, cell in self.cells.items():
                 if cell.territory_pixels and cell.centroid is not None:
-                    # Original Lloyd algorithm: move toward centroid
+                    # Lloyd algorithm: move toward centroid
                     display_centroid = self._comp_to_display_coords(cell.centroid[0], cell.centroid[1])
                     current_pos = self.cell_seeds[cell_id]
 
                     # Calculate movement toward centroid
                     centroid_movement = np.array(display_centroid) - np.array(current_pos)
 
-                    # Add biological adaptation force
-                    adjustments = self._calculate_local_position_adjustments()
-                    biological_force = adjustments.get(cell_id, np.array([0.0, 0.0]))
-
-                    # Combine movements (70% geometric, 30% biological)
-                    total_movement = centroid_movement * 0.7 + biological_force * 0.3
-
                     # Apply smoothing
                     smoothing_factor = 0.3
                     new_pos = (
-                        current_pos[0] * (1 - smoothing_factor) + (current_pos[0] + total_movement[0]) * smoothing_factor,
-                        current_pos[1] * (1 - smoothing_factor) + (current_pos[1] + total_movement[1]) * smoothing_factor
+                        current_pos[0] * (1 - smoothing_factor) + (
+                                    current_pos[0] + centroid_movement[0]) * smoothing_factor,
+                        current_pos[1] * (1 - smoothing_factor) + (
+                                    current_pos[1] + centroid_movement[1]) * smoothing_factor
                     )
 
                     # Constrain to grid bounds
@@ -691,11 +606,9 @@ class Grid:
 
         # Store original methods
         self._original_update_biological_adaptation = self.update_biological_adaptation
-        self._original_run_adaptive_optimization = self._run_adaptive_optimization
 
         # Replace with tracking versions
         self.update_biological_adaptation = self._tracked_update_biological_adaptation
-        self._run_adaptive_optimization = self._tracked_run_adaptive_optimization
 
         print("✅ Energy tracking enabled for Grid")
 

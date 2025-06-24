@@ -1,265 +1,241 @@
 """
-Configuration settings for the endothelial cell mechanotransduction simulation.
-
-This module defines the configuration parameters and feature toggles
-for the simulation, allowing customization of which model components
-are active and their associated parameters.
+Simplified configuration for event-driven endothelial cell simulation.
 """
+import os
+import time
 
 
 class SimulationConfig:
-    """Configuration settings for the endothelial simulation."""
+    """Clean, simplified configuration for event-driven system."""
 
     def __init__(self):
-        """Initialize configuration with default values."""
-        # ---------------
-        # temporary fix
-        # ----------------
-        # ----------------
-        # Temporal dynamics parameters
-        # ----------------
-        self.known_pressures = [15, 25, 45]
-        self.known_A_max = {15: 1.5, 25: 3.7, 45: 5.3}
-        self.initial_response = 1.0
-        self.tau_base = 60.0
-        self.lambda_scale = 0.8
-
-        # ----------------
-        # Population dynamics parameters
-        # ----------------
-        self.max_divisions = 15
-        self.proliferation_rate = 0.0006
-        self.carrying_capacity = 3000
-        self.death_rate_healthy = 0.0001
-        self.death_rate_senescent_tel = 0.00033
-        self.death_rate_senescent_stress = 0.00042
-        self.senescence_induction_factor = 0.00008
-        self.senolytic_concentration = 5.0
-        self.senolytic_efficacy_tel = 1.0
-        self.senolytic_efficacy_stress = 1.2
-        # ----------------
-        # Simulation settings
-        # ----------------
-        # Duration of simulation in minutes (18 hours = 1080 minutes)
-        self.simulation_duration = 1080
-
-        # Time step for numerical integration (in minutes)
-        self.time_step = 1.0
-
-        # Size of the 2D grid for cell placement (width, height in pixels)
-        self.grid_size = (1024, 1024)
-
-        # Number of cells at the start of simulation
+        # === CORE SIMULATION PARAMETERS ===
+        self.simulation_duration = 360  # minutes (6 hours)
+        self.time_step = 1.0  # minutes
         self.initial_cell_count = 50
+        self.grid_size = (800, 600)  # pixels
 
-        # ----------------
-        # Component toggles
-        # ----------------
-        # Enable/disable population dynamics (cell division, death)
-        self.enable_population_dynamics = True
+        # === EVENT-DRIVEN SYSTEM (MAIN FEATURE) ===
+        self.use_event_driven_system = True  # Always enabled
+        self.biological_optimization_enabled = False  # Always disabled
 
-        # Enable/disable spatial properties (cell orientation, aspect ratio)
-        self.enable_spatial_properties = True
-
-        # Enable/disable temporal dynamics (time-dependent adaptation)
-        self.enable_temporal_dynamics = True
-
-        # Enable/disable senescence mechanisms
-        self.enable_senescence = True
-
-        # Enable/disable senolytic effects (drugs that target senescent cells)
-        self.enable_senolytics = False
-
-        # Enable/disable stem cell input
-        self.enable_stem_cells = False
-
-        # ----------------
-        # Visualization settings
-        # ----------------
-        # Visualization interval (in simulation steps) - every 10 minutes
-        self.plot_interval = 10
-
-        # Whether to save plots to files
-        self.save_plots = True
-
-        # Directory for visualization output
-        self.plot_directory = "results"
-
-        # Whether to create animations
-        self.create_animations = True
-
-        # Whether to save detailed metrics to CSV
-        self.save_metrics = True
-
-        # Time units label for plot titles and axes
-        self.time_unit = "minutes"
-
-        # NEW: Biological optimization parameters
-        self.biological_optimization_enabled = True
-        self.adaptation_strength = 0.25  # How strongly cells adapt toward targets
-        self.max_displacement_per_step = 12.0  # Maximum cell movement per step
-        self.global_adaptation_interval = 3  # Steps between global optimizations
-        self.convergence_threshold = 0.001  # Energy convergence threshold
-
-        # Energy weights for different properties
-        self.energy_weight_area = 1.0
-        self.energy_weight_aspect_ratio = 0.5
-        self.energy_weight_orientation = 0.5
-
-        # ----------------
-        # Hole system parameters
-        # ----------------
-        self.enable_holes = True
-        self.max_holes = 5
-        self.hole_creation_probability_base = 0.02  # 2% base probability per timestep
-        self.hole_creation_threshold_cells = 10
-        self.hole_creation_threshold_senescence = 0.30  # 30%
-
-        # Hole size parameters
-        self.hole_size_min_factor = 0.2  # 1/5 of cell size
-        self.hole_size_max_factor = 1.0  # Same as cell size
-
-        # Hole compression parameters
-        self.hole_compression_reference_density = 15
-
-        # Multi-configuration initialization settings
-        self.use_multi_config_init = True  # Enable by default
-        self.multi_config_count = 10  # Number of configurations to test
-        self.multi_config_optimization_steps = 3  # Optimization per config
-        self.multi_config_save_analysis = True  # Save detailed analysis
-
-        # NEW: Event-driven system toggle
-        self.use_event_driven_system = False  # Set to True to use new system
-
-        # Event-driven parameters
-        self.min_reconfiguration_interval = 30.0  # minutes
+        # Event detection sensitivity
         self.pressure_change_threshold = 0.1  # Pa
-        self.senescence_threshold_change = 0.05  # 5%
         self.cell_count_change_threshold = 5  # cells
+        self.senescence_threshold_change = 0.05  # 5%
+
+        # Reconfiguration timing
+        self.min_reconfiguration_interval = 30.0  # minutes
 
         # Transition parameters
-        self.max_compression_ratio = 0.7  # Cells can compress to 70%
+        self.max_compression_ratio = 0.7  # cells can compress to 70%
         self.transition_completion_threshold = 0.95
         self.trajectory_checkpoint_interval = 20.0  # minutes
 
-        # Event-driven system parameters
-        self.use_event_driven_system = True  # Enable by default
-        self.biological_optimization_enabled = False  # Disable force-based system
+        # Multi-configuration system
+        self.multi_config_count = 10
+        self.multi_config_optimization_steps = 3
 
-        # Debug options
+        # === SIMULATION COMPONENTS ===
+        self.enable_temporal_dynamics = True
+        self.enable_spatial_properties = True
+        self.enable_population_dynamics = True
+
+        # Population features
+        self.enable_senescence = True
+        self.enable_senolytics = False
+        self.enable_stem_cells = False
+
+        # Hole system
+        self.enable_holes = True
+        self.max_holes = 5
+        self.hole_creation_probability_base = 0.02
+        self.hole_creation_threshold_cells = 10
+        self.hole_creation_threshold_senescence = 0.30
+
+        # === VISUALIZATION ===
+        self.plot_interval = 10  # steps
+        self.save_plots = True
+        self.create_animations = False
+        self.plot_directory = self._generate_plot_directory()
+
+        # === DEBUG OPTIONS ===
         self.debug_events = False
         self.debug_transitions = False
 
-    def enable_event_driven_system(self):
-        """Enable event-driven configuration system."""
-        self.use_event_driven_system = True
-        self.biological_optimization_enabled = False  # Disable continuous forces
+        # === TEMPORAL DYNAMICS ===
+        self.tau_area_minutes = 45.0
+        self.tau_orientation_minutes = 60.0
+        self.tau_aspect_ratio_minutes = 50.0
 
-    def configure_event_sensitivity(self,
-                                    pressure_threshold=0.1,
-                                    senescence_threshold=0.05,
-                                    cell_change_threshold=5):
-        """Configure event detection sensitivity."""
-        self.pressure_change_threshold = pressure_threshold
-        self.senescence_threshold_change = senescence_threshold
-        self.cell_count_change_threshold = cell_change_threshold
+        # === SENESCENCE ===
+        self.max_divisions = 50
+        self.telomere_base_length = 100
+        self.senescence_growth_factor_tel = 1.5
+        self.senescence_growth_factor_stress = 0.8
 
-    def configure_transitions(self,
-                              completion_threshold=0.95,
-                              max_compression=0.7,
-                              checkpoint_interval=20.0):
-        """Configure transition behavior."""
-        self.transition_completion_threshold = completion_threshold
-        self.max_compression_ratio = max_compression
-        self.trajectory_checkpoint_interval = checkpoint_interval
+    def _generate_plot_directory(self):
+        """Generate timestamped plot directory."""
+        timestamp = time.strftime("%Y%m%d-%H%M%S")
+        return f"results_event_driven_{timestamp}"
 
-    def disable_all_but_temporal(self):
-        """Configure to focus only on temporal dynamics."""
-        self.enable_population_dynamics = False
-        self.enable_spatial_properties = False
-        self.enable_senescence = False
-        self.enable_senolytics = False
-        self.enable_stem_cells = False
+    # === SIMPLE CONFIGURATION METHODS ===
+
+    def set_temporal_only(self):
+        """Focus only on temporal dynamics."""
         self.enable_temporal_dynamics = True
-
-    def disable_all_but_spatial(self):
-        """Configure to focus only on spatial properties."""
-        self.enable_population_dynamics = False
-        self.enable_temporal_dynamics = False
-        self.enable_senescence = False
-        self.enable_senolytics = False
-        self.enable_stem_cells = False
-        self.enable_spatial_properties = True
-
-    def enable_minimal_population(self):
-        """Configure for basic population dynamics without senescence."""
-        self.enable_population_dynamics = True
         self.enable_spatial_properties = False
-        self.enable_temporal_dynamics = False
+        self.enable_population_dynamics = False
         self.enable_senescence = False
-        self.enable_senolytics = False
-        self.enable_stem_cells = False
+        return self
 
-    def enable_all(self):
-        """Enable all simulation components."""
-        self.enable_population_dynamics = True
+    def set_spatial_only(self):
+        """Focus only on spatial properties."""
+        self.enable_temporal_dynamics = False
         self.enable_spatial_properties = True
-        self.enable_temporal_dynamics = True
+        self.enable_population_dynamics = False
+        self.enable_senescence = False
+        return self
+
+    def set_population_only(self):
+        """Focus only on population dynamics."""
+        self.enable_temporal_dynamics = False
+        self.enable_spatial_properties = False
+        self.enable_population_dynamics = True
         self.enable_senescence = True
-        self.enable_senolytics = True
-        self.enable_stem_cells = True
+        return self
+
+    def set_full_simulation(self):
+        """Enable all simulation components."""
+        self.enable_temporal_dynamics = True
+        self.enable_spatial_properties = True
+        self.enable_population_dynamics = True
+        self.enable_senescence = True
+        return self
+
+    def set_minimal(self):
+        """Minimal simulation - basic tessellation only."""
+        self.enable_temporal_dynamics = False
+        self.enable_spatial_properties = False
+        self.enable_population_dynamics = False
+        self.enable_senescence = False
+        self.enable_holes = False
+        return self
+
+    # === EVENT-DRIVEN CONFIGURATION ===
+
+    def set_event_sensitivity(self, pressure=0.1, cells=5, senescence=0.05):
+        """Set event detection sensitivity."""
+        self.pressure_change_threshold = pressure
+        self.cell_count_change_threshold = cells
+        self.senescence_threshold_change = senescence
+        return self
+
+    def set_transition_params(self, compression=0.7, completion=0.95, interval=20.0):
+        """Set transition parameters."""
+        self.max_compression_ratio = compression
+        self.transition_completion_threshold = completion
+        self.trajectory_checkpoint_interval = interval
+        return self
+
+    def enable_debug(self, events=True, transitions=True):
+        """Enable debug output."""
+        self.debug_events = events
+        self.debug_transitions = transitions
+        return self
+
+    # === QUICK SETUPS ===
+
+    def quick_test(self):
+        """Quick test configuration - small, fast."""
+        self.initial_cell_count = 20
+        self.simulation_duration = 120  # 2 hours
+        self.multi_config_count = 5
+        self.enable_holes = False
+        self.create_animations = False
+        return self
+
+    def research_quality(self):
+        """High-quality research configuration."""
+        self.initial_cell_count = 100
+        self.simulation_duration = 720  # 12 hours
+        self.multi_config_count = 20
+        self.multi_config_optimization_steps = 5
+        self.create_animations = True
+        return self
+
+    def get_summary(self):
+        """Get configuration summary."""
+        return {
+            'mode': 'event-driven',
+            'components': [
+                name for name, enabled in [
+                    ('temporal', self.enable_temporal_dynamics),
+                    ('spatial', self.enable_spatial_properties),
+                    ('population', self.enable_population_dynamics),
+                    ('senescence', self.enable_senescence),
+                    ('holes', self.enable_holes)
+                ] if enabled
+            ],
+            'duration': f"{self.simulation_duration} min ({self.simulation_duration/60:.1f}h)",
+            'cells': self.initial_cell_count,
+            'pressure_threshold': self.pressure_change_threshold,
+            'multi_configs': self.multi_config_count,
+            'debug': self.debug_events or self.debug_transitions
+        }
 
     def describe(self):
-        """Generate a text description of the current configuration."""
-        status = []
-        status.append("Endothelial Simulation Configuration:")
-        status.append("--------------------------------")
-        status.append(
-            f"Simulation duration: {self.simulation_duration} {self.time_unit} ({self.simulation_duration / 60:.1f} hours)")
-        status.append(f"Time step: {self.time_step} {self.time_unit}")
-        status.append(f"Grid size: {self.grid_size[0]} x {self.grid_size[1]} pixels")
-        status.append(f"Initial cells: {self.initial_cell_count}")
-        status.append(f"Visualization interval: Every {self.plot_interval} {self.time_unit}")
-        status.append("\nActive Components:")
-        status.append(f"- Population dynamics: {'✓' if self.enable_population_dynamics else '✗'}")
-        status.append(f"- Spatial properties: {'✓' if self.enable_spatial_properties else '✗'}")
-        status.append(f"- Temporal dynamics: {'✓' if self.enable_temporal_dynamics else '✗'}")
-        status.append(f"- Senescence: {'✓' if self.enable_senescence else '✗'}")
-        status.append(f"- Senolytics: {'✓' if self.enable_senolytics else '✗'}")
-        status.append(f"- Stem cells: {'✓' if self.enable_stem_cells else '✗'}")
-        status.append(f"- Holes: {'✓' if self.enable_holes else '✗'}")
+        """Generate description of configuration."""
+        summary = self.get_summary()
 
-        return "\n".join(status)
+        desc = f"""
+🧬 Event-Driven Endothelial Cell Simulation Configuration
 
-    def get_time_in_hours(self, minutes):
-        """Convert simulation time from minutes to hours for display."""
-        return minutes / 60.0
+📊 Simulation Settings:
+   Duration: {summary['duration']}
+   Initial cells: {summary['cells']}
+   Grid size: {self.grid_size[0]}×{self.grid_size[1]}
+   Time step: {self.time_step} min
 
+🔄 Event-Driven System:
+   Pressure threshold: {self.pressure_change_threshold} Pa
+   Min reconfig interval: {self.min_reconfiguration_interval} min
+   Max compression: {self.max_compression_ratio}
+   Multi-configurations: {self.multi_config_count}
 
-# Create a default configuration instance
-default_config = SimulationConfig()
+🧪 Enabled Components: {', '.join(summary['components'])}
+
+🐛 Debug: {'ON' if summary['debug'] else 'OFF'}
+"""
+        return desc.strip()
 
 
-# Example configurations for different simulation types
-def create_temporal_only_config():
-    """Create a configuration focused only on temporal dynamics."""
-    config = SimulationConfig()
-    config.disable_all_but_temporal()
-    config.plot_directory = "results_temporal"
-    return config
-
-
-def create_spatial_only_config():
-    """Create a configuration focused only on spatial properties."""
-    config = SimulationConfig()
-    config.disable_all_but_spatial()
-    config.plot_directory = "results_spatial"
-    return config
-
+# === SIMPLE CONFIGURATION CREATION FUNCTIONS ===
 
 def create_full_config():
-    """Create a configuration with all components enabled."""
-    config = SimulationConfig()
-    #config.enable_all()
-    return config
+    """Create full event-driven configuration."""
+    return SimulationConfig().set_full_simulation()
 
+def create_temporal_only_config():
+    """Create temporal-only configuration."""
+    return SimulationConfig().set_temporal_only()
+
+def create_spatial_only_config():
+    """Create spatial-only configuration."""
+    return SimulationConfig().set_spatial_only()
+
+def create_population_only_config():
+    """Create population-only configuration."""
+    return SimulationConfig().set_population_only()
+
+def create_minimal_config():
+    """Create minimal configuration."""
+    return SimulationConfig().set_minimal()
+
+def create_test_config():
+    """Create quick test configuration."""
+    return SimulationConfig().set_full_simulation().quick_test()
+
+def create_research_config():
+    """Create research-quality configuration."""
+    return SimulationConfig().set_full_simulation().research_quality()
