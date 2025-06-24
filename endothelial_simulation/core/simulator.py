@@ -434,12 +434,7 @@ class Simulator:
         current_input = self.update_input_value()
 
         # Detect events (pressure changes, senescence, holes)
-        events = self.event_detector.detect_events(
-            current_time=self.time,
-            current_pressure=current_input,
-            grid=self.grid,
-            last_check_time=self.time - dt
-        )
+        events = self.event_detector.detect_events(self)
 
         # Process any detected events
         for event in events:
@@ -568,7 +563,7 @@ class Simulator:
 
     def _process_event(self, event):
         """Process a detected event by triggering reconfiguration."""
-        print(f"🔍 Processing event: {event.event_type.name} at t={self.time/60:.1f}h")
+        print(f"🔍 Processing event: {event.event_type.name} at t={self.time / 60:.1f}h")
 
         # Check minimum interval between reconfigurations
         time_since_last = self.time - self.last_reconfiguration_time
@@ -578,40 +573,47 @@ class Simulator:
             print(f"   ⏳ Skipping - too soon (last: {time_since_last:.1f}min ago)")
             return
 
-        # Generate new configuration for current conditions
-        current_pressure = self.update_input_value()
-        hole_count = len(self.grid.holes) if hasattr(self.grid, 'holes') else 0
-        cell_counts = self.grid.count_cells_by_type()
-        senescent_count = cell_counts.get('telomere_senescent', 0) + cell_counts.get('stress_senescent', 0)
+        # Generate reconfiguration using the correct method
+        try:
+            print(f"   🔄 Triggering reconfiguration...")
 
-        new_config = self.configuration_manager.generate_configuration_for_conditions(
-            pressure=current_pressure,
-            hole_count=hole_count,
-            senescent_count=senescent_count
-        )
-
-        if new_config:
-            # Start transition to new configuration
-            self.transition_controller.start_transition(
-                target_config=new_config,
-                current_time=self.time
+            reconfiguration_result = self.configuration_manager.generate_reconfiguration(
+                event=event,
+                num_configurations=getattr(self.config, 'multi_config_count', 5),
+                optimization_iterations=3
             )
 
-            self.last_reconfiguration_time = self.time
+            # Check if reconfiguration provides meaningful improvement
+            energy_improvement = reconfiguration_result.get('energy_improvement', 0)
 
-            # Record event
-            event_record = {
-                'time': self.time,
-                'event': event.event_type.name,
-                'pressure': current_pressure,
-                'energy': new_config.energy,
-                'cell_count': len(self.grid.cells)
-            }
+            if energy_improvement > 0.001:  # Meaningful improvement threshold
+                # Start transition to new configuration
+                self.transition_controller.start_transition(
+                    reconfiguration_result=reconfiguration_result,
+                    current_time=self.time
+                )
 
-            self.configuration_history.append(event_record)
-            self.event_history.append(event_record)
+                self.last_reconfiguration_time = self.time
 
-            print(f"   ✅ Started transition to new configuration (energy: {new_config.energy:.4f})")
+                # Record event
+                event_record = {
+                    'time': self.time,
+                    'event': event.event_type.name,
+                    'pressure': self.update_input_value(),
+                    'energy_improvement': energy_improvement,
+                    'cell_count': len(self.grid.cells)
+                }
+
+                self.configuration_history.append(event_record)
+                self.event_history.append(event_record)
+
+                print(f"   ✅ Reconfiguration started (ΔE: {energy_improvement:.4f})")
+            else:
+                print(f"   ❌ No beneficial reconfiguration found (ΔE: {energy_improvement:.4f})")
+
+        except Exception as e:
+            print(f"   ⚠️  Reconfiguration failed: {e}")
+            # Continue simulation even if reconfiguration fails
 
     # =============================================================================
     # UTILITY METHODS
@@ -625,12 +627,139 @@ class Simulator:
             self.grid.apply_shear_stress_field(shear_stress_function, duration)
 
     def _execute_population_actions(self, actions):
-        """Execute population actions."""
-        for action in actions:
-            if action['type'] == 'add_cell':
-                self.grid.add_cell(**action['params'])
-            elif action['type'] == 'remove_cell':
-                self.grid.remove_cell(action['params']['cell_id'])
+        """
+        Execute population actions from PopulationDynamicsModel.
+
+        Args:
+            actions: Dictionary with 'births' and 'deaths' lists
+        """
+        if not actions or not isinstance(actions, dict):
+            return
+
+        # Process births (new cells)
+        births = actions.get('births', [])
+        for birth in births:
+            if birth['type'] == 'healthy':
+                self._add_healthy_cell(birth['divisions'])
+            elif birth['type'] == 'senescent':
+                self._add_senescent_cell(birth['cause'])
+
+        # Process deaths (remove cells)
+        deaths = actions.get('deaths', [])
+        for death in deaths:
+            if death['type'] == 'healthy':
+                self._remove_healthy_cells(death['divisions'], death['count'])
+            elif death['type'] == 'senescent':
+                self._remove_senescent_cells(death['cause'], death['count'])
+
+        # Log population changes
+        if births or deaths:
+            total_deaths = sum(d.get('count', 1) for d in deaths)
+            print(f"  Population: +{len(births)} births, -{total_deaths} deaths")
+
+    def _add_healthy_cell(self, divisions):
+        """Add a healthy cell with specified division count."""
+        try:
+            if hasattr(self.grid, 'add_cell'):
+                self.grid.add_cell(divisions=divisions, is_senescent=False)
+            else:
+                self._create_cell_manually(divisions=divisions, is_senescent=False)
+        except Exception as e:
+            print(f"Warning: Could not add healthy cell: {e}")
+
+    def _add_senescent_cell(self, cause):
+        """Add a senescent cell with specified cause."""
+        try:
+            if hasattr(self.grid, 'add_cell'):
+                self.grid.add_cell(is_senescent=True, senescence_cause=cause)
+            else:
+                self._create_cell_manually(is_senescent=True, senescence_cause=cause)
+        except Exception as e:
+            print(f"Warning: Could not add senescent cell: {e}")
+
+    def _remove_healthy_cells(self, divisions, count):
+        """Remove specified number of healthy cells with given division count."""
+        if count <= 0:
+            return
+
+        # Find matching cells
+        candidates = [
+            cell_id for cell_id, cell in self.grid.cells.items()
+            if not cell.is_senescent and getattr(cell, 'divisions', 0) == divisions
+        ]
+
+        # Remove up to 'count' cells
+        removed = 0
+        for cell_id in candidates:
+            if removed >= count:
+                break
+            if self.grid.remove_cell(cell_id):
+                removed += 1
+
+    def _remove_senescent_cells(self, cause, count):
+        """Remove specified number of senescent cells with given cause."""
+        if count <= 0:
+            return
+
+        # Find matching cells
+        candidates = [
+            cell_id for cell_id, cell in self.grid.cells.items()
+            if cell.is_senescent and getattr(cell, 'senescence_cause', None) == cause
+        ]
+
+        # Remove up to 'count' cells
+        removed = 0
+        for cell_id in candidates:
+            if removed >= count:
+                break
+            if self.grid.remove_cell(cell_id):
+                removed += 1
+
+    def _create_cell_manually(self, **cell_properties):
+        """
+        Fallback method to create a cell manually if grid.add_cell doesn't exist.
+        """
+        try:
+            from endothelial_simulation.core.cell import Cell
+            import uuid
+
+            # Generate unique cell ID
+            cell_id = str(uuid.uuid4())
+
+            # Create cell with basic properties
+            cell = Cell(
+                cell_id=cell_id,
+                position=(
+                    np.random.uniform(0, self.grid.width),
+                    np.random.uniform(0, self.grid.height)
+                ),
+                **cell_properties
+            )
+
+            # Add to grid
+            self.grid.cells[cell_id] = cell
+
+            # Initialize spatial properties if model exists
+            if 'spatial' in self.models:
+                current_pressure = self.update_input_value()
+                spatial_model = self.models['spatial']
+
+                cell.target_area = spatial_model.calculate_target_area(
+                    current_pressure, cell.is_senescent, getattr(cell, 'senescence_cause', None)
+                )
+                cell.target_aspect_ratio = spatial_model.calculate_target_aspect_ratio(
+                    current_pressure, cell.is_senescent
+                )
+                cell.target_orientation = spatial_model.calculate_target_orientation(
+                    current_pressure, cell.is_senescent
+                )
+
+            # Update tessellation
+            if hasattr(self.grid, '_update_voronoi_tessellation'):
+                self.grid._update_voronoi_tessellation()
+
+        except Exception as e:
+            print(f"Warning: Manual cell creation failed: {e}")
 
     # =============================================================================
     # STATE RECORDING AND ANALYSIS

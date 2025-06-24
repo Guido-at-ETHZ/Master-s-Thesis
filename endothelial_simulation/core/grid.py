@@ -1041,6 +1041,97 @@ class Grid:
             'selected_idx': best_idx
         }
 
+    def get_cell_properties(self):
+        """
+        Get comprehensive cell properties for all cells in the grid.
+
+        Returns:
+            Dictionary containing various cell property arrays and statistics
+        """
+        if not self.cells:
+            return {
+                'areas': [],
+                'aspect_ratios': [],
+                'orientations': [],
+                'target_areas': [],
+                'target_aspect_ratios': [],
+                'target_orientations': [],
+                'mean_area': 0.0,
+                'std_area': 0.0,
+                'mean_aspect_ratio': 1.0,
+                'std_aspect_ratio': 0.0,
+                'mean_orientation': 0.0,
+                'std_orientation': 0.0,
+                'senescent_count': 0,
+                'healthy_count': 0
+            }
+
+        # Collect properties from all cells
+        areas = []
+        aspect_ratios = []
+        orientations_deg = []
+        target_areas = []
+        target_aspect_ratios = []
+        target_orientations_deg = []
+        senescent_count = 0
+        healthy_count = 0
+
+        for cell in self.cells.values():
+            # Basic counts
+            if cell.is_senescent:
+                senescent_count += 1
+            else:
+                healthy_count += 1
+
+            # Actual properties
+            areas.append(cell.actual_area)
+            aspect_ratios.append(cell.actual_aspect_ratio)
+
+            # Convert orientation to degrees and normalize
+            orientation_deg = np.degrees(cell.actual_orientation) % 180
+            if orientation_deg > 90:
+                orientation_deg = 180 - orientation_deg
+            orientations_deg.append(orientation_deg)
+
+            # Target properties
+            target_areas.append(getattr(cell, 'target_area', cell.actual_area))
+            target_aspect_ratios.append(getattr(cell, 'target_aspect_ratio', cell.actual_aspect_ratio))
+
+            target_orientation_deg = np.degrees(getattr(cell, 'target_orientation', cell.actual_orientation)) % 180
+            if target_orientation_deg > 90:
+                target_orientation_deg = 180 - target_orientation_deg
+            target_orientations_deg.append(target_orientation_deg)
+
+        # Convert to numpy arrays for statistics
+        areas = np.array(areas)
+        aspect_ratios = np.array(aspect_ratios)
+        orientations_deg = np.array(orientations_deg)
+        target_areas = np.array(target_areas)
+        target_aspect_ratios = np.array(target_aspect_ratios)
+        target_orientations_deg = np.array(target_orientations_deg)
+
+        return {
+            # Raw data arrays
+            'areas': areas.tolist(),
+            'aspect_ratios': aspect_ratios.tolist(),
+            'orientations': orientations_deg.tolist(),
+            'target_areas': target_areas.tolist(),
+            'target_aspect_ratios': target_aspect_ratios.tolist(),
+            'target_orientations': target_orientations_deg.tolist(),
+
+            # Statistics
+            'mean_area': float(np.mean(areas)),
+            'std_area': float(np.std(areas)),
+            'mean_aspect_ratio': float(np.mean(aspect_ratios)),
+            'std_aspect_ratio': float(np.std(aspect_ratios)),
+            'mean_orientation': float(np.mean(orientations_deg)),
+            'std_orientation': float(np.std(orientations_deg)),
+
+            # Counts
+            'senescent_count': senescent_count,
+            'healthy_count': healthy_count,
+            'total_count': len(self.cells)
+        }
     def _reconstruct_configuration(self, cell_data):
         """
         Reconstruct a specific configuration from stored cell data.
@@ -1077,6 +1168,8 @@ class Grid:
         # Run brief optimization to settle
         self.optimize_cell_positions(iterations=2)
 
+
+
     def save_configuration_analysis(self, configurations_data, filename=None):
         """
         Save detailed analysis of configuration comparison with cell parameters.
@@ -1088,6 +1181,9 @@ class Grid:
         """
         import pandas as pd
         import matplotlib.pyplot as plt
+        import os
+
+        os.makedirs(self.config.plot_directory, exist_ok=True)
 
         if filename is None:
             timestamp = time.strftime("%Y%m%d-%H%M%S")

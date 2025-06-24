@@ -74,6 +74,42 @@ class SimulationConfig:
         self.senescence_growth_factor_tel = 1.5
         self.senescence_growth_factor_stress = 0.8
 
+        # These are based on experimental data - adjust values as needed
+        self.known_pressures = [0.0, 1.4]  # Pressure values in Pa
+        self.known_A_max = {
+            0.0: 1.0,  # A_max at 0 Pa (baseline)
+            1.4: 2.5  # A_max at 1.4 Pa (example value - adjust based on your data)
+        }
+
+        # Initial response value
+        self.initial_response = 1.0
+
+        # Time constant parameters
+        self.tau_base = 1.0  # Base time constant (minutes)
+        self.lambda_scale = 0.5  # Lambda scaling parameter
+
+        # === TEMPORAL DYNAMICS PARAMETERS ===
+        self.known_pressures = [0.0, 1.4]
+        self.known_A_max = {
+            0.0: 1.0,  # A_max at 0 Pa (baseline)
+            1.4: 2.5  # A_max at 1.4 Pa
+        }
+        self.initial_response = 1.0
+        self.tau_base = 60.0  # Base time constant (minutes)
+        self.lambda_scale = 0.3  # Lambda scaling parameter
+
+        # === POPULATION DYNAMICS PARAMETERS ===
+        self.max_divisions = 15
+        self.proliferation_rate = 0.0006
+        self.carrying_capacity = 3000
+        self.death_rate_healthy = 0.0001
+        self.death_rate_senescent_tel = 0.00033
+        self.death_rate_senescent_stress = 0.00042
+        self.senescence_induction_factor = 0.0000008
+        self.senolytic_concentration = 0.0
+        self.senolytic_efficacy_tel = 1.0
+        self.senolytic_efficacy_stress = 1.2
+
     def _generate_plot_directory(self):
         """Generate timestamped plot directory."""
         timestamp = time.strftime("%Y%m%d-%H%M%S")
@@ -104,6 +140,7 @@ class SimulationConfig:
         self.enable_population_dynamics = True
         self.enable_senescence = True
         return self
+
 
     def set_full_simulation(self):
         """Enable all simulation components."""
