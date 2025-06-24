@@ -314,7 +314,6 @@ Examples:
     # === CREATE CONFIGURATION BASED ON MODE ===
     if args.mode == 'full':
         config = create_full_config()
-        config.enable_all()
     elif args.mode == 'temporal':
         config = create_temporal_only_config()
     elif args.mode == 'spatial':
@@ -334,7 +333,7 @@ Examples:
     config.create_animations = args.create_animations
 
     # Event-driven system configuration
-    config.enable_event_driven_system()
+    config.use_event_driven_system = True
     config.pressure_change_threshold = args.pressure_threshold
     config.min_reconfiguration_interval = args.min_reconfig_interval
     config.max_compression_ratio = args.max_compression

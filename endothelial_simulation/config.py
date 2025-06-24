@@ -232,6 +232,10 @@ def create_minimal_config():
     """Create minimal configuration."""
     return SimulationConfig().set_minimal()
 
+def enable_all(self):
+    """Enable all simulation components (backward compatibility method)."""
+    return self.set_full_simulation()
+
 def create_test_config():
     """Create quick test configuration."""
     return SimulationConfig().set_full_simulation().quick_test()
