@@ -26,7 +26,7 @@ class SimulationConfig:
         self.senescence_threshold_change = 0.05  # 5%
 
         # Reconfiguration timing
-        self.min_reconfiguration_interval = 30.0  # minutes
+        self.min_reconfiguration_interval = 999.0  # minutes
 
         # Transition parameters
         self.max_compression_ratio = 0.7  # cells can compress to 70%

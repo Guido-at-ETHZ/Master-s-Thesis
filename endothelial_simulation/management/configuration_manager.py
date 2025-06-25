@@ -257,7 +257,7 @@ class ConfigurationManager:
     
     def _update_cell_targets_for_current_conditions(self):
         """Update cell targets based on current pressure and conditions."""
-        if 'spatial' not in hasattr(self, 'simulator') or not hasattr(self.simulator, 'models'):
+        if not hasattr(self, 'simulator') or not hasattr(self.simulator, 'models') or 'spatial' not in self.simulator.models:
             return
             
         # This will be called with access to simulator to get current pressure

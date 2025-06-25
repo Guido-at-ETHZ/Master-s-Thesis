@@ -464,7 +464,7 @@ class Simulator:
         # Update population dynamics
         if 'population' in self.models and self.config.enable_population_dynamics:
             model = self.models['population']
-            stem_cell_rate = 10 if self.config.enable_stem_cells else 0
+            stem_cell_rate = self.config.stem_cell_rate if self.config.enable_stem_cells else 0
             model.update_from_cells(self.grid.cells, dt, current_input, stem_cell_rate)
             actions = model.synchronize_cells(self.grid.cells)
             self._execute_population_actions(actions)
