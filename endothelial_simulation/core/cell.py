@@ -413,11 +413,12 @@ class Cell:
             tel_prob = ((self.divisions - 0.7 * config.max_divisions) /
                         (0.3 * config.max_divisions)) * 0.5
 
-        # Stress-induced senescence probability (affected by compression)
+        # Stress-induced senescence probability (ONLY from shear stress)
         stress_factor = self._calculate_stress_factor(config)
-        # More compressed cells are more likely to become senescent
-        compression_stress = max(0, 2.0 - self.compression_ratio)
-        stress_prob = min((stress_factor + compression_stress) * self.stress_exposure_time * config.time_step, 0.95)
+
+        # REMOVED: compression_stress = max(0, 2.0 - self.compression_ratio)
+        # Now only using shear stress, not compression
+        stress_prob = min(stress_factor * self.stress_exposure_time * config.time_step, 0.95)
 
         return {'telomere': tel_prob, 'stress': stress_prob}
 
