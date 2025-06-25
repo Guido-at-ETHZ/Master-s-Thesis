@@ -14,7 +14,7 @@ class SimulationConfig:
         self.time_step = 1.0  # minutes
         self.time_unit = "minutes"
         self.initial_cell_count = 50
-        self.grid_size = (800, 600)  # pixels
+        self.grid_size = (1024, 1024)  # pixels
 
         # === EVENT-DRIVEN SYSTEM (MAIN FEATURE) ===
         self.use_event_driven_system = True  # Always enabled
