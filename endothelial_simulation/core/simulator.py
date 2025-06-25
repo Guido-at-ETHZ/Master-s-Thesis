@@ -906,6 +906,70 @@ class Simulator:
 
         return filepath
 
+
+    def get_safe_final_statistics(self):
+        """
+        Get final statistics safely, avoiding memory/overflow issues.
+
+        Returns:
+            Dictionary with safe statistics
+        """
+        try:
+            stats = {}
+
+            # Basic cell counts (safe)
+            total_cells = len(self.grid.cells)
+            stats['total_cells'] = total_cells
+
+            # Count senescent cells safely
+            senescent_count = 0
+            healthy_count = 0
+
+            for cell in self.grid.cells.values():
+                if getattr(cell, 'is_senescent', False):
+                    senescent_count += 1
+                else:
+                    healthy_count += 1
+
+            stats['healthy_cells'] = healthy_count
+            stats['senescent_cells'] = senescent_count
+
+            # Safe energy calculation
+            try:
+                biological_energy = self.grid.calculate_biological_energy()
+                # Cap energy to prevent overflow
+                biological_energy = min(biological_energy, 1e6)
+                stats['biological_energy'] = biological_energy
+            except Exception as e:
+                stats['biological_energy'] = 0.0
+                print(f"Could not calculate biological energy: {e}")
+
+            # Safe packing efficiency
+            try:
+                grid_area = self.grid.width * self.grid.height
+                stats['packing_efficiency'] = min(total_cells / grid_area, 1.0) if grid_area > 0 else 0.0
+            except Exception as e:
+                stats['packing_efficiency'] = 0.0
+                print(f"Could not calculate packing efficiency: {e}")
+
+            # Event-driven specific stats (safe)
+            stats['reconfigurations_count'] = len(getattr(self, 'configuration_history', []))
+            stats['events_count'] = len(getattr(self, 'event_history', []))
+
+            return stats
+
+        except Exception as e:
+            print(f"Error getting safe statistics: {e}")
+            return {
+                'total_cells': len(self.grid.cells) if hasattr(self, 'grid') else 0,
+                'healthy_cells': 0,
+                'senescent_cells': 0,
+                'biological_energy': 0.0,
+                'packing_efficiency': 0.0,
+                'reconfigurations_count': 0,
+                'events_count': 0
+            }
+
     def get_best_config_parameters(self, save_excel=False, excel_path=None):
         """
         Show parameters for the best configuration.
@@ -1025,14 +1089,3 @@ class Simulator:
         else:
             print("Energy tracking not enabled")
             return None
-
-    def create_comprehensive_plots(self, save_individual=True, prefix="simulation"):
-        """Create comprehensive plots using the Plotter class."""
-        try:
-            plotter = Plotter(self.config)
-            figures = plotter.create_comprehensive_plots(self.history, save_individual=save_individual)
-            print(f"📊 Created {len(figures)} comprehensive plots")
-            return figures
-        except Exception as e:
-            print(f"⚠️  Plot creation failed: {e}")
-            return []

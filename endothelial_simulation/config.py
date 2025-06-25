@@ -12,6 +12,7 @@ class SimulationConfig:
         # === CORE SIMULATION PARAMETERS ===
         self.simulation_duration = 360  # minutes (6 hours)
         self.time_step = 1.0  # minutes
+        self.time_unit = "minutes"
         self.initial_cell_count = 50
         self.grid_size = (800, 600)  # pixels
 

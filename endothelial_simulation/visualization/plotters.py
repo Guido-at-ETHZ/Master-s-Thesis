@@ -1321,7 +1321,7 @@ class Plotter:
             grid.territory_map = original_territories
             grid._update_voronoi_tessellation()
 
-    def create_all_plots(self, simulator, history=None, prefix=None):
+    def create_all_plots(self, simulator, prefix=None):
         """
         Create all available plots for the simulation.
         MODIFIED: Now automatically includes energy analysis.
@@ -1334,6 +1334,27 @@ class Plotter:
         Returns:
             List of created figure objects
         """
+
+        # Use simulator history
+        history = simulator.history
+
+        # Check if simulator has history
+        if not history:
+            print("⚠️  No simulation history available")
+            return []
+
+        # Use timestamp prefix if not provided
+        if prefix is None:
+            import time
+            prefix = time.strftime("%Y%m%d-%H%M%S")
+
+        # Create output directory
+        os.makedirs(self.config.plot_directory, exist_ok=True)
+
+        # Create figures
+        figures = []
+
+        print(f"📊 Creating all plots with prefix: {prefix}")
         # Use simulator history if not provided
         if history is None:
             history = simulator.history
@@ -1520,113 +1541,152 @@ class Plotter:
 
     def _plot_energy_analysis(self, simulator, save_path=None):
         """
-        NEW METHOD: Add this to your Plotter class.
-        Creates energy analysis plot using existing energy system.
+        FIXED: Memory-safe energy analysis plot that handles large cell counts.
         """
         try:
             import matplotlib.pyplot as plt
             from matplotlib.gridspec import GridSpec
 
-            # Get energy summary
-            summary = simulator.grid.get_energy_summary()
+            print(f"Creating energy analysis for {len(simulator.grid.cells)} cells...")
 
-            if 'error' in summary:
-                print(f"Energy tracking not available: {summary['error']}")
+            # Get basic energy information safely
+            try:
+                if hasattr(simulator.grid, 'get_energy_summary'):
+                    summary = simulator.grid.get_energy_summary()
+                else:
+                    print("Energy summary not available")
+                    return None
+
+                if 'error' in summary:
+                    print(f"Energy tracking not available: {summary['error']}")
+                    return None
+            except Exception as e:
+                print(f"Could not get energy summary: {e}")
                 return None
 
-            # Create figure
-            fig = plt.figure(figsize=(14, 10))
-            gs = GridSpec(2, 3, figure=fig, hspace=0.3, wspace=0.3)
+            # Create a simple, safe energy plot
+            fig = plt.figure(figsize=(12, 8))
+            gs = GridSpec(2, 2, figure=fig, hspace=0.3, wspace=0.3)
 
-            # 1. Energy breakdown pie chart
+            # 1. Basic energy information (text-based to avoid large calculations)
             ax1 = fig.add_subplot(gs[0, 0])
+            ax1.axis('off')
 
-            area_energy = summary.get('current_area_energy', 0)
-            ar_energy = summary.get('current_ar_energy', 0)
-            orient_energy = summary.get('current_orientation_energy', 0)
-            total_energy = summary.get('current_total_energy', 0)
+            # Safely get basic statistics
+            total_cells = len(simulator.grid.cells)
+            biological_energy = getattr(simulator.grid, 'calculate_biological_energy', lambda: 0)()
 
-            if total_energy > 0:
-                energies = [area_energy, ar_energy, orient_energy]
-                labels = ['Area', 'Aspect Ratio', 'Orientation']
-                colors = ['skyblue', 'lightcoral', 'lightgreen']
+            # Limit precision to avoid overflow
+            energy_per_cell = biological_energy / max(1, total_cells) if total_cells > 0 else 0
+            energy_per_cell = min(energy_per_cell, 1e6)  # Cap to prevent overflow
 
-                # Remove zeros
-                non_zero = [(e, l, c) for e, l, c in zip(energies, labels, colors) if e > 0]
-                if non_zero:
-                    energies, labels, colors = zip(*non_zero)
-                    ax1.pie(energies, labels=labels, colors=colors, autopct='%1.1f%%')
+            stats_text = f"""Energy Statistics
 
-            ax1.set_title(f'Energy Breakdown\nTotal: {total_energy:.4f}')
+    Total Cells: {total_cells:,}
+    Bio Energy: {biological_energy:.4f}
+    Energy/Cell: {energy_per_cell:.6f}
 
-            # 2. Energy per cell
+    Grid Size: {simulator.grid.width}×{simulator.grid.height}
+    Time: {simulator.time:.1f} min"""
+
+            ax1.text(0.05, 0.95, stats_text, transform=ax1.transAxes, fontsize=11,
+                     verticalalignment='top', fontfamily='monospace',
+                     bbox=dict(boxstyle='round,pad=0.5', facecolor='lightblue', alpha=0.8))
+            ax1.set_title('Energy Overview', fontsize=12)
+
+            # 2. Cell distribution (safe histogram)
             ax2 = fig.add_subplot(gs[0, 1])
-            cell_count = summary.get('cell_count', 1)
-            energy_per_cell = summary.get('energy_per_cell', 0)
+            try:
+                # Sample cells if there are too many to avoid memory issues
+                cell_sample = list(simulator.grid.cells.values())
+                if len(cell_sample) > 1000:  # Limit sample size
+                    import random
+                    cell_sample = random.sample(cell_sample, 1000)
 
-            ax2.bar(['Energy per Cell'], [energy_per_cell], color='orange', alpha=0.7)
-            ax2.set_title(f'Energy Efficiency\n({cell_count} cells)')
-            ax2.set_ylabel('Energy per Cell')
-
-            # 3. Component percentages
-            ax3 = fig.add_subplot(gs[0, 2])
-            if 'component_breakdown' in summary:
-                comp = summary['component_breakdown']
-                categories = ['Area', 'Aspect Ratio', 'Orientation']
-                percentages = [comp.get('area_fraction', 0) * 100,
-                               comp.get('ar_fraction', 0) * 100,
-                               comp.get('orientation_fraction', 0) * 100]
-
-                ax3.bar(categories, percentages, color=['blue', 'red', 'green'], alpha=0.7)
-                ax3.set_ylabel('Percentage (%)')
-                ax3.set_title('Component Distribution')
-                ax3.set_ylim(0, 100)
-
-            # 4. Energy evolution (bottom spanning all columns)
-            ax4 = fig.add_subplot(gs[1, :])
-
-            if hasattr(simulator.grid, 'energy_tracker') and simulator.grid.energy_tracker['history']:
-                history = simulator.grid.energy_tracker['history']
-
-                if len(history) > 1:
-                    times = [h.get('timestamp', i) for i, h in enumerate(history)]
-                    total_energies = [h.get('total_energy', 0) for h in history]
-                    area_energies = [h.get('area_energy', 0) for h in history]
-                    ar_energies = [h.get('aspect_ratio_energy', 0) for h in history]
-                    orient_energies = [h.get('orientation_energy', 0) for h in history]
-
-                    ax4.plot(times, total_energies, 'k-', linewidth=3, label='Total')
-                    ax4.plot(times, area_energies, 'b-', linewidth=2, label='Area', alpha=0.7)
-                    ax4.plot(times, ar_energies, 'r-', linewidth=2, label='Aspect Ratio', alpha=0.7)
-                    ax4.plot(times, orient_energies, 'g-', linewidth=2, label='Orientation', alpha=0.7)
-
-                    ax4.set_xlabel('Recording Number')
-                    ax4.set_ylabel('Energy')
-                    ax4.set_title('Energy Evolution Over Time')
-                    ax4.legend()
-                    ax4.grid(True, alpha=0.3)
+                if cell_sample:
+                    areas = [cell.area for cell in cell_sample if hasattr(cell, 'area') and cell.area < 1e6]
+                    if areas:
+                        ax2.hist(areas, bins=min(30, len(areas) // 10), alpha=0.7, color='skyblue', edgecolor='black')
+                        ax2.set_xlabel('Cell Area (pixels²)')
+                        ax2.set_ylabel('Frequency')
+                        ax2.set_title(f'Area Distribution\n(Sample of {len(areas)} cells)')
+                    else:
+                        ax2.text(0.5, 0.5, 'No area data available', ha='center', va='center', transform=ax2.transAxes)
+                        ax2.set_title('Area Distribution')
                 else:
-                    ax4.text(0.5, 0.5, f'Current Energy: {total_energy:.4f}',
-                             ha='center', va='center', transform=ax4.transAxes, fontsize=14)
-                    ax4.set_title('Energy State')
-            else:
-                ax4.text(0.5, 0.5, f'Current Energy: {total_energy:.4f}',
-                         ha='center', va='center', transform=ax4.transAxes, fontsize=14)
-                ax4.set_title('Energy State')
+                    ax2.text(0.5, 0.5, 'No cell data', ha='center', va='center', transform=ax2.transAxes)
+                    ax2.set_title('Area Distribution')
+            except Exception as e:
+                ax2.text(0.5, 0.5, f'Error: {str(e)[:50]}...', ha='center', va='center', transform=ax2.transAxes)
+                ax2.set_title('Area Distribution')
 
-            plt.suptitle('Biological Energy Analysis', fontsize=16)
+            # 3. Senescence statistics (safe counting)
+            ax3 = fig.add_subplot(gs[1, 0])
+            try:
+                healthy_count = sum(
+                    1 for cell in simulator.grid.cells.values() if not getattr(cell, 'is_senescent', False))
+                senescent_count = total_cells - healthy_count
 
-            # Save if requested
+                if total_cells > 0:
+                    categories = ['Healthy', 'Senescent']
+                    counts = [healthy_count, senescent_count]
+                    colors = ['green', 'red']
+
+                    bars = ax3.bar(categories, counts, color=colors, alpha=0.7)
+                    ax3.set_ylabel('Cell Count')
+                    ax3.set_title('Cell Health Distribution')
+
+                    # Add count labels on bars
+                    for bar, count in zip(bars, counts):
+                        height = bar.get_height()
+                        ax3.text(bar.get_x() + bar.get_width() / 2., height,
+                                 f'{count:,}', ha='center', va='bottom', fontsize=10)
+                else:
+                    ax3.text(0.5, 0.5, 'No cells', ha='center', va='center', transform=ax3.transAxes)
+                    ax3.set_title('Cell Health Distribution')
+            except Exception as e:
+                ax3.text(0.5, 0.5, f'Error: {str(e)[:50]}...', ha='center', va='center', transform=ax3.transAxes)
+                ax3.set_title('Cell Health Distribution')
+
+            # 4. Simulation progress
+            ax4 = fig.add_subplot(gs[1, 1])
+            try:
+                if hasattr(simulator, 'history') and simulator.history:
+                    # Safe history plotting - limit data points
+                    history_sample = simulator.history[-100:] if len(simulator.history) > 100 else simulator.history
+                    times = [state.get('time', 0) for state in history_sample]
+                    cell_counts = [state.get('cells', 0) for state in history_sample]
+
+                    if times and cell_counts:
+                        ax4.plot(times, cell_counts, 'b-', linewidth=2, marker='o', markersize=3)
+                        ax4.set_xlabel('Time (minutes)')
+                        ax4.set_ylabel('Cell Count')
+                        ax4.set_title('Population Evolution')
+                        ax4.grid(True, alpha=0.3)
+                    else:
+                        ax4.text(0.5, 0.5, 'No history data', ha='center', va='center', transform=ax4.transAxes)
+                        ax4.set_title('Population Evolution')
+                else:
+                    ax4.text(0.5, 0.5, 'No simulation history', ha='center', va='center', transform=ax4.transAxes)
+                    ax4.set_title('Population Evolution')
+            except Exception as e:
+                ax4.text(0.5, 0.5, f'Error: {str(e)[:50]}...', ha='center', va='center', transform=ax4.transAxes)
+                ax4.set_title('Population Evolution')
+
+            # Set main title
+            fig.suptitle('Biological Energy Analysis (Safe Mode)\nEndothelial Cell Mechanotransduction Simulation',
+                         fontsize=14, y=0.95)
+
+            # Save if path provided
             if save_path:
-                plt.savefig(save_path, dpi=300, bbox_inches='tight')
-                print(f"Energy analysis saved to: {save_path}")
+                plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='white')  # Lower DPI to save memory
+                print(f"Safe energy analysis saved to: {save_path}")
 
             return fig
 
         except Exception as e:
-            print(f"Error creating energy plot: {e}")
+            print(f"Error creating safe energy analysis plot: {e}")
             return None
-        return None
 
     def visualize_all_configurations(self, grid, configurations_data, save_path=None, show_top_n=None):
         """
@@ -1736,7 +1796,7 @@ class Plotter:
                 for spine in ax.spines.values():
                     spine.set_edgecolor('gold')
                     spine.set_linewidth(4)
-                title_prefix = "★ SELECTED ★\n"
+                title_prefix = "* SELECTED *\n"
             else:
                 # Colored border based on energy
                 for spine in ax.spines.values():
@@ -2031,3 +2091,6 @@ class Plotter:
             print(f"📊 Energy landscape plot saved to: {save_path}")
 
         return fig
+
+
+

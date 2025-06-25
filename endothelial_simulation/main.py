@@ -438,7 +438,7 @@ Examples:
         plotter = Plotter(config)
 
         # Create comprehensive plots
-        figures = plotter.create_comprehensive_plots(simulator.history, save_individual=True)
+        figures = plotter.create_all_plots(simulator, prefix=f"comprehensive_{timestamp}")
         print(f"   Created {len(figures)} comprehensive plots")
 
         # Create all plots (includes configuration analysis if available)
@@ -456,27 +456,40 @@ Examples:
 
     # === DISPLAY FINAL STATISTICS ===
     try:
-        final_stats = simulator.grid.get_grid_statistics()
-        cell_counts = final_stats.get('cell_counts', {})
+        # Use safe statistics method instead of get_grid_statistics
+        if hasattr(simulator, 'get_safe_final_statistics'):
+            final_stats = simulator.get_safe_final_statistics()
+        else:
+            # Fallback to basic stats if method doesn't exist
+            final_stats = {
+                'total_cells': len(simulator.grid.cells),
+                'healthy_cells': 0,
+                'senescent_cells': 0,
+                'biological_energy': 0.0,
+                'packing_efficiency': 0.0,
+                'reconfigurations_count': 0,
+                'events_count': 0
+            }
 
         print(f"\n📈 Final Statistics:")
-        print(f"   Total cells: {cell_counts.get('total', len(simulator.grid.cells))}")
-        print(f"   Healthy cells: {cell_counts.get('normal', 0)}")
-        print(f"   Senescent cells: {cell_counts.get('telomere_senescent', 0) + cell_counts.get('stress_senescent', 0)}")
+        print(f"   Total cells: {final_stats.get('total_cells', 0):,}")
+        print(f"   Healthy cells: {final_stats.get('healthy_cells', 0):,}")
+        print(f"   Senescent cells: {final_stats.get('senescent_cells', 0):,}")
         print(f"   Packing efficiency: {final_stats.get('packing_efficiency', 0):.2f}")
-        print(f"   Biological energy: {final_stats.get('biological_energy', simulator.grid.calculate_biological_energy()):.4f}")
-
-        # Event-driven specific stats
-        if hasattr(simulator, 'configuration_history'):
-            reconfig_count = len(simulator.configuration_history)
-            print(f"   Reconfigurations triggered: {reconfig_count}")
-
-        if hasattr(simulator, 'event_history'):
-            event_count = len(simulator.event_history)
-            print(f"   Events detected: {event_count}")
+        print(f"   Biological energy: {final_stats.get('biological_energy', 0):.4f}")
+        print(f"   Reconfigurations triggered: {final_stats.get('reconfigurations_count', 0)}")
+        print(f"   Events detected: {final_stats.get('events_count', 0)}")
 
     except Exception as e:
         print(f"⚠️  Could not display final statistics: {e}")
+        # Minimal fallback
+        try:
+            total_cells = len(simulator.grid.cells)
+            print(f"\n📈 Basic Statistics:")
+            print(f"   Total cells: {total_cells:,}")
+        except:
+            print(f"\n⚠️  No statistics available")
+
 
     # === SHOW PLOTS IF REQUESTED ===
     if args.plot:
