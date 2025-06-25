@@ -263,13 +263,11 @@ class ConfigurationManager:
         # This will be called with access to simulator to get current pressure
         # For now, we'll update this when we integrate with the simulator
         pass
-    
+
     def _optimize_configuration_biological(self):
         """Optimize the current configuration using biological energy."""
-        # Use gentle optimization to settle the configuration
-        current_energy = self.grid.calculate_biological_energy()
-        self.grid._run_adaptive_optimization('gentle', current_energy)
-        self.grid.optimize_cell_positions(iterations=1)
+        # Just update tessellation without optimization
+        self.grid._update_voronoi_tessellation()
     
     def _evaluate_configuration(self, config_idx: int) -> ConfigurationState:
         """Evaluate a configuration and return its metrics."""
