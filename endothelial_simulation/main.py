@@ -441,11 +441,6 @@ Examples:
         figures = plotter.create_all_plots(simulator, prefix=f"comprehensive_{timestamp}")
         print(f"   Created {len(figures)} comprehensive plots")
 
-        # Create all plots (includes configuration analysis if available)
-        if hasattr(plotter, 'create_all_plots'):
-            all_figures = plotter.create_all_plots(simulator, prefix=f"sim_{timestamp}")
-            print(f"   Created {len(all_figures)} total plots in: {config.plot_directory}")
-
         # Create animations if requested and data is available
         if args.create_animations and hasattr(simulator, 'frame_data') and simulator.frame_data:
             print("🎬 Creating animations...")
