@@ -852,7 +852,8 @@ class Simulator:
                 'aspect_ratio': cell.actual_aspect_ratio,
                 'area': cell.actual_area,
                 'is_senescent': cell.is_senescent,
-                'senescence_cause': cell.senescence_cause
+                'senescence_cause': cell.senescence_cause,
+                'territory': self.grid.get_display_territories().get(cell_id, [])
             })
 
         cell_properties = self.grid.get_cell_properties()

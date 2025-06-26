@@ -57,7 +57,7 @@ class SimulationConfig:
         # === VISUALIZATION ===
         self.plot_interval = 10  # steps
         self.save_plots = True
-        self.create_animations = False
+        self.create_animations = True
         self.plot_directory = self._generate_plot_directory()
 
         # === DEBUG OPTIONS ===
@@ -190,7 +190,7 @@ class SimulationConfig:
         self.simulation_duration = 120  # 2 hours
         self.multi_config_count = 5
         self.enable_holes = False
-        self.create_animations = False
+        self.create_animations = True
         return self
 
     def research_quality(self):

@@ -1332,29 +1332,23 @@ class Plotter:
 
     def create_mosaic_animation(self, simulator, save_path=None, fps=2, max_frames=30, show_info=True):
         """
-        Create an animation showing the cell mosaic evolving over time.
-        FIXED: Now properly handles population dynamics and senescence transitions.
-
-        Parameters:
-            simulator: Simulator object with completed simulation
-            save_path: Path to save the animation (default: auto-generated)
-            fps: Frames per second (default: 2)
-            max_frames: Maximum number of frames to include (default: 30)
-            show_info: Whether to show info text overlay (default: True)
-
-        Returns:
-            Animation object
+        Create an animation showing REAL individual cells evolving over time.
+        FIXED: Now shows actual cell lifecycles with proper senescence transitions.
         """
         import matplotlib.animation as animation
+        import numpy as np
+        from matplotlib.patches import Polygon
 
-        if not simulator.history:
-            print("No simulation history available for mosaic animation")
+        # Check if we have frame data (individual cell tracking)
+        if not simulator.frame_data:
+            print("❌ No frame data available. Make sure recording is enabled!")
+            print("   Set config.create_animations = True before running simulation")
             return None
 
-        print(f"Creating FIXED mosaic animation from {len(simulator.history)} time points...")
+        print(f"✅ Creating REAL mosaic animation from {len(simulator.frame_data)} frames...")
 
         # Select frames to animate (skip some if too many)
-        total_frames = len(simulator.history)
+        total_frames = len(simulator.frame_data)
         if total_frames > max_frames:
             step = total_frames // max_frames
             selected_indices = list(range(0, total_frames, step))
@@ -1363,280 +1357,201 @@ class Plotter:
         else:
             selected_indices = list(range(total_frames))
 
-        print(f"Animating {len(selected_indices)} frames with FIXED population dynamics...")
-
-        # Store original simulator state
-        original_time = simulator.time
-        original_input = simulator.input_pattern.copy()
-
-        # Get all cells (we'll selectively show them based on historical population)
-        all_cells = list(simulator.grid.cells.values())
-        all_cell_ids = list(simulator.grid.cells.keys())
-
-        # Pre-process historical data to determine cell assignments
-        print("Pre-processing historical population data...")
-        frame_data = []
-
-        for hist_idx in selected_indices:
-            state = simulator.history[hist_idx]
-
-            # Get population counts from history (convert to int to avoid numpy.float64 issues)
-            if 'healthy_cells' in state:
-                healthy_count = int(state['healthy_cells'])
-                sen_tel_count = int(state['senescent_tel'])
-                sen_stress_count = int(state['senescent_stress'])
-                total_count = healthy_count + sen_tel_count + sen_stress_count
-            else:
-                # Fallback if detailed counts not available
-                total_count = int(state.get('cells', len(all_cells)))
-                healthy_count = total_count
-                sen_tel_count = 0
-                sen_stress_count = 0
-
-            # Create mapping of which cells to show as what type
-            # Strategy: Assign cell types to match historical counts
-            frame_info = {
-                'time': state['time'],
-                'input_value': state['input_value'],
-                'total_count': total_count,
-                'healthy_count': healthy_count,
-                'sen_tel_count': sen_tel_count,
-                'sen_stress_count': sen_stress_count,
-                'cell_assignments': {}
-            }
-
-            # Assign cells to categories to match historical counts
-            cells_used = 0
-
-            # First, assign healthy cells (ensure we use integers)
-            for i in range(min(int(healthy_count), len(all_cells))):
-                if cells_used < len(all_cells):
-                    frame_info['cell_assignments'][all_cell_ids[cells_used]] = {
-                        'type': 'healthy',
-                        'visible': True
-                    }
-                    cells_used += 1
-
-            # Then assign telomere-senescent cells
-            for i in range(min(int(sen_tel_count), len(all_cells) - cells_used)):
-                if cells_used < len(all_cells):
-                    frame_info['cell_assignments'][all_cell_ids[cells_used]] = {
-                        'type': 'senescent',
-                        'cause': 'telomere',
-                        'visible': True
-                    }
-                    cells_used += 1
-
-            # Then assign stress-senescent cells
-            for i in range(min(int(sen_stress_count), len(all_cells) - cells_used)):
-                if cells_used < len(all_cells):
-                    frame_info['cell_assignments'][all_cell_ids[cells_used]] = {
-                        'type': 'senescent',
-                        'cause': 'stress',
-                        'visible': True
-                    }
-                    cells_used += 1
-
-            # Mark remaining cells as invisible (they "don't exist" at this time)
-            for i in range(cells_used, len(all_cells)):
-                frame_info['cell_assignments'][all_cell_ids[i]] = {
-                    'type': 'hidden',
-                    'visible': False
-                }
-
-            # Update cell properties from history if available
-            if 'cell_properties' in state:
-                cell_props = state['cell_properties']
-                frame_info['cell_properties'] = cell_props
-
-            frame_data.append(frame_info)
-
-            print(
-                f"  t={state['time']:.1f}: {healthy_count}H + {sen_tel_count}ST + {sen_stress_count}SS = {total_count} total")
+        print(f"   Animating {len(selected_indices)} frames showing REAL cell transitions...")
 
         # Create figure
         fig, ax = plt.subplots(figsize=(12, 12))
 
-        # Time/info text overlay
+        # Info text overlay
         if show_info:
             info_text = ax.text(0.02, 0.98, '', transform=ax.transAxes, fontsize=12,
                                 verticalalignment='top',
                                 bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
 
         def animate_frame(frame_idx):
-            # Clear the axis
+            """
+            Animate one frame using REAL historical cell data.
+            NO MORE FAKE PROPORTIONAL ASSIGNMENTS!
+            """
+            # Clear the plot
             ax.clear()
 
-            # Get the current frame data
-            frame_info = frame_data[frame_idx]
+            # Get REAL historical data for this specific time point
+            frame = simulator.frame_data[selected_indices[frame_idx]]
 
-            # Update simulator time and input
-            simulator.time = frame_info['time']
-            simulator.input_pattern = {'value': frame_info['input_value']}
+            print(f"   Frame {frame_idx}: t={frame['time']:.1f}, cells={len(frame['cells'])}")
 
-            # Set axis properties
+            # Set up the plot area
             ax.set_xlim(0, simulator.grid.width)
             ax.set_ylim(0, simulator.grid.height)
             ax.set_aspect('equal')
 
-            # Get display territories
-            display_territories = simulator.grid.get_display_territories()
+            # Count cells by type (for display info)
+            cell_counts = {'healthy': 0, 'senescent_tel': 0, 'senescent_stress': 0}
 
-            # Plot each cell according to its assignment for this frame
-            visible_cells = 0
-            for cell_id, cell in simulator.grid.cells.items():
-                if cell_id not in frame_info['cell_assignments']:
-                    continue
+            # Plot each REAL individual cell from the historical data
+            for cell_data in frame['cells']:
+                cell_id = cell_data['cell_id']
 
-                assignment = frame_info['cell_assignments'][cell_id]
-                if not assignment['visible']:
-                    continue  # Skip invisible cells
+                # Get this cell's REAL territory at this time point
+                territory = cell_data.get('territory', [])
+                if not territory or len(territory) < 3:
+                    continue  # Skip cells with no territory
 
-                if cell_id not in display_territories:
-                    continue
+                # Use the cell's REAL senescence status at this time
+                # (Not fake assignment based on population ratios!)
+                is_senescent = cell_data['is_senescent']
+                senescence_cause = cell_data.get('senescence_cause')
 
-                display_pixels = display_territories[cell_id]
-                if not display_pixels:
-                    continue
-
-                # Determine color based on HISTORICAL assignment (not current cell state)
-                if assignment['type'] == 'healthy':
-                    color = 'green'
-                    alpha = 0.6
-                    edge_width = 0.5
-                elif assignment['type'] == 'senescent':
-                    # Senescent cells - color by cause
-                    if assignment['cause'] == 'telomere':
-                        color = '#DC143C'  # Crimson for telomere
-                    else:
-                        color = '#4169E1'  # Royal Blue for stress
+                # Determine color based on REAL cell state
+                if not is_senescent:
+                    color = 'lightgreen'
                     alpha = 0.7
-                    edge_width = 1.0
-                else:
-                    continue  # Skip if not a valid type
+                    edge_color = 'darkgreen'
+                    cell_counts['healthy'] += 1
 
-                # Create polygon from display territory pixels
-                if len(display_pixels) > 10:
+                elif senescence_cause == 'telomere':
+                    color = '#DC143C'  # Crimson red
+                    alpha = 0.8
+                    edge_color = 'darkred'
+                    cell_counts['senescent_tel'] += 1
+
+                else:  # stress senescence
+                    color = '#4169E1'  # Royal blue
+                    alpha = 0.8
+                    edge_color = 'darkblue'
+                    cell_counts['senescent_stress'] += 1
+
+                # Draw the cell's ACTUAL territory from this time point
+                if len(territory) > 10:
                     try:
-                        # Sample pixels if territory is very large (for performance)
-                        pixels_to_use = display_pixels
-                        if len(pixels_to_use) > 200:  # Reduced for animation performance
-                            indices = np.random.choice(len(pixels_to_use), 200, replace=False)
-                            pixels_to_use = [pixels_to_use[i] for i in indices]
-
-                        # Create convex hull for visualization
+                        # Create a clean polygon from the territory
                         from scipy.spatial import ConvexHull
-                        points = np.array(pixels_to_use)
+                        points = np.array(territory)
+
+                        # If territory is huge, sample it for performance
+                        if len(points) > 200:
+                            indices = np.random.choice(len(points), 200, replace=False)
+                            points = points[indices]
+
                         hull = ConvexHull(points)
                         hull_points = points[hull.vertices]
 
-                        polygon = plt.Polygon(hull_points, facecolor=color, alpha=alpha,
-                                              edgecolor='black', linewidth=edge_width)
+                        # Create and add the polygon
+                        polygon = Polygon(hull_points,
+                                          facecolor=color,
+                                          alpha=alpha,
+                                          edgecolor=edge_color,
+                                          linewidth=0.5)
                         ax.add_patch(polygon)
-                        visible_cells += 1
-                    except Exception:
-                        # Fallback: scatter plot of pixels
-                        if len(display_pixels) > 50:
-                            sample_size = min(50, len(display_pixels))
-                            indices = np.random.choice(len(display_pixels), sample_size, replace=False)
-                            sampled_pixels = [display_pixels[i] for i in indices]
-                            points = np.array(sampled_pixels)
-                        else:
-                            points = np.array(display_pixels)
 
-                        ax.scatter(points[:, 0], points[:, 1], c=color, alpha=alpha, s=2, marker='s')
-                        visible_cells += 1
+                    except Exception as e:
+                        # Fallback: scatter plot if polygon creation fails
+                        points = np.array(territory[:100])  # Limit for performance
+                        ax.scatter(points[:, 0], points[:, 1],
+                                   c=color, alpha=alpha, s=1, marker='s')
 
-                # Show orientation vector at centroid (for some cells)
-                if cell.centroid is not None and visible_cells % 3 == 0:  # Every 3rd visible cell
-                    display_centroid = simulator.grid._comp_to_display_coords(cell.centroid[0], cell.centroid[1])
-                    cx, cy = display_centroid
+                # Mark the cell center
+                pos = cell_data['position']
+                ax.plot(pos[0], pos[1], 'ko', markersize=1.5)
 
-                    vector_length = np.sqrt(cell.actual_area * (simulator.grid.computation_scale ** 2)) * 0.1
-                    dx = vector_length * np.cos(cell.actual_orientation)
-                    dy = vector_length * np.sin(cell.actual_orientation)
+            # Create legend
+            healthy_patch = plt.Rectangle((0, 0), 1, 1, facecolor='lightgreen', alpha=0.7, label='Healthy')
+            tel_patch = plt.Rectangle((0, 0), 1, 1, facecolor='#DC143C', alpha=0.8, label='Senescent (Telomere)')
+            stress_patch = plt.Rectangle((0, 0), 1, 1, facecolor='#4169E1', alpha=0.8, label='Senescent (Stress)')
+            ax.legend(handles=[healthy_patch, tel_patch, stress_patch], loc='upper right', fontsize=10)
 
-                    ax.arrow(cx, cy, dx, dy, head_width=vector_length * 0.3,
-                             head_length=vector_length * 0.3, fc='white', ec='black',
-                             alpha=0.8, width=vector_length * 0.08, zorder=10)
-
-            # Add flow direction indicator
-            arrow_length = simulator.grid.width * 0.08
-            arrow_x = simulator.grid.width * 0.5
-            arrow_y = simulator.grid.height * 0.05
-
-            ax.arrow(arrow_x - arrow_length / 2, arrow_y, arrow_length, 0,
-                     head_width=arrow_length * 0.3, head_length=arrow_length * 0.2,
-                     fc='black', ec='black', width=arrow_length * 0.08, zorder=5)
-
-            ax.text(arrow_x, arrow_y - arrow_length * 0.5, "Flow Direction",
-                    ha='center', va='top', fontsize=10, weight='bold')
-
-            # Add legend
-            from matplotlib.patches import Patch
-            legend_elements = [
-                Patch(facecolor='green', edgecolor='black', alpha=0.6, label='Healthy'),
-                Patch(facecolor='#DC143C', edgecolor='black', alpha=0.7, label='Senescent (Tel)'),
-                Patch(facecolor='#4169E1', edgecolor='black', alpha=0.7, label='Senescent (Stress)')
-            ]
-            ax.legend(handles=legend_elements, loc='upper right', fontsize=9)
-
-            # Format axes
-            ax.set_xlabel('X Position (pixels)', fontsize=12)
-            ax.set_ylabel('Y Position (pixels)', fontsize=12)
-
-            # Update title and info
-            time_hours = frame_info['time'] / 60 if self.config.time_unit == "minutes" else frame_info['time']
+            # Calculate time for display
+            time_hours = frame['time'] / 60 if self.config.time_unit == "minutes" else frame['time']
             time_unit = "hours" if self.config.time_unit == "minutes" else self.config.time_unit
 
-            ax.set_title(f'Endothelial Cell Mosaic Evolution\nTime: {time_hours:.1f} {time_unit}',
+            # Set title
+            ax.set_title(f'Real Endothelial Cell Mosaic Evolution\n'
+                         f'Time: {time_hours:.1f} {time_unit} | Individual Cell Tracking',
                          fontsize=14)
 
-            # Update info text with CORRECTED population counts
+            # Update info text
             if show_info:
+                total_cells = sum(cell_counts.values())
                 info_str = (f"Time: {time_hours:.1f} {time_unit}\n"
-                            f"Shear Stress: {frame_info['input_value']:.2f} Pa\n"
-                            f"Healthy: {int(frame_info['healthy_count'])}\n"
-                            f"Sen (Tel): {int(frame_info['sen_tel_count'])}\n"
-                            f"Sen (Stress): {int(frame_info['sen_stress_count'])}\n"
-                            f"Total: {int(frame_info['total_count'])}")
-
+                            f"Shear Stress: {frame['input_value']:.2f} Pa\n"
+                            f"Healthy: {cell_counts['healthy']}\n"
+                            f"Sen (Telomere): {cell_counts['senescent_tel']}\n"
+                            f"Sen (Stress): {cell_counts['senescent_stress']}\n"
+                            f"Total: {total_cells}\n"
+                            f"🎯 Real Individual Cells!")
                 info_text.set_text(info_str)
 
             return []
 
-        # Create animation
-        anim = animation.FuncAnimation(fig, animate_frame, frames=len(frame_data),
+        # Create the animation
+        print("   Creating animation object...")
+        anim = animation.FuncAnimation(fig, animate_frame, frames=len(selected_indices),
                                        interval=1000 // fps, repeat=True, blit=False)
 
         # Generate save path if not provided
         if save_path is None:
             import time
             timestamp = time.strftime("%Y%m%d-%H%M%S")
-            save_path = os.path.join(self.config.plot_directory, f"FIXED_mosaic_animation_{timestamp}.mp4")
+            save_path = os.path.join(self.config.plot_directory, f"REAL_mosaic_animation_{timestamp}.mp4")
 
-        # Save animation
+        # Save the animation
         try:
+            print(f"   Saving animation to: {save_path}")
             if 'ffmpeg' in animation.writers.list():
                 Writer = animation.writers['ffmpeg']
-                writer = Writer(fps=fps, metadata=dict(artist='FIXED Endothelial Mosaic Animation'), bitrate=1800)
+                writer = Writer(fps=fps, metadata=dict(artist='Real Mosaic Animation'), bitrate=1800)
                 anim.save(save_path, writer=writer, dpi=150)
-                print(f"✅ FIXED mosaic animation saved to: {save_path}")
-                print(f"   {len(frame_data)} frames at {fps} fps")
-                print(f"   Now shows correct population dynamics!")
+                print(f"✅ REAL mosaic animation saved successfully!")
+                print(f"   📊 {len(selected_indices)} frames at {fps} fps")
+                print(f"   🧬 Shows actual individual cell lifecycles")
+                print(f"   🎯 No more instant senescence transitions!")
             else:
-                print("❌ ffmpeg not available for MP4. Trying GIF...")
+                print("⚠️  ffmpeg not available, saving as GIF...")
                 anim.save(save_path.replace('.mp4', '.gif'), writer='pillow', fps=fps)
-                print(f"✅ FIXED mosaic animation saved as GIF")
+                print(f"✅ Animation saved as GIF")
         except Exception as e:
-            print(f"❌ Error saving mosaic animation: {e}")
-
-        # Restore original simulator state
-        simulator.time = original_time
-        simulator.input_pattern = original_input
+            print(f"❌ Error saving animation: {e}")
+            print("   Try installing ffmpeg: pip install ffmpeg-python")
 
         return anim
 
+    # BONUS: Function to verify your data is ready
+    def check_animation_readiness(simulator):
+        """
+        Check if your simulator has the data needed for real animation.
+        Call this before creating animation to make sure everything is ready.
+        """
+        print("🔍 Checking animation readiness...")
+
+        # Check 1: Frame data exists
+        if not hasattr(simulator, 'frame_data') or not simulator.frame_data:
+            print("❌ No frame data found!")
+            print("   Solution: Set config.create_animations = True before running simulation")
+            return False
+
+        # Check 2: Frame data has cells
+        sample_frame = simulator.frame_data[0]
+        if 'cells' not in sample_frame or not sample_frame['cells']:
+            print("❌ Frame data exists but has no cell information!")
+            return False
+
+        # Check 3: Cells have territory data
+        sample_cell = sample_frame['cells'][0]
+        if 'territory' not in sample_cell:
+            print("❌ Cell data exists but missing territory information!")
+            print("   Solution: Add territory data to _record_frame() method")
+            return False
+
+        # Check 4: Territory data is not empty
+        if not sample_cell['territory']:
+            print("⚠️  Territory data exists but is empty - this might cause issues")
+
+        print(f"✅ Animation ready! Found {len(simulator.frame_data)} frames with cell data")
+        print(f"   📊 Each frame has ~{len(sample_frame['cells'])} cells")
+        print(f"   🧬 Territory data: {'✅ Available' if sample_cell.get('territory') else '❌ Missing'}")
+
+        return True
 
     def create_all_plots(self, simulator, prefix=None):
         """
