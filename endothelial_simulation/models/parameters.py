@@ -46,7 +46,7 @@ class ModelParameters:
         # Spatial parameters
         # ------------------------------
         # Base aspect ratio for cells
-        self.optimal_aspect_ratio_base = 1.0
+        self.optimal_aspect_ratio_base = 2.0
 
         # How much aspect ratio changes per unit of shear stress
         self.aspect_ratio_sensitivity = 0.2
@@ -64,25 +64,25 @@ class ModelParameters:
 
         # Base cell division rate (per minute)
         # 0.0006 would be about once per 28 hours on average
-        self.division_rate = 0.0006
+        self.division_rate = 0 #0.0006
 
         # Base cell death rate (per minute)
-        self.death_rate = 0.0001
+        self.death_rate = 0 #0.0001
 
         # Carrying capacity (maximum sustainable cell count)
-        self.carrying_capacity = 3000
+        self.carrying_capacity = 200
 
         # ------------------------------
         # Senescence parameters
         # ------------------------------
         # Death rate of telomere-induced senescent cells (per minute)
-        self.tel_death_rate = 0.00033  # About 1/50 of normal turnover rate
+        self.tel_death_rate = 0 #0.00033  # About 1/50 of normal turnover rate
 
         # Death rate of stress-induced senescent cells (per minute)
-        self.stress_death_rate = 0.00042  # Slightly higher than telomere-induced
+        self.stress_death_rate = 0 #0.00042  # Slightly higher than telomere-induced
 
         # Senescence induction by SASP (Senescence-Associated Secretory Phenotype)
-        self.sasp_factor = 0.0000008
+        self.sasp_factor = 0 #0.0000008
 
         # ------------------------------
         # Senolytic parameters
@@ -100,7 +100,7 @@ class ModelParameters:
         # Stem cell parameters
         # ------------------------------
         # Rate of stem cell input (cells per minute)
-        self.stem_cell_rate = 0.17  # About 10 per hour
+        self.stem_cell_rate = 0 #0.17  # About 10 per hour
 
         # Distribution of stem cells across division stages
         self._stem_cell_distribution = None

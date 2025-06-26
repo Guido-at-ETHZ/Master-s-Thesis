@@ -1286,7 +1286,7 @@ class Plotter:
 
                 # Title and formatting
                 is_selected = config['config_idx'] == best_idx
-                title_prefix = "★ SELECTED ★\n" if is_selected else ""
+                title_prefix = "- SELECTED -\n" if is_selected else ""
                 title = (f"{title_prefix}Config #{config['config_idx'] + 1}\n"
                          f"Energy: {config['energy']:.3f}")
 
@@ -1934,7 +1934,7 @@ class Plotter:
                     # Title with ranking and metrics
                     rank = frame_idx + 1
                     is_selected = config['config_idx'] == best_idx
-                    selected_text = " ★ SELECTED ★" if is_selected else ""
+                    selected_text = "- SELECTED -" if is_selected else ""
 
                     title = (f"Configuration Ranking - #{rank}/{len(sorted_configs)}{selected_text}\n"
                              f"Config #{config['config_idx'] + 1} | "

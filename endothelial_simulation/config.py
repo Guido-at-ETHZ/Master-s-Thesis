@@ -13,7 +13,7 @@ class SimulationConfig:
         self.simulation_duration = 360  # minutes (6 hours)
         self.time_step = 1.0  # minutes
         self.time_unit = "minutes"
-        self.initial_cell_count = 50
+        self.initial_cell_count = 20
         self.grid_size = (1024, 1024)  # pixels
 
         # === EVENT-DRIVEN SYSTEM (MAIN FEATURE) ===
@@ -26,7 +26,7 @@ class SimulationConfig:
         self.senescence_threshold_change = 0.05  # 5%
 
         # Reconfiguration timing
-        self.min_reconfiguration_interval = 999.0  # minutes
+        self.min_reconfiguration_interval = 20.0  # minutes
 
         # Transition parameters
         self.max_compression_ratio = 0.7  # cells can compress to 70%
@@ -48,11 +48,11 @@ class SimulationConfig:
         self.enable_stem_cells = False
 
         # Hole system
-        self.enable_holes = True
+        self.enable_holes = False
         self.max_holes = 5
-        self.hole_creation_probability_base = 0.02
-        self.hole_creation_threshold_cells = 10
-        self.hole_creation_threshold_senescence = 0.30
+        self.hole_creation_probability_base = 0 # 0.02
+        self.hole_creation_threshold_cells = 0 #10
+        self.hole_creation_threshold_senescence = 0 #0.30
 
         # === VISUALIZATION ===
         self.plot_interval = 10  # steps
@@ -70,10 +70,10 @@ class SimulationConfig:
         self.tau_aspect_ratio_minutes = 50.0
 
         # === SENESCENCE ===
-        self.max_divisions = 50
-        self.telomere_base_length = 100
-        self.senescence_growth_factor_tel = 1.5
-        self.senescence_growth_factor_stress = 0.8
+        self.max_divisions = 0 #50
+        self.telomere_base_length = 0 #100
+        self.senescence_growth_factor_tel = 0 #1.5
+        self.senescence_growth_factor_stress = 0 #0.8
 
         # These are based on experimental data - adjust values as needed
         self.known_pressures = [0.0, 1.4]  # Pressure values in Pa
@@ -100,13 +100,13 @@ class SimulationConfig:
         self.lambda_scale = 0.3  # Lambda scaling parameter
 
         # === POPULATION DYNAMICS PARAMETERS ===
-        self.max_divisions = 15
-        self.proliferation_rate = 0.0006
-        self.carrying_capacity = 3000
-        self.death_rate_healthy = 0.0001
-        self.death_rate_senescent_tel = 0.00033
-        self.death_rate_senescent_stress = 0.00042
-        self.senescence_induction_factor = 0.0000008
+        self.max_divisions = 0 #15
+        self.proliferation_rate = 0 #0.0006
+        self.carrying_capacity = 200
+        self.death_rate_healthy = 0 #0.0001
+        self.death_rate_senescent_tel = 0 #0.00033
+        self.death_rate_senescent_stress = 0 #0.00042
+        self.senescence_induction_factor = 0 #0.0000008
         self.senolytic_concentration = 0.0
         self.senolytic_efficacy_tel = 1.0
         self.senolytic_efficacy_stress = 1.2
