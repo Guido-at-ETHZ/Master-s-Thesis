@@ -70,7 +70,7 @@ class SimulationConfig:
         self.tau_aspect_ratio_minutes = 50.0
 
         # === SENESCENCE ===
-        self.max_divisions = 0 #50
+        self.max_divisions = 12 #50
         self.telomere_base_length = 0 #100
         self.senescence_growth_factor_tel = 0 #1.5
         self.senescence_growth_factor_stress = 0 #0.8

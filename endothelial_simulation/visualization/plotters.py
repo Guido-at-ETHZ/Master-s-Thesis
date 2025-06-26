@@ -201,6 +201,7 @@ class Plotter:
         if save_path is not None:
             plt.tight_layout()
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
 
         return fig
 
@@ -255,7 +256,7 @@ class Plotter:
         if save_path is not None:
             plt.tight_layout()
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
-
+            plt.close()
         return fig
 
     def plot_senescent_growth_metrics(self, history, save_path=None):
@@ -313,6 +314,7 @@ class Plotter:
 
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
 
         return fig
 
@@ -376,6 +378,7 @@ class Plotter:
         if save_path is not None:
             plt.tight_layout()
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
 
         return fig
 
@@ -436,6 +439,7 @@ class Plotter:
         if save_path is not None:
             plt.tight_layout()
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
 
         return fig
 
@@ -478,6 +482,7 @@ class Plotter:
         if save_path is not None:
             plt.tight_layout()
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
 
         return fig
 
@@ -657,6 +662,7 @@ class Plotter:
                                      f"cell_distributions_evolution_{timestamp}.png")
 
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
         print(f"✅ Evolution plot saved to: {save_path}")
         print(f"   ✅ FIXED: Orientations are correctly displayed as 0-90° flow alignment")
 
@@ -739,6 +745,7 @@ class Plotter:
                                      f"cell_distributions_snapshots_{timestamp}.png")
 
         plt.savefig(save_path, dpi=300, bbox_inches='tight')
+        plt.close()
         print(f"✅ Snapshot plot saved to: {save_path}")
 
         return fig
@@ -939,6 +946,7 @@ class Plotter:
         if save_path is not None:
             plt.tight_layout()
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
 
         return fig
 
@@ -1311,6 +1319,7 @@ class Plotter:
             if save_path:
                 plt.savefig(save_path, dpi=300, bbox_inches='tight')
                 print(f"Configuration mosaics saved to: {save_path}")
+                plt.close()
 
             return fig
 
@@ -1680,6 +1689,7 @@ class Plotter:
             # Save if path provided
             if save_path:
                 plt.savefig(save_path, dpi=150, bbox_inches='tight', facecolor='white')  # Lower DPI to save memory
+                plt.close()
                 print(f"Safe energy analysis saved to: {save_path}")
 
             return fig
@@ -1848,6 +1858,7 @@ class Plotter:
         # Save if path provided
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
             print(f"📊 Configuration comparison saved to: {save_path}")
 
         # Restore original state
@@ -2088,6 +2099,7 @@ class Plotter:
 
         if save_path:
             plt.savefig(save_path, dpi=300, bbox_inches='tight')
+            plt.close()
             print(f"📊 Energy landscape plot saved to: {save_path}")
 
         return fig

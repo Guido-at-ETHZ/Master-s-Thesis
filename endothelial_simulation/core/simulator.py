@@ -781,7 +781,7 @@ class Simulator:
         }
 
         # Add cell properties
-        state.update(cell_properties)
+        state['cell_properties'] = cell_properties
 
         # Add population dynamics if enabled
         if 'population' in self.models:
@@ -855,12 +855,15 @@ class Simulator:
                 'senescence_cause': cell.senescence_cause
             })
 
+        cell_properties = self.grid.get_cell_properties()
+
         # Store frame data
         frame_info = {
             'time': self.time,
             'input_value': self.input_pattern['value'],
             'cell_count': len(self.grid.cells),
             'cells': cells_data,
+            'cell_properties': cell_properties,
             'transitioning': self.transition_controller.is_transitioning()
         }
 
