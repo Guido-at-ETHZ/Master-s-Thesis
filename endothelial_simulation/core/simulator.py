@@ -981,25 +981,40 @@ class Simulator:
         config_results = self._config_results
         best_config = config_results['best_config']
 
+
         # Extract parameters from best configuration
         params = {
-            'config_id': best_config['config_id'],
+            'config_id': best_config['config_idx'],
             'energy': best_config['energy'],
-            'cell_count': len(best_config['cells']),
+            'cell_count': len(best_config['cell_data']),
             'cells': []
         }
 
-        # Get individual cell parameters
-        for cell_id, cell_data in best_config['cells'].items():
-            cell_params = {
-                'cell_id': cell_id,
-                'area': cell_data.get('area', 0),
-                'aspect_ratio': cell_data.get('aspect_ratio', 1.0),
-                'orientation_degrees': np.degrees(cell_data.get('orientation', 0)),
-                'divisions': cell_data.get('divisions', 0),
-                'is_senescent': cell_data.get('is_senescent', False)
-            }
-            params['cells'].append(cell_params)
+        # Check that all cells from config exist in grid
+        missing_cells = [cell_id for cell_id in best_config['cell_data'].keys()
+                         if cell_id not in self.grid.cells]
+
+        if missing_cells:
+            print(f"⚠️ Warning: {len(missing_cells)} cells missing from grid: {missing_cells[:5]}...")
+
+        # Get actual values from current grid state
+        for cell_id, cell_data in best_config['cell_data'].items():
+            if cell_id in self.grid.cells:  # Only process existing cells
+                actual_cell = self.grid.cells[cell_id]
+                cell_params = {
+                    'cell_id': cell_id,
+                    'target_area': cell_data['target_area'],
+                    'area': actual_cell.actual_area,
+                    'target_aspect_ratio': cell_data['target_aspect_ratio'],
+                    'aspect_ratio': actual_cell.actual_aspect_ratio,
+                    'target_orientation_degrees': np.degrees(cell_data['target_orientation']),
+                    'orientation_degrees': np.degrees(actual_cell.actual_orientation),
+                    'divisions': cell_data.get('divisions', 0),
+                    'is_senescent': cell_data.get('is_senescent', False)
+                }
+                params['cells'].append(cell_params)
+
+        print(f"📊 Processed {len(params['cells'])} cells with actual tessellation data")
 
         # Calculate averages
         areas = [cell['area'] for cell in params['cells']]
