@@ -330,7 +330,7 @@ Examples:
     config.simulation_duration = args.duration
     config.initial_cell_count = args.cells
     config.save_plots = not args.no_save
-    config.create_animations = args.create_animations
+    config.create_animations = True
 
     # Event-driven system configuration
     config.use_event_driven_system = True
