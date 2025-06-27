@@ -227,7 +227,7 @@ Examples:
                         help='Simulation mode (default: full)')
 
     # === BASIC PARAMETERS ===
-    parser.add_argument('--duration', type=float, default=360,
+    parser.add_argument('--duration', type=float, default=90,
                         help='Simulation duration in minutes (default: 360 = 6 hours)')
 
     parser.add_argument('--cells', type=int, default=20,

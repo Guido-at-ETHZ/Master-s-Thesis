@@ -57,7 +57,7 @@ class Cell:
 
         # Mechanical properties
         self.local_shear_stress = 0.0
-        self.stress_exposure_time = 0.0
+        #self.stress_exposure_time = 0.0
 
         # Growth and adaptation properties
         self.growth_pressure = 0.0  # Pressure to expand beyond current territory
@@ -77,6 +77,11 @@ class Cell:
 
         # Optional: For monitoring temporal dynamics
         self.last_dynamics_info = {}
+
+        # Stress resistance
+        stress_offset = 3.0  # 3x more resistant (offset)
+        variability = np.random.normal(1.0, 0.5)  # Your variability
+        self.stress_resistance = stress_offset * max(0.3, variability)
 
     def assign_territory(self, pixel_list):
         """
@@ -395,10 +400,10 @@ class Cell:
         self.senescence_cause = cause
         return True
 
-    def apply_shear_stress(self, shear_stress, duration):
+    def apply_shear_stress(self, shear_stress):
         """Apply shear stress to the cell for the given duration."""
         self.local_shear_stress = shear_stress
-        self.stress_exposure_time += duration
+
 
     def calculate_senescence_probability(self, config):
         """Calculate probability of senescence based on cell state and conditions."""
@@ -415,10 +420,8 @@ class Cell:
 
         # Stress-induced senescence probability (ONLY from shear stress)
         stress_factor = self._calculate_stress_factor(config)
-
-        # REMOVED: compression_stress = max(0, 2.0 - self.compression_ratio)
-        # Now only using shear stress, not compression
-        stress_prob = min(stress_factor * self.stress_exposure_time * config.time_step, 0.95)
+        adjusted_stress_factor = stress_factor / self.stress_resistance  # Apply individual resistance
+        stress_prob = min(adjusted_stress_factor * self.stress_exposure_time * config.time_step, 0.95)
 
         return {'telomere': tel_prob, 'stress': stress_prob}
 
@@ -456,7 +459,6 @@ class Cell:
             'adhesion_strength': self.adhesion_strength,
             'response': self.response,
             'local_shear_stress': self.local_shear_stress,
-            'stress_exposure_time': self.stress_exposure_time,
             'senescent_growth_factor': self.senescent_growth_factor,
             'is_enlarged_senescent': self.senescent_growth_factor > 1.5
         }
