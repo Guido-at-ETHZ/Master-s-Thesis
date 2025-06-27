@@ -1445,6 +1445,15 @@ class Plotter:
                                           linewidth=0.5)
                         ax.add_patch(polygon)
 
+                        # ADD THIS: Display cell ID at the centroid
+                        centroid_x = np.mean([p[0] for p in territory])
+                        centroid_y = np.mean([p[1] for p in territory])
+
+                        ax.text(centroid_x, centroid_y, str(cell_id),
+                                fontsize=8, ha='center', va='center',
+                                color='white', fontweight='bold',
+                                bbox=dict(boxstyle='round,pad=0.2', facecolor='black', alpha=0.7))
+
                     except Exception as e:
                         # Fallback: scatter plot if polygon creation fails
                         points = np.array(territory[:100])  # Limit for performance

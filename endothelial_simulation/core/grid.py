@@ -298,7 +298,7 @@ class Grid:
             else:
                 x, y = cell.position
             shear_stress = shear_stress_function(x, y)
-            cell.apply_shear_stress(shear_stress, duration)
+            cell.apply_shear_stress(shear_stress)
 
     def calculate_confluency(self):
         """Calculate the confluency."""
