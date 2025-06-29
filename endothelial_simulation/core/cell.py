@@ -25,6 +25,7 @@ class Cell:
         """
         # Basic cell properties
         self.cell_id = cell_id
+        self.biological_id = f"bio_{hash((position[0], position[1], cell_id)) % 100000}"
         self.position = position
         self.divisions = divisions
         self.is_senescent = is_senescent
@@ -80,8 +81,8 @@ class Cell:
 
         # Stress resistance
         stress_offset = 3.0  # 3x more resistant (offset)
-        variability = np.random.normal(1.0, 0.5)  # Your variability
-        self.stress_resistance = stress_offset * max(0.3, variability)
+        variability = np.random.normal(1.0, 0.3)  # Your variability
+        self.stress_resistance = stress_offset * max(0.8, variability)
 
     def assign_territory(self, pixel_list):
         """
@@ -392,10 +393,22 @@ class Cell:
         self.age = 0.0
         return True
 
+    # Add this to your Cell's induce_senescence method:
     def induce_senescence(self, cause):
-        """Induce senescence in the cell."""
+        """Induce senescence with debugging."""
         if self.is_senescent:
             return False
+
+        # DEBUG: Print when senescence occurs
+        import traceback
+        bio_id = getattr(self, 'biological_id', 'unknown')
+        print(f"🚨 SENESCENCE TRIGGERED: {bio_id}")
+        print(f"   Cause: {cause}")
+        print(f"   Age: {self.age}, Divisions: {self.divisions}")
+        print(f"   Call stack:")
+        for line in traceback.format_stack()[-3:-1]:  # Show who called this
+            print(f"     {line.strip()}")
+
         self.is_senescent = True
         self.senescence_cause = cause
         return True

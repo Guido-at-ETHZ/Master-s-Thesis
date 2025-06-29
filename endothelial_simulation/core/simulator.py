@@ -112,9 +112,50 @@ class Simulator:
         self.last_tessellation_update = 0
         self.last_position_optimization = 0
 
+        # Add biological ID tracking
+        self.biological_id_counter = 0
+        self.biological_id_map = {}  # Maps grid_cell_id -> biological_id
+        self.cell_properties_map = {}  # Maps biological_id -> persistent properties
+
     # =============================================================================
     # INITIALIZATION METHODS
     # =============================================================================
+
+    def get_or_create_biological_id(self, grid_cell_id, cell_position, cell_divisions):
+        """Get or create a persistent biological ID for a cell."""
+
+        # Check if we already have a mapping for this grid cell
+        if grid_cell_id in self.biological_id_map:
+            return self.biological_id_map[grid_cell_id]
+
+        # Try to find existing biological ID based on position and properties
+        position_key = (round(cell_position[0], 1), round(cell_position[1], 1))
+
+        for bio_id, props in self.cell_properties_map.items():
+            stored_pos = props.get('original_position')
+            stored_div = props.get('divisions')
+
+            if (stored_pos and stored_div is not None and
+                    abs(stored_pos[0] - cell_position[0]) < 50 and  # 50 pixel tolerance
+                    abs(stored_pos[1] - cell_position[1]) < 50 and
+                    stored_div == cell_divisions):
+                # Found matching cell, reuse biological ID
+                self.biological_id_map[grid_cell_id] = bio_id
+                return bio_id
+
+        # Create new biological ID
+        self.biological_id_counter += 1
+        bio_id = f"bio_{self.biological_id_counter:05d}"
+
+        # Store mappings
+        self.biological_id_map[grid_cell_id] = bio_id
+        self.cell_properties_map[bio_id] = {
+            'original_position': cell_position,
+            'divisions': cell_divisions,
+            'creation_time': self.time
+        }
+
+        return bio_id
 
     def initialize(self, cell_count=None):
         """Initialize with standard single configuration."""
@@ -839,26 +880,130 @@ class Simulator:
 
         self.history.append(state)
 
+    # Replace your current senescence debugging with this enhanced version
+
     def _record_frame(self):
-        """Record frame data for animation."""
-        # Collect cell data for this frame
+        """Record frame data with detailed senescence bias debugging."""
         cells_data = []
 
-        for cell_id, cell in self.grid.cells.items():
+        # Detailed analysis of cell properties
+        healthy_props = []
+        senescent_props = []
+
+        for grid_cell_id, cell in self.grid.cells.items():
+            biological_id = self.get_or_create_biological_id(
+                grid_cell_id,
+                cell.position,
+                cell.divisions
+            )
+
+            cell.biological_id = biological_id
+
+            # Collect detailed properties
+            bio_id_num = int(biological_id.replace('bio_', ''))
+
+            cell_props = {
+                'bio_id': biological_id,
+                'bio_id_num': bio_id_num,
+                'divisions': cell.divisions,
+                'age': cell.age,
+                'stress_resistance': getattr(cell, 'stress_resistance', 1.0),
+                'local_shear_stress': cell.local_shear_stress,
+                'stress_exposure_time': getattr(cell, 'stress_exposure_time', 0.0),
+                'creation_time': self.cell_properties_map[biological_id].get('creation_time', self.time),
+                'target_area': getattr(cell, 'target_area', 0),
+                'is_senescent': cell.is_senescent,
+                'senescence_cause': cell.senescence_cause
+            }
+
+            if cell.is_senescent:
+                senescent_props.append(cell_props)
+            else:
+                healthy_props.append(cell_props)
+
+            # Calculate senescence probability for debugging
+            if hasattr(cell, 'calculate_senescence_probability'):
+                try:
+                    sen_prob = cell.calculate_senescence_probability(self.config)
+                    stress_prob = sen_prob.get('stress', 0)
+                    tel_prob = sen_prob.get('telomere', 0)
+
+                    if stress_prob > 0.1 or tel_prob > 0.1:  # High probability
+                        print(f"⚠️  {biological_id} (#{bio_id_num:02d}) HIGH SENESCENCE RISK:")
+                        print(f"     Stress prob: {stress_prob:.3f}, Tel prob: {tel_prob:.3f}")
+                        print(f"     Divisions: {cell.divisions}, Age: {cell.age:.1f}")
+                        print(f"     Stress resistance: {cell_props['stress_resistance']:.2f}")
+                        print(f"     Local shear: {cell.local_shear_stress:.2f}")
+                        print(f"     Creation time: {cell_props['creation_time']:.1f}")
+                except Exception as e:
+                    print(f"❌ Error calculating senescence for {biological_id}: {e}")
+
+            # Standard frame data
             cells_data.append({
-                'cell_id': cell_id,
+                'cell_id': biological_id,
                 'position': cell.position,
                 'orientation': cell.actual_orientation,
                 'aspect_ratio': cell.actual_aspect_ratio,
                 'area': cell.actual_area,
                 'is_senescent': cell.is_senescent,
                 'senescence_cause': cell.senescence_cause,
-                'territory': self.grid.get_display_territories().get(cell_id, [])
+                'territory': self.grid.get_display_territories().get(grid_cell_id, [])
             })
 
-        cell_properties = self.grid.get_cell_properties()
+        # DETAILED COMPARISON ANALYSIS
+        if senescent_props and healthy_props:
+            print(f"\n🔬 DETAILED SENESCENCE BIAS ANALYSIS:")
+            print(f"=" * 50)
+
+            # Compare averages
+            sen_avg_div = np.mean([c['divisions'] for c in senescent_props])
+            healthy_avg_div = np.mean([c['divisions'] for c in healthy_props])
+
+            sen_avg_age = np.mean([c['age'] for c in senescent_props])
+            healthy_avg_age = np.mean([c['age'] for c in healthy_props])
+
+            sen_avg_stress_res = np.mean([c['stress_resistance'] for c in senescent_props])
+            healthy_avg_stress_res = np.mean([c['stress_resistance'] for c in healthy_props])
+
+            sen_avg_creation = np.mean([c['creation_time'] for c in senescent_props])
+            healthy_avg_creation = np.mean([c['creation_time'] for c in healthy_props])
+
+            print(f"SENESCENT CELLS (n={len(senescent_props)}):")
+            print(f"  Avg divisions: {sen_avg_div:.2f}")
+            print(f"  Avg age: {sen_avg_age:.2f}")
+            print(f"  Avg stress resistance: {sen_avg_stress_res:.2f}")
+            print(f"  Avg creation time: {sen_avg_creation:.1f}")
+
+            print(f"\nHEALTHY CELLS (n={len(healthy_props)}):")
+            print(f"  Avg divisions: {healthy_avg_div:.2f}")
+            print(f"  Avg age: {healthy_avg_age:.2f}")
+            print(f"  Avg stress resistance: {healthy_avg_stress_res:.2f}")
+            print(f"  Avg creation time: {healthy_avg_creation:.1f}")
+
+            # Identify the smoking gun
+            print(f"\n🎯 KEY DIFFERENCES:")
+
+            div_diff = sen_avg_div - healthy_avg_div
+            if abs(div_diff) > 1:
+                print(f"  📊 DIVISIONS: Senescent cells have {div_diff:+.2f} more divisions!")
+
+            age_diff = sen_avg_age - healthy_avg_age
+            if abs(age_diff) > 10:
+                print(f"  ⏰ AGE: Senescent cells are {age_diff:+.2f} time units older!")
+
+            stress_res_diff = sen_avg_stress_res - healthy_avg_stress_res
+            if abs(stress_res_diff) > 0.5:
+                print(f"  🛡️  STRESS RESISTANCE: Senescent cells have {stress_res_diff:+.2f} different resistance!")
+
+            creation_diff = sen_avg_creation - healthy_avg_creation
+            if abs(creation_diff) > 30:
+                print(f"  🕰️  CREATION TIME: Senescent cells created {creation_diff:+.1f} time units later!")
+
+            print(f"=" * 50)
 
         # Store frame data
+        cell_properties = self.grid.get_cell_properties()
+
         frame_info = {
             'time': self.time,
             'input_value': self.input_pattern['value'],
@@ -910,6 +1055,133 @@ class Simulator:
 
         return filepath
 
+    # Add this function to your simulator class or as a standalone function
+
+    def test_cell_id_consistency(simulator):
+        """
+        Test function to verify cell ID consistency after your changes.
+        Run this after a simulation to check if biological IDs are working.
+        """
+        if not simulator.frame_data or len(simulator.frame_data) < 2:
+            print("❌ Need at least 2 frames to test consistency")
+            return False
+
+        print("🧪 Testing cell ID consistency...")
+
+        # Track cells across first few frames
+        consistency_issues = 0
+        transitions_found = 0
+
+        for frame_idx in range(1, min(len(simulator.frame_data), 6)):  # Check first 5 transitions
+            prev_frame = simulator.frame_data[frame_idx - 1]
+            current_frame = simulator.frame_data[frame_idx]
+
+            # Create lookup for current frame cells
+            current_cells = {cell['cell_id']: cell for cell in current_frame['cells']}
+
+            # Check each cell from previous frame
+            for prev_cell in prev_frame['cells']:
+                cell_id = prev_cell['cell_id']
+
+                if cell_id in current_cells:
+                    current_cell = current_cells[cell_id]
+
+                    # Check for senescence transitions
+                    if not prev_cell['is_senescent'] and current_cell['is_senescent']:
+                        transitions_found += 1
+                        print(
+                            f"  ✅ Cell {cell_id} transitioned to senescent (cause: {current_cell['senescence_cause']})")
+
+                    # Check for impossible reversals
+                    if prev_cell['is_senescent'] and not current_cell['is_senescent']:
+                        consistency_issues += 1
+                        print(f"  ❌ Cell {cell_id} reverted from senescent to healthy (impossible!)")
+
+                    # Check for senescence cause changes
+                    if (prev_cell['is_senescent'] and current_cell['is_senescent'] and
+                            prev_cell['senescence_cause'] != current_cell['senescence_cause']):
+                        consistency_issues += 1
+                        print(f"  ❌ Cell {cell_id} changed senescence cause (impossible!)")
+
+        # Summary
+        print(f"\n📊 Test Results:")
+        print(f"   Frames tested: {min(len(simulator.frame_data), 6)}")
+        print(f"   Senescence transitions found: {transitions_found}")
+        print(f"   Consistency issues: {consistency_issues}")
+
+        if consistency_issues == 0:
+            print("✅ Cell ID consistency test PASSED!")
+            return True
+        else:
+            print("❌ Cell ID consistency test FAILED!")
+            return False
+
+    # Also add this simple check function
+    def check_biological_ids(simulator):
+        """Quick check to see if cells have biological IDs."""
+        if not simulator.grid.cells:
+            print("❌ No cells in grid")
+            return
+
+        cells_with_bio_id = 0
+        total_cells = len(simulator.grid.cells)
+
+        for cell in simulator.grid.cells.values():
+            if hasattr(cell, 'biological_id'):
+                cells_with_bio_id += 1
+
+        print(f"📊 Biological ID Status:")
+        print(f"   Total cells: {total_cells}")
+        print(f"   Cells with biological ID: {cells_with_bio_id}")
+        print(f"   Coverage: {cells_with_bio_id / total_cells * 100:.1f}%")
+
+        if cells_with_bio_id == total_cells:
+            print("✅ All cells have biological IDs!")
+        else:
+            print(f"⚠️  {total_cells - cells_with_bio_id} cells missing biological IDs")
+
+        # Show a few example IDs
+        example_ids = []
+        for cell in list(simulator.grid.cells.values())[:3]:
+            if hasattr(cell, 'biological_id'):
+                example_ids.append(cell.biological_id)
+
+        if example_ids:
+            print(f"   Example biological IDs: {example_ids}")
+
+    # Test your animation works
+    def test_animation_with_biological_ids(plotter, simulator):
+        """Test that the animation shows consistent cell IDs."""
+        if not simulator.frame_data:
+            print("❌ No frame data for animation")
+            return
+
+        print("🎬 Testing animation with biological IDs...")
+
+        # Check first frame
+        first_frame = simulator.frame_data[0]
+        print(f"   First frame has {len(first_frame['cells'])} cells")
+
+        # Show sample cell data
+        if first_frame['cells']:
+            sample_cell = first_frame['cells'][0]
+            print(f"   Sample cell data: {sample_cell}")
+
+        # Try creating animation (this will use your fixed _record_frame method)
+        try:
+            animation = plotter.create_mosaic_animation(
+                simulator,
+                save_path="test_biological_ids.mp4",
+                fps=1,
+                max_frames=5
+            )
+            if animation:
+                print("✅ Animation created successfully with biological IDs!")
+            else:
+                print("❌ Animation creation failed")
+        except Exception as e:
+            print(f"❌ Animation error: {e}")
+            print("   Check that your _record_frame changes are correct")
 
     def get_safe_final_statistics(self):
         """
