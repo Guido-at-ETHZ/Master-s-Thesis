@@ -546,23 +546,30 @@ class Cell:
 
     # Add this to your Cell's induce_senescence method:
     def induce_senescence(self, cause):
-        """Induce senescence with debugging."""
+        """
+        Induce senescence while preserving cell identity.
+        FIXED: Ensure biological_id is preserved during conversion.
+        """
         if self.is_senescent:
-            return False
+            return  # Already senescent
 
-        # DEBUG: Print when senescence occurs
-        import traceback
-        bio_id = getattr(self, 'biological_id', 'unknown')
-        print(f"🚨 SENESCENCE TRIGGERED: {bio_id}")
-        print(f"   Cause: {cause}")
-        print(f"   Age: {self.age}, Divisions: {self.divisions}")
-        print(f"   Call stack:")
-        for line in traceback.format_stack()[-3:-1]:  # Show who called this
-            print(f"     {line.strip()}")
+        # Preserve the biological ID before conversion
+        original_biological_id = getattr(self, 'biological_id', None)
 
+        # Mark as senescent
         self.is_senescent = True
         self.senescence_cause = cause
-        return True
+
+        # Restore biological ID if it was set
+        if original_biological_id:
+            self.biological_id = original_biological_id
+
+        # Optional: Stop proliferation
+        if hasattr(self, 'max_divisions'):
+            self.divisions = self.max_divisions
+
+        print(f"✅ Cell {original_biological_id or 'unknown'} converted to senescent state ({cause})")
+
 
     def apply_shear_stress(self, shear_stress):
         """Apply shear stress to the cell for the given duration."""

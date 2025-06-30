@@ -465,6 +465,41 @@ class Simulator:
     # SIMULATION EXECUTION METHODS
     # =============================================================================
 
+    def _convert_healthy_to_senescent(self, cause, preferred_divisions=None):
+        """
+        Convert an existing healthy cell to senescent instead of creating a new one.
+        Maintains the same cell ID and just changes the state.
+        """
+        # Find healthy cells to convert
+        healthy_cells = []
+        for grid_cell_id, cell in self.grid.cells.items():
+            if not cell.is_senescent:
+                healthy_cells.append((grid_cell_id, cell))
+
+        if not healthy_cells:
+            print(f"Warning: No healthy cells available to convert to senescent ({cause})")
+            return
+
+        # Choose which cell to convert
+        target_cell_id, target_cell = None, None
+
+        if preferred_divisions is not None:
+            # Try to find a cell with matching division count
+            for grid_cell_id, cell in healthy_cells:
+                if cell.divisions == preferred_divisions:
+                    target_cell_id, target_cell = grid_cell_id, cell
+                    break
+
+        # If no specific cell found, convert the first available healthy cell
+        if target_cell is None:
+            target_cell_id, target_cell = healthy_cells[0]
+
+        # Convert the cell (same ID, just change state)
+        old_biological_id = getattr(target_cell, 'biological_id', 'unknown')
+        target_cell.induce_senescence(cause)
+
+        print(f"🔄 Converted cell {old_biological_id} from healthy to senescent ({cause})")
+
     def step(self, dt=None):
         """Modified step method to include deterministic senescence checking"""
         if dt is None:
@@ -497,7 +532,6 @@ class Simulator:
         if senescent_count > 0:
             print(f"📊 {senescent_count} cells became senescent (Time: {self.time:.1f})")
 
-        # Continue with existing model updates...
         # Update models (population dynamics, temporal dynamics)
         if 'temporal' in self.models and self.config.enable_temporal_dynamics:
             model = self.models['temporal']
@@ -508,7 +542,6 @@ class Simulator:
             model = self.models['spatial']
             # Set transition mode if transitioning
             model._in_transition_mode = self.transition_controller.is_transitioning()
-
             for cell in self.grid.cells.values():
                 dynamics_result = model.update_cell_properties(cell, current_input, dt, self.grid.cells)
 
@@ -531,6 +564,7 @@ class Simulator:
         # Record state
         self._record_state()
 
+        # THIS IS THE IMPORTANT PART - RETURN THE RIGHT KEYS
         return {
             'time': self.time,
             'step_count': self.step_count,
@@ -540,12 +574,7 @@ class Simulator:
         }
 
     def get_stress_statistics(self):
-            """
-            Get statistics about cellular stress status for monitoring.
 
-            Returns:
-                dict: Stress statistics across all cells
-            """
             if not self.grid.cells:
                 return {}
 
@@ -758,20 +787,23 @@ class Simulator:
     def _execute_population_actions(self, actions):
         """
         Execute population actions from PopulationDynamicsModel.
-
-        Args:
-            actions: Dictionary with 'births' and 'deaths' lists
+        FIXED: Convert existing cells to senescent instead of creating new ones.
         """
         if not actions or not isinstance(actions, dict):
             return
 
-        # Process births (new cells)
+        # Process births (only for healthy cells now)
         births = actions.get('births', [])
-        for birth in births:
-            if birth['type'] == 'healthy':
-                self._add_healthy_cell(birth['divisions'])
-            elif birth['type'] == 'senescent':
-                self._add_senescent_cell(birth['cause'])
+        healthy_births = [b for b in births if b['type'] == 'healthy']
+        senescent_births = [b for b in births if b['type'] == 'senescent']
+
+        # Add healthy cells normally
+        for birth in healthy_births:
+            self._add_healthy_cell(birth['divisions'])
+
+        # FIXED: Convert existing healthy cells to senescent instead of adding new ones
+        for birth in senescent_births:
+            self._convert_healthy_to_senescent(birth['cause'], birth.get('divisions', None))
 
         # Process deaths (remove cells)
         deaths = actions.get('deaths', [])
@@ -784,7 +816,12 @@ class Simulator:
         # Log population changes
         if births or deaths:
             total_deaths = sum(d.get('count', 1) for d in deaths)
-            print(f"  Population: +{len(births)} births, -{total_deaths} deaths")
+            senescent_conversions = len(senescent_births)
+            healthy_births_count = len(healthy_births)
+
+            print(f"  Population: +{healthy_births_count} healthy births, "
+                  f"{senescent_conversions} conversions to senescent, -{total_deaths} deaths")
+
 
     def _add_healthy_cell(self, divisions):
         """Add a healthy cell with specified division count."""
@@ -796,15 +833,6 @@ class Simulator:
         except Exception as e:
             print(f"Warning: Could not add healthy cell: {e}")
 
-    def _add_senescent_cell(self, cause):
-        """Add a senescent cell with specified cause."""
-        try:
-            if hasattr(self.grid, 'add_cell'):
-                self.grid.add_cell(is_senescent=True, senescence_cause=cause)
-            else:
-                self._create_cell_manually(is_senescent=True, senescence_cause=cause)
-        except Exception as e:
-            print(f"Warning: Could not add senescent cell: {e}")
 
     def _remove_healthy_cells(self, divisions, count):
         """Remove specified number of healthy cells with given division count."""
