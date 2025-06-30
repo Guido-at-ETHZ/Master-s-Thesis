@@ -3,6 +3,7 @@ Core module for the Cell class that represents a single endothelial cell with te
 Optimized version for better performance.
 """
 import numpy as np
+from endothelial_simulation import config
 
 
 class Cell:
