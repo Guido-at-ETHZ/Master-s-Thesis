@@ -59,7 +59,7 @@ class Cell:
 
         # Mechanical properties
         self.local_shear_stress = 0.0
-        #self.stress_exposure_time = 0.0
+       
 
         # Growth and adaptation properties
         self.growth_pressure = 0.0  # Pressure to expand beyond current territory
