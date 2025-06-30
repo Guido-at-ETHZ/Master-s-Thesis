@@ -111,6 +111,12 @@ class SimulationConfig:
         self.senolytic_efficacy_tel = 1.0
         self.senolytic_efficacy_stress = 1.2
 
+        # Deterministic senescence parameters
+        self.base_cellular_resistance = 0.5  # Base resistance threshold (adjusted for stress_factor scale)
+        self.resistance_variability = 0.2  # Cell-to-cell variability
+        self.stress_model = "linear"  # "linear", "nonlinear", or "saturation"
+
+
     def _generate_plot_directory(self):
         """Generate timestamped plot directory."""
         timestamp = time.strftime("%Y%m%d-%H%M%S")

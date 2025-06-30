@@ -466,7 +466,7 @@ class Simulator:
     # =============================================================================
 
     def step(self, dt=None):
-        """Execute one simulation step using event-driven approach."""
+        """Modified step method to include deterministic senescence checking"""
         if dt is None:
             dt = self.config.time_step
 
@@ -485,9 +485,23 @@ class Simulator:
         if self.transition_controller.is_transitioning():
             self.transition_controller.update_transition(self.time, dt)
 
-        # Apply shear stress
+        # Apply shear stress (existing code)
         self._apply_shear_stress(current_input, dt)
 
+        # NEW: Check for deterministic stress-induced senescence AFTER applying shear stress
+        for grid_cell_id, cell in self.grid.cells.items():
+            # Check for deterministic stress-induced senescence
+            senescence_triggered = cell.update_stress_and_check_senescence(dt, self.config)
+
+            # Existing telomere-based senescence check (probabilistic) - only if not already senescent
+            if not senescence_triggered and not cell.is_senescent:
+                sen_probs = cell.calculate_senescence_probability(self.config)
+
+                # Only check telomere senescence now (stress is deterministic)
+                if np.random.random() < sen_probs['telomere']:
+                    cell.induce_senescence("telomere_exhaustion")
+
+        # Continue with existing model updates...
         # Update models (population dynamics, temporal dynamics)
         if 'temporal' in self.models and self.config.enable_temporal_dynamics:
             model = self.models['temporal']
@@ -528,6 +542,82 @@ class Simulator:
             'input_value': current_input,
             'transitioning': self.transition_controller.is_transitioning()
         }
+
+        def get_stress_statistics(self):
+            """
+            Get statistics about cellular stress status for monitoring.
+
+            Returns:
+                dict: Stress statistics across all cells
+            """
+            if not self.grid.cells:
+                return {}
+
+            stress_data = []
+            at_risk_count = 0
+            will_senesce_count = 0
+
+            for cell in self.grid.cells.values():
+                if not cell.is_senescent:
+                    status = cell.get_stress_status(self.config)  # Pass config parameter
+                    stress_data.append(status)
+
+                    if status['at_risk']:
+                        at_risk_count += 1
+                    if status['will_senesce']:
+                        will_senesce_count += 1
+
+            if not stress_data:
+                return {}
+
+            final_stresses = [s['final_stress'] for s in stress_data]
+            stress_ratios = [s['stress_ratio'] for s in stress_data]
+
+            return {
+                'total_healthy_cells': len(stress_data),
+                'cells_at_risk': at_risk_count,
+                'cells_will_senesce': will_senesce_count,
+                'avg_final_stress': np.mean(final_stresses),
+                'max_final_stress': np.max(final_stresses),
+                'avg_stress_ratio': np.mean(stress_ratios),
+                'max_stress_ratio': np.max(stress_ratios)
+            }
+
+    # Example usage in your main simulation loop:
+    def run_simulation_with_monitoring():
+        """Example of how to monitor the deterministic senescence"""
+
+        simulator = Simulator(config)
+
+        # Your existing simulation setup...
+        simulator.initialize(cell_count=config.initial_cell_count)
+
+        for step in range(num_steps):
+            step_result = simulator.step()  # Use your existing step method
+
+            # Monitor stress status every 10 steps
+            if step % 10 == 0:
+                stress_stats = simulator.get_stress_statistics()
+                if stress_stats:
+                    print(f"Step {step}: {stress_stats['cells_at_risk']} cells at risk, "
+                          f"{stress_stats['cells_will_senesce']} will senesce")
+                    print(f"  Max stress ratio: {stress_stats['max_stress_ratio']:.2f}")
+
+    # Or use your existing run method:
+    def monitor_during_run():
+        """Monitor stress during your existing run() method"""
+        simulator = Simulator(config)
+        simulator.initialize(cell_count=config.initial_cell_count)
+
+        # Set up your input pattern (step, constant, etc.)
+        simulator.set_step_input(initial_value=0, final_value=2.0, step_time=30)
+
+        # Run simulation (this calls step() internally)
+        results = simulator.run(duration=120)  # 2 hours
+
+        # Check final stress statistics
+        final_stats = simulator.get_stress_statistics()
+        print(f"Final simulation stats: {final_stats}")
 
     def run(self, duration=None):
         """

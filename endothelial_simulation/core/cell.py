@@ -79,13 +79,72 @@ class Cell:
         # Optional: For monitoring temporal dynamics
         self.last_dynamics_info = {}
 
-        # Stress resistance
-        stress_offset = 3.0  # 3x more resistant (offset)
-        variability = np.random.normal(1.0, 0.3)  # Your variability
-        self.stress_resistance = stress_offset * max(0.8, variability)
+        # Cellular resistance (threshold for senescence)
+        base_resistance = 0.5  # Base resistance value (adjusted for stress_factor scale)
+        variability = np.random.normal(1.0, 0.2)  # 20% variability between cells
+        self.cellular_resistance = base_resistance * max(0.5, variability)
 
-        # Stress
+        # Stress accumulation tracking
+        self.accumulated_stress = 0.0
         self.stress_exposure_time = 0.0
+
+    def calculate_final_stress(self, config, exposure_time=None):
+        """
+        Calculate final stress based on biologically calibrated stress factor and exposure time.
+        Uses your existing _calculate_stress_factor method for proper stress conversion.
+
+        Args:
+            config: Simulation configuration
+            exposure_time: Time exposed to stress (hours). If None, uses self.stress_exposure_time
+
+        Returns:
+            final_stress: Cumulative stress value
+        """
+        if exposure_time is None:
+            exposure_time = self.stress_exposure_time
+
+        # Use your existing calibrated stress factor conversion
+        stress_factor = self._calculate_stress_factor(config)
+
+        # Option 1: Linear accumulation model
+        final_stress = stress_factor * exposure_time
+
+        return final_stress
+
+    def update_stress_and_check_senescence(self, dt_hours, config):
+        """
+        Update stress exposure and check for deterministic senescence.
+        Call this method each time step.
+
+        Args:
+            dt_hours: Time step in hours
+            config: Simulation configuration
+
+        Returns:
+            bool: True if senescence was triggered
+        """
+        if self.is_senescent:
+            return False
+
+        # Update exposure time if under stress
+        if self.local_shear_stress > 0:
+            self.stress_exposure_time += dt_hours
+
+            # Calculate current final stress using calibrated stress factor
+            final_stress = self.calculate_final_stress(config)
+
+            # Deterministic senescence check
+            if final_stress > self.cellular_resistance:
+                self.induce_senescence("stress_threshold_exceeded")
+                print(f"🔴 Deterministic senescence triggered!")
+                print(f"   Final stress: {final_stress:.6f}")
+                print(f"   Cellular resistance: {self.cellular_resistance:.6f}")
+                print(f"   Raw shear stress: {self.local_shear_stress:.2f} Pa")
+                print(f"   Stress factor: {self._calculate_stress_factor(config):.6f}")
+                print(f"   Exposure time: {self.stress_exposure_time:.2f} hours")
+                return True
+
+        return False
 
     def assign_territory(self, pixel_list):
         """
@@ -422,11 +481,14 @@ class Cell:
 
 
     def calculate_senescence_probability(self, config):
-        """Calculate probability of senescence based on cell state and conditions."""
+        """
+        Modified method - now only handles telomere-induced senescence.
+        Stress-induced senescence is now deterministic.
+        """
         if self.is_senescent:
             return {'telomere': 0.0, 'stress': 0.0}
 
-        # Telomere-induced senescence probability
+        # Telomere-induced senescence probability (keep existing logic)
         tel_prob = 0.0
         if self.divisions >= config.max_divisions:
             tel_prob = 1.0
@@ -434,12 +496,39 @@ class Cell:
             tel_prob = ((self.divisions - 0.7 * config.max_divisions) /
                         (0.3 * config.max_divisions)) * 0.5
 
-        # Stress-induced senescence probability (ONLY from shear stress)
-        stress_factor = self._calculate_stress_factor(config)
-        adjusted_stress_factor = stress_factor / self.stress_resistance  # Apply individual resistance
-        stress_prob = min(adjusted_stress_factor * self.stress_exposure_time * config.time_step, 0.95)
+        # Stress-induced senescence is now deterministic (handled separately)
+        # Return 0 for stress probability since it's no longer probabilistic
+        stress_prob = 0.0
 
         return {'telomere': tel_prob, 'stress': stress_prob}
+
+    def get_stress_status(self, config):
+        """
+        Get current stress status for monitoring.
+
+        Args:
+            config: Simulation configuration
+
+        Returns:
+            dict: Current stress information
+        """
+        if self.stress_exposure_time > 0:
+            final_stress = self.calculate_final_stress(config)
+            stress_ratio = final_stress / self.cellular_resistance
+        else:
+            final_stress = 0.0
+            stress_ratio = 0.0
+
+        return {
+            'final_stress': final_stress,
+            'cellular_resistance': self.cellular_resistance,
+            'stress_ratio': stress_ratio,
+            'exposure_time': self.stress_exposure_time,
+            'current_shear_stress': self.local_shear_stress,
+            'stress_factor': self._calculate_stress_factor(config) if self.local_shear_stress > 0 else 0.0,
+            'at_risk': stress_ratio > 0.8,  # Warning threshold
+            'will_senesce': stress_ratio >= 1.0
+        }
 
     def _calculate_stress_factor(self, config):
         """Calculate stress factor based on shear stress magnitude."""
