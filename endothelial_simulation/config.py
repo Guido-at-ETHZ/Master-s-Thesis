@@ -102,7 +102,6 @@ class SimulationConfig:
         self.lambda_scale = 0.3  # Lambda scaling parameter
 
         # === POPULATION DYNAMICS PARAMETERS ===
-        self.max_divisions = 0 #15
         self.proliferation_rate = 0 #0.0006
         self.carrying_capacity = 200
         self.death_rate_healthy = 0 #0.0001

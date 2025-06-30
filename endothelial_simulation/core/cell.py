@@ -59,7 +59,7 @@ class Cell:
 
         # Mechanical properties
         self.local_shear_stress = 0.0
-       
+
 
         # Growth and adaptation properties
         self.growth_pressure = 0.0  # Pressure to expand beyond current territory
@@ -81,29 +81,14 @@ class Cell:
         self.last_dynamics_info = {}
 
         # TELOMERE SYSTEM - Simple and configurable
-        if config:
-            # Each cell starts with individual telomere length
-            self.telomere_length = np.random.normal(
-                config.initial_telomere_mean,
-                config.initial_telomere_std
-            )
-            # Ensure minimum viable length
-            self.telomere_length = max(10, self.telomere_length)
+        self.telomere_length = np.random.normal(100, 20)  # Mean=100, std=20
+        self.telomere_length = max(10, self.telomere_length)  # Minimum viable length
+        self.telomere_loss_per_division = 14.3  # 100/7 divisions
 
-            # Store config reference for division calculations
-            self.telomere_loss_per_division = config.telomere_loss_per_division
-        else:
-            # Fallback defaults
-            self.telomere_length = 100
-            self.telomere_loss_per_division = 100 / 7
-
-        # STRESS SYSTEM (unchanged)
-        if config:
-            base_resistance = config.base_cellular_resistance
-            variability = np.random.normal(1.0, config.resistance_variability)
-            self.cellular_resistance = base_resistance * max(0.5, variability)
-        else:
-            self.cellular_resistance = 0.5
+        # STRESS SYSTEM - Hardcoded for simplicity
+        base_resistance = 0.5
+        variability = np.random.normal(1.0, 0.2)
+        self.cellular_resistance = base_resistance * max(0.5, variability)
 
         # Stress accumulation tracking
         self.accumulated_stress = 0.0
