@@ -84,6 +84,9 @@ class Cell:
         variability = np.random.normal(1.0, 0.3)  # Your variability
         self.stress_resistance = stress_offset * max(0.8, variability)
 
+        # Stress
+        self.stress_exposure_time = 0.0
+
     def assign_territory(self, pixel_list):
         """
         Assign a list of pixels to this cell's territory.
@@ -441,12 +444,19 @@ class Cell:
     def _calculate_stress_factor(self, config):
         """Calculate stress factor based on shear stress magnitude."""
         tau = self.local_shear_stress
-        if tau <= 10:
+        if tau <= 0:
+            return 0
+        if tau <= 1:
             return 0.002 + tau * 0.0005
-        elif tau <= 20:
-            return 0.007 + (tau - 10) * 0.001
+        elif tau <= 2:
+            return 0.007 + (tau - 1) * 0.001
         else:
-            return 0.017 + (tau - 20) * 0.005
+            return 0.017 + (tau - 2) * 0.005
+
+    def update_stress_exposure(self, dt_hours):
+        """Update stress exposure time for any stress above 0 Pa."""
+        if self.local_shear_stress > 0:
+            self.stress_exposure_time += dt_hours
 
     def get_state_dict(self):
         """Get cell state dictionary with real parameters only."""
