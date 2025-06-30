@@ -79,10 +79,30 @@ class Cell:
         # Optional: For monitoring temporal dynamics
         self.last_dynamics_info = {}
 
-        # Cellular resistance (threshold for senescence)
-        base_resistance = 0.5  # Base resistance value (adjusted for stress_factor scale)
-        variability = np.random.normal(1.0, 0.2)  # 20% variability between cells
-        self.cellular_resistance = base_resistance * max(0.5, variability)
+        # TELOMERE SYSTEM - Simple and configurable
+        if config:
+            # Each cell starts with individual telomere length
+            self.telomere_length = np.random.normal(
+                config.initial_telomere_mean,
+                config.initial_telomere_std
+            )
+            # Ensure minimum viable length
+            self.telomere_length = max(10, self.telomere_length)
+
+            # Store config reference for division calculations
+            self.telomere_loss_per_division = config.telomere_loss_per_division
+        else:
+            # Fallback defaults
+            self.telomere_length = 100
+            self.telomere_loss_per_division = 100 / 7
+
+        # STRESS SYSTEM (unchanged)
+        if config:
+            base_resistance = config.base_cellular_resistance
+            variability = np.random.normal(1.0, config.resistance_variability)
+            self.cellular_resistance = base_resistance * max(0.5, variability)
+        else:
+            self.cellular_resistance = 0.5
 
         # Stress accumulation tracking
         self.accumulated_stress = 0.0
@@ -110,6 +130,35 @@ class Cell:
         final_stress = stress_factor * exposure_time
 
         return final_stress
+
+    def get_senescence_status(self, config):
+        """Get comprehensive senescence risk status."""
+        if self.is_senescent:
+            return {
+                'is_senescent': True,
+                'cause': self.senescence_cause,
+                'telomere_length': self.telomere_length,
+                'stress_ratio': 0
+            }
+
+        # Calculate risk factors
+        telomere_ratio = self.telomere_length / max(1, self.telomere_loss_per_division)
+        divisions_left = int(telomere_ratio)
+
+        stress_ratio = 0
+        if self.stress_exposure_time > 0:
+            final_stress = self.calculate_final_stress(config)
+            stress_ratio = final_stress / self.cellular_resistance
+
+        return {
+            'is_senescent': False,
+            'telomere_length': self.telomere_length,
+            'divisions_left': divisions_left,
+            'telomere_at_risk': divisions_left <= 1,
+            'stress_ratio': stress_ratio,
+            'stress_at_risk': stress_ratio > 0.8,
+            'will_senesce_soon': divisions_left <= 1 or stress_ratio >= 1.0
+        }
 
     def update_stress_and_check_senescence(self, dt_hours, config):
         """
@@ -448,12 +497,66 @@ class Cell:
         self.age += time_step
 
     def divide(self):
-        """Perform cell division, increasing the division count."""
+        """Perform cell division with telomere shortening."""
         if self.is_senescent:
             return False
+
+        # Shorten telomeres with each division
+        self.telomere_length -= self.telomere_loss_per_division
         self.divisions += 1
         self.age = 0.0
+
         return True
+
+    def check_deterministic_senescence(self, config):
+        """
+        Check for all deterministic senescence triggers.
+
+        Returns:
+            str or None: Senescence cause if triggered, None otherwise
+        """
+        if self.is_senescent:
+            return None
+
+        # 1. TELOMERE SENESCENCE - Simple threshold check
+        if self.telomere_length <= 0:
+            return "telomere_exhaustion"
+
+        # 2. STRESS SENESCENCE - Existing system
+        if self.stress_exposure_time > 0:
+            final_stress = self.calculate_final_stress(config)
+            if final_stress > self.cellular_resistance:
+                return "stress_threshold_exceeded"
+
+        return None
+
+    def update_and_check_all_senescence(self, dt_hours, config):
+        """
+        Update stress exposure and check all senescence mechanisms.
+
+        Args:
+            dt_hours: Time step in hours
+            config: Simulation configuration
+
+        Returns:
+            bool: True if senescence was triggered
+        """
+        if self.is_senescent:
+            return False
+
+        # Update stress exposure time
+        if self.local_shear_stress > 0:
+            self.stress_exposure_time += dt_hours
+
+        # Check for senescence
+        senescence_cause = self.check_deterministic_senescence(config)
+
+        if senescence_cause:
+            self.induce_senescence(senescence_cause)
+            print(f"🔴 {senescence_cause}: Telomere={self.telomere_length:.1f}, Divisions={self.divisions}")
+            return True
+
+        return False
 
     # Add this to your Cell's induce_senescence method:
     def induce_senescence(self, cause):

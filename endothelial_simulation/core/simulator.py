@@ -488,18 +488,14 @@ class Simulator:
         # Apply shear stress (existing code)
         self._apply_shear_stress(current_input, dt)
 
-        # NEW: Check for deterministic stress-induced senescence AFTER applying shear stress
+        # SINGLE DETERMINISTIC SENESCENCE CHECK
+        senescent_count = 0
         for grid_cell_id, cell in self.grid.cells.items():
-            # Check for deterministic stress-induced senescence
-            senescence_triggered = cell.update_stress_and_check_senescence(dt, self.config)
+            if cell.update_and_check_all_senescence(dt, self.config):
+                senescent_count += 1
 
-            # Existing telomere-based senescence check (probabilistic) - only if not already senescent
-            if not senescence_triggered and not cell.is_senescent:
-                sen_probs = cell.calculate_senescence_probability(self.config)
-
-                # Only check telomere senescence now (stress is deterministic)
-                if np.random.random() < sen_probs['telomere']:
-                    cell.induce_senescence("telomere_exhaustion")
+        if senescent_count > 0:
+            print(f"📊 {senescent_count} cells became senescent (Time: {self.time:.1f})")
 
         # Continue with existing model updates...
         # Update models (population dynamics, temporal dynamics)
@@ -543,7 +539,7 @@ class Simulator:
             'transitioning': self.transition_controller.is_transitioning()
         }
 
-        def get_stress_statistics(self):
+    def get_stress_statistics(self):
             """
             Get statistics about cellular stress status for monitoring.
 
@@ -582,6 +578,8 @@ class Simulator:
                 'avg_stress_ratio': np.mean(stress_ratios),
                 'max_stress_ratio': np.max(stress_ratios)
             }
+
+
 
     # Example usage in your main simulation loop:
     def run_simulation_with_monitoring():

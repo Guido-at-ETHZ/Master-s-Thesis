@@ -69,11 +69,13 @@ class SimulationConfig:
         self.tau_orientation_minutes = 60.0
         self.tau_aspect_ratio_minutes = 50.0
 
-        # === SENESCENCE ===
-        self.max_divisions = 12 #50
-        self.telomere_base_length = 0 #100
-        self.senescence_growth_factor_tel = 0 #1.5
-        self.senescence_growth_factor_stress = 0 #0.8
+        # === TELOMERE SENESCENCE PARAMETERS ===
+        self.max_divisions = 7  # Target number of divisions before senescence
+        self.initial_telomere_mean = 100  # Average starting telomere length
+        self.initial_telomere_std = 20  # Variability in starting length
+
+        # Calculated automatically to match max_divisions
+        self.telomere_loss_per_division = self.initial_telomere_mean / self.max_divisions
 
         # These are based on experimental data - adjust values as needed
         self.known_pressures = [0.0, 1.4]  # Pressure values in Pa
@@ -114,7 +116,6 @@ class SimulationConfig:
         # Deterministic senescence parameters
         self.base_cellular_resistance = 0.5  # Base resistance threshold (adjusted for stress_factor scale)
         self.resistance_variability = 0.2  # Cell-to-cell variability
-        self.stress_model = "linear"  # "linear", "nonlinear", or "saturation"
 
 
     def _generate_plot_directory(self):
