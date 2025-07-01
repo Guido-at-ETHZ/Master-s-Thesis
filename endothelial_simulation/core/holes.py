@@ -70,7 +70,6 @@ class HoleManager:
         # Configuration parameters (same as original)
         self.max_holes = getattr(grid.config, 'max_holes', 5)
         self.hole_creation_probability_base = getattr(grid.config, 'hole_creation_probability_base', 0.02)
-        self.hole_creation_threshold_cells = getattr(grid.config, 'hole_creation_threshold_cells', 10)
         self.hole_creation_threshold_senescence = getattr(grid.config, 'hole_creation_threshold_senescence', 0.30)
         self.compression_reference_density = getattr(grid.config, 'hole_compression_reference_density', 15)
 

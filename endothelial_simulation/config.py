@@ -51,7 +51,6 @@ class SimulationConfig:
         self.enable_holes = True
         self.max_holes = 5
         self.hole_creation_probability_base = 0.02
-        self.hole_creation_threshold_cells = 10
         self.hole_creation_threshold_senescence = 0.30
 
         # === VISUALIZATION ===
