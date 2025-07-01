@@ -184,11 +184,35 @@ class Cell:
     def assign_territory(self, pixel_list):
         """
         Assign a list of pixels to this cell's territory.
-        Optimized version with sampling for large territories.
+        Now enforces expansion limits to prevent unrealistic over-expansion.
 
         Parameters:
             pixel_list: List of (x, y) tuples representing pixels owned by this cell
         """
+        # Calculate base target area (without senescent growth factor)
+        if self.is_senescent:
+            base_target_area = self.target_area / max(1.0, self.senescent_growth_factor)
+            max_allowed_area = base_target_area * 3.0  # 300% expansion limit
+        else:
+            base_target_area = self.target_area
+            max_allowed_area = base_target_area * 1.2  # 120% expansion limit
+
+        # Enforce expansion limits
+        requested_area = len(pixel_list)
+        if requested_area > max_allowed_area:
+            # Cap the territory to maximum allowed area
+            # Keep pixels closest to cell center/position
+            if pixel_list:
+                pixels_array = np.array(pixel_list)
+                distances = np.linalg.norm(pixels_array - np.array(self.position), axis=1)
+                sorted_indices = np.argsort(distances)
+                max_pixels = int(max_allowed_area)
+                pixel_list = [pixel_list[i] for i in sorted_indices[:max_pixels]]
+
+            print(f"⚠️  Cell {self.cell_id} expansion limited: {requested_area:.0f} → {len(pixel_list):.0f} pixels "
+                  f"({'senescent' if self.is_senescent else 'healthy'} limit: {max_allowed_area:.0f})")
+
+        # Assign territory
         self.territory_pixels = pixel_list
         self.actual_area = len(pixel_list)
 
@@ -203,7 +227,7 @@ class Cell:
             # Calculate geometric properties (optimized)
             self._calculate_geometry_fast()
 
-            # Update compression ratio
+            # Update compression ratio (based on current target, which includes senescent growth)
             self.compression_ratio = self.actual_area / max(1, self.target_area)
 
             # Calculate growth pressure (higher when compressed)
@@ -215,6 +239,7 @@ class Cell:
     def update_senescent_growth(self, dt_hours):
         """
         Probabilistic growth for senescent cells.
+        Now enforces expansion limits based on actual area.
 
         Parameters:
             dt_hours: Time step in hours
@@ -225,7 +250,21 @@ class Cell:
         if not self.is_senescent:
             return False
 
-        # Can't grow beyond maximum
+        # Check expansion limits BEFORE growth factor limits
+        base_target_area = self.target_area / max(1.0, self.senescent_growth_factor)
+        max_allowed_area = base_target_area * 3.0  # 300% expansion limit
+
+        # If actual area already exceeds expansion limit, prevent further growth
+        if self.actual_area >= max_allowed_area:
+            # Optionally adjust target_area down to match actual constraint
+            constrained_target = min(self.target_area, max_allowed_area)
+            if constrained_target < self.target_area:
+                self.target_area = constrained_target
+                # Recalculate growth factor based on constrained target
+                self.senescent_growth_factor = self.target_area / base_target_area
+            return False
+
+        # Can't grow beyond maximum growth factor
         if self.senescent_growth_factor >= self.max_senescent_growth:
             return False
 
@@ -243,24 +282,67 @@ class Cell:
         size_factor = (self.max_senescent_growth - self.senescent_growth_factor) / \
                       (self.max_senescent_growth - 1.0)
 
+        # 4. NEW: Growth becomes less likely as actual area approaches expansion limit
+        area_factor = max(0.1, (max_allowed_area - self.actual_area) / (max_allowed_area * 0.5))
+
         # Combined probability
-        final_prob = growth_prob * stress_factor * compression_factor * size_factor
+        final_prob = growth_prob * stress_factor * compression_factor * size_factor * area_factor
         final_prob = min(0.3 * dt_hours, final_prob)  # Cap at 30% per hour
 
         # Random growth check
         if np.random.random() < final_prob:
-            # Grow by the increment
+            # Calculate proposed growth
             growth_increase = self.growth_increment * np.random.uniform(0.8, 1.2)  # Add variability
-            self.senescent_growth_factor = min(self.max_senescent_growth,
-                                               self.senescent_growth_factor + growth_increase)
+            proposed_growth_factor = min(self.max_senescent_growth,
+                                         self.senescent_growth_factor + growth_increase)
 
-            # Update target area
-            base_area = self.target_area / (self.senescent_growth_factor - growth_increase + 1.0)  # Back-calculate base
-            self.target_area = base_area * self.senescent_growth_factor
+            # Calculate proposed target area
+            proposed_target_area = base_target_area * proposed_growth_factor
 
-            return True
+            # Ensure proposed target doesn't exceed expansion limit
+            if proposed_target_area <= max_allowed_area:
+                self.senescent_growth_factor = proposed_growth_factor
+                self.target_area = proposed_target_area
+                return True
+            else:
+                # Growth would exceed limit - cap at maximum allowed
+                self.target_area = max_allowed_area
+                self.senescent_growth_factor = max_allowed_area / base_target_area
+                return True
 
         return False
+
+    def check_expansion_compliance(self):
+        """
+        Check if cell is within expansion limits and return compliance info.
+
+        Returns:
+            Dict with compliance information
+        """
+        if self.is_senescent:
+            base_target_area = self.target_area / max(1.0, self.senescent_growth_factor)
+            max_allowed_area = base_target_area * 3.0  # 300% limit
+            expansion_type = "senescent"
+            limit_multiplier = 3.0
+        else:
+            base_target_area = self.target_area
+            max_allowed_area = base_target_area * 1.2  # 120% limit
+            expansion_type = "healthy"
+            limit_multiplier = 1.2
+
+        expansion_ratio = self.actual_area / base_target_area if base_target_area > 0 else 0
+        is_compliant = self.actual_area <= max_allowed_area
+
+        return {
+            'is_compliant': is_compliant,
+            'expansion_type': expansion_type,
+            'limit_multiplier': limit_multiplier,
+            'base_target_area': base_target_area,
+            'max_allowed_area': max_allowed_area,
+            'actual_area': self.actual_area,
+            'expansion_ratio': expansion_ratio,
+            'overage': max(0, self.actual_area - max_allowed_area)
+        }
 
     def _calculate_boundary_fast(self):
         """Calculate the boundary points of the cell territory - optimized version."""

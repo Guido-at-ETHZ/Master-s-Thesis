@@ -185,9 +185,14 @@ class SpatialPropertiesModel:
 
         # Get time constants from temporal model
         if self.temporal_model:
-            tau_area = self.temporal_model.calculate_tau_area()
-            tau_orient = self.temporal_model.calculate_tau_orientation()
-            tau_ar = self.temporal_model.calculate_tau_aspect_ratio()
+            # Use current pressure to get scaled time constants
+            # Default to 1.0 Pa if pressure not available
+            current_pressure = getattr(self, '_current_pressure', pressure) if hasattr(self,
+                                                                                       '_current_pressure') else pressure
+            # Get time constants for different biological properties
+            tau_area, _ = self.temporal_model.get_scaled_tau_and_amax(current_pressure, 'area')
+            tau_orient, _ = self.temporal_model.get_scaled_tau_and_amax(current_pressure, 'orientation')
+            tau_ar, _ = self.temporal_model.get_scaled_tau_and_amax(current_pressure, 'aspect_ratio')
         else:
             # Default time constants if no temporal model
             tau_area = 30.0  # 30 minutes

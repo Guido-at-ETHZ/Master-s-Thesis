@@ -77,12 +77,14 @@ class HoleManager:
         self.min_hole_radius = None
         self.max_hole_radius = None
 
-        # Biological parameters
+        # FIXED: Biological parameters - now consistent with cell system
         self.max_expansion_healthy = 1.2  # Healthy cells: 120% of target area
-        self.max_expansion_senescent = 1.0  # Senescent cells: 100% of target area (no growth)
+        self.max_expansion_senescent = 3.0  # Senescent cells: 300% of target area (matches max_senescent_growth)
         self.senescence_threshold = 0.30  # 30% senescence threshold
 
         print(f"🧬 Biological HoleManager initialized (max {self.max_holes} holes)")
+        print(
+            f"   Expansion limits - Healthy: {self.max_expansion_healthy}x, Senescent: {self.max_expansion_senescent}x")
 
     # =============================================================================
     # BIOLOGICAL DECISION LOGIC (REPLACES ARBITRARY THRESHOLDS)
