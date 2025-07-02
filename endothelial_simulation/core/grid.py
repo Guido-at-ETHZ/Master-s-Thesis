@@ -163,6 +163,7 @@ class Grid:
         """
         Update Voronoi tessellation with area-based weighting.
         """
+
         if not self.cells:
             self.pixel_ownership.fill(-1)
             self.territory_map.clear()
@@ -223,6 +224,8 @@ class Grid:
             pixels = [(int(self.pixel_coords[idx][0]), int(self.pixel_coords[idx][1]))
                      for idx in pixel_indices]
             self._assign_territory_to_cell(cell_id, pixels)
+
+        self.enforce_biological_limits()
 
     # Include all the other necessary methods from the previous response
     def _angle_difference(self, target, actual):
@@ -482,6 +485,32 @@ class Grid:
 
         return display_territories
 
+    def enforce_biological_limits(self):
+        """Clamp cell territories to biological limits and create holes."""
+
+        for cell in self.cells.values():
+            max_area = cell.target_area * (1.2 if not cell.is_senescent else 3.0)
+
+            if cell.actual_area > max_area:
+                # Keep only the pixels closest to cell center
+                distances = [(pixel, self._distance_to_cell_center(pixel, cell))
+                             for pixel in cell.territory_pixels]
+                distances.sort(key=lambda x: x[1])  # Sort by distance
+
+                # Keep only the closest pixels up to max_area
+                pixels_to_keep = int(max_area)
+                cell.territory_pixels = [pixel for pixel, dist in distances[:pixels_to_keep]]
+                cell.actual_area = len(cell.territory_pixels)
+
+                # Mark excess pixels as holes/unassigned
+                excess_pixels = [pixel for pixel, dist in distances[pixels_to_keep:]]
+                for pixel in excess_pixels:
+                    self.pixel_ownership[pixel[1], pixel[0]] = -1  # Mark as hole
+
+    def _distance_to_cell_center(self, pixel, cell):
+        """Calculate distance from pixel to cell center."""
+        return np.sqrt((pixel[0] - cell.position[0]) ** 2 + (pixel[1] - cell.position[1]) ** 2)
+
     def populate_grid(self, count, division_distribution=None, area_distribution=None):
         """Populate the grid with initial cells."""
         created_cells = []
@@ -508,6 +537,7 @@ class Grid:
 
             divisions = division_distribution()
             target_area = area_distribution()
+            print(f"🐛 INITIAL: Cell will be created with target_area = {target_area}")
 
             is_senescent = False
             senescence_cause = None

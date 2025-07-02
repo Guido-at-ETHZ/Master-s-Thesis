@@ -293,6 +293,7 @@ class Simulator:
         spatial_model = self.models['spatial']
 
         for cell_id, cell in self.grid.cells.items():
+            old_target = cell.target_area
             target_area = spatial_model.calculate_target_area(
                 current_pressure, cell.is_senescent, cell.senescence_cause
             )
@@ -304,6 +305,7 @@ class Simulator:
             )
 
             cell.target_area = target_area
+            print(f"🐛 PRESSURE_UPDATE: Cell {cell_id}: {old_target} → {target_area}")
             cell.target_aspect_ratio = target_aspect_ratio
             cell.target_orientation = target_orientation
             cell.actual_aspect_ratio = target_aspect_ratio
