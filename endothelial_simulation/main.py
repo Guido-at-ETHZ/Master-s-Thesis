@@ -17,7 +17,7 @@ from endothelial_simulation.config import (
 )
 from endothelial_simulation.core.simulator import Simulator
 from endothelial_simulation.visualization import Plotter
-
+from endothelial_simulation.control.mpc_controller import EndothelialMPCController
 
 def parse_schedule_string(schedule_str):
     """
@@ -167,6 +167,54 @@ def run_protocol_simulation(config, protocol_name, duration=None, **protocol_kwa
     return simulator
 
 
+def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, duration=None):
+    """Run a simulation with MPC controller."""
+    print(f"🚀 Setting up MPC-controlled simulation...")
+
+    simulator = Simulator(config)
+
+    config_results = simulator.initialize_with_multiple_configurations(
+        cell_count=config.initial_cell_count,
+        num_configurations=getattr(config, 'multi_config_count', 10),
+        optimization_iterations=getattr(config, 'multi_config_optimization_steps', 3)
+    )
+    simulator._config_results = config_results
+
+    # Create MPC controller
+    mpc = EndothelialMPCController(simulator, config)
+    targets = {
+        'response': mpc_response_target,
+        'orientation': np.radians(mpc_orientation_target)
+    }
+    mpc.set_targets(targets)
+
+    print(f"📊 Running MPC-controlled simulation:")
+    print(f"   Response target: {mpc_response_target}")
+    print(f"   Orientation target: {mpc_orientation_target}°")
+
+    # MPC simulation loop
+    sim_duration = duration if duration else config.simulation_duration
+    for minute in range(int(sim_duration)):
+        try:
+            optimal_shear, control_info = mpc.control_step()
+
+            if control_info.get('emergency', False):
+                print(f"🛑 EMERGENCY at t={minute}min: {control_info['reason']}")
+                optimal_shear = 0.0
+
+            simulator.set_constant_input(optimal_shear)
+            simulator.step(dt=1.0)
+
+            if minute % 30 == 0:
+                print(f"T={minute:3d}min: Shear={optimal_shear:.2f}Pa, Cells={len(simulator.grid.cells):2d}")
+
+        except Exception as e:
+            print(f"⚠️ Error at t={minute}min: {e}")
+            simulator.set_constant_input(0.5)
+            simulator.step(dt=1.0)
+
+    return simulator
+
 def run_constant_simulation(config, constant_value, duration=None):
     """Run a simulation with constant input."""
     print(f"🚀 Setting up constant simulation...")
@@ -250,6 +298,9 @@ Examples:
                                    'stress_recovery', 'oscillatory_low', 'high_stress_brief'],
                             help='Use predefined protocol')
 
+    input_group.add_argument('--mpc-control', action='store_true',
+                             help='Use MPC controller for autonomous control')
+
     # === SINGLE-STEP INPUT PARAMETERS ===
     parser.add_argument('--initial-value', type=float, default=0.0,
                         help='Initial shear stress value in Pa (default: 0.0)')
@@ -263,6 +314,22 @@ Examples:
     # === MULTI-STEP INPUT PARAMETERS ===
     parser.add_argument('--schedule', type=str,
                         help='Multi-step schedule as "time1,value1;time2,value2;..." (times in minutes, values in Pa)')
+
+    # === PROTOCOL SCALING PARAMETERS ===
+    parser.add_argument('--scale-time', type=float, default=1.0,
+                        help='Time scaling factor for protocols (default: 1.0)')
+
+    parser.add_argument('--scale-stress', type=float, default=1.0,
+                        help='Stress scaling factor for protocols (default: 1.0)')
+
+    parser.add_argument('--max-stress', type=float,
+                        help='Maximum stress limit for protocols (Pa)')
+
+    # === MPC CONTROL PARAMETERS ===
+    parser.add_argument('--mpc-response-target', type=float, default=2.0,
+                        help='MPC response target (default: 2.0)')
+    parser.add_argument('--mpc-orientation-target', type=float, default=20.0,
+                        help='MPC orientation target in degrees (default: 20.0)')
 
     # === PROTOCOL SCALING PARAMETERS ===
     parser.add_argument('--scale-time', type=float, default=1.0,
@@ -403,6 +470,18 @@ Examples:
                     return
 
             simulator = run_multi_step_simulation(config, schedule, args.duration)
+
+        elif args.mpc_control:  # ← ADD THIS NEW BLOCK
+            # MPC control
+            print("INPUT TYPE: MPC Control")
+            print("-" * 40)
+
+            simulator = run_mpc_simulation(
+                config,
+                args.mpc_response_target,
+                args.mpc_orientation_target,
+                args.duration
+            )
 
         else:
             # Single-step input (default)

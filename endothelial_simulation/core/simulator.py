@@ -317,6 +317,14 @@ class Simulator:
     # INPUT PATTERN METHODS
     # =============================================================================
 
+    def set_constant_input(self, value):
+        """Set a constant input value for MPC control."""
+        self.input_pattern = {
+            'type': 'constant',
+            'value': value,
+            'params': {'value': value}
+        }
+
     def set_step_input(self, initial_value, final_value, step_time):
         """Set step input pattern."""
         self.input_pattern = {
