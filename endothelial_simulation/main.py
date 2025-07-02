@@ -315,15 +315,6 @@ Examples:
     parser.add_argument('--schedule', type=str,
                         help='Multi-step schedule as "time1,value1;time2,value2;..." (times in minutes, values in Pa)')
 
-    # === PROTOCOL SCALING PARAMETERS ===
-    parser.add_argument('--scale-time', type=float, default=1.0,
-                        help='Time scaling factor for protocols (default: 1.0)')
-
-    parser.add_argument('--scale-stress', type=float, default=1.0,
-                        help='Stress scaling factor for protocols (default: 1.0)')
-
-    parser.add_argument('--max-stress', type=float,
-                        help='Maximum stress limit for protocols (Pa)')
 
     # === MPC CONTROL PARAMETERS ===
     parser.add_argument('--mpc-response-target', type=float, default=2.0,
