@@ -265,6 +265,9 @@ class Grid:
         if cell_id in self.cells:
             self.cells[cell_id].assign_territory(pixels)
 
+            # Update territory_map with the limited territory
+            self.territory_map[cell_id] = self.cells[cell_id].territory_pixels
+
     # Add all the missing methods from your original Grid class
     def adapt_cell_properties(self):
         """Adapt cell properties based on space constraints and targets."""
@@ -491,6 +494,10 @@ class Grid:
         for cell in self.cells.values():
             max_area = cell.target_area * (1.2 if not cell.is_senescent else 3.0)
 
+            # ADD THIS LINE to see what's happening:
+            print(
+                f"🐛 Cell {cell.cell_id}: actual={cell.actual_area} max={max_area} exceeds={cell.actual_area > max_area}")
+
             if cell.actual_area > max_area:
                 # Keep only the pixels closest to cell center
                 distances = [(pixel, self._distance_to_cell_center(pixel, cell))
@@ -502,10 +509,13 @@ class Grid:
                 cell.territory_pixels = [pixel for pixel, dist in distances[:pixels_to_keep]]
                 cell.actual_area = len(cell.territory_pixels)
 
+                self.territory_map[cell.cell_id] = cell.territory_pixels
+
                 # Mark excess pixels as holes/unassigned
                 excess_pixels = [pixel for pixel, dist in distances[pixels_to_keep:]]
                 for pixel in excess_pixels:
-                    self.pixel_ownership[pixel[1], pixel[0]] = -1  # Mark as hole
+                    if 0 <= pixel[0] < self.comp_width and 0 <= pixel[1] < self.comp_height:
+                        self.pixel_ownership[pixel[1], pixel[0]] = -1
 
     def _distance_to_cell_center(self, pixel, cell):
         """Calculate distance from pixel to cell center."""
