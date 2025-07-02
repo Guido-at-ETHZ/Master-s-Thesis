@@ -42,7 +42,7 @@ class Grid:
         # Biological optimization parameters
         self.energy_weights = {
             'area': 1.0,  # Weight for area deviation
-            'aspect_ratio': 5.5,  # Weight for aspect ratio deviation
+            'aspect_ratio': 8.5,  # Weight for aspect ratio deviation
             'orientation': 5.0,  # Weight for orientation deviation
             'overlap': 2.0,  # Weight for preventing overlap
             'boundary': 0.1  # Weight for staying within bounds
@@ -210,7 +210,7 @@ class Grid:
         distances = cdist(self.pixel_coords, seed_array)
 
         # Apply weights
-        weight_factor = 0.08  # Adjusted for better balance
+        weight_factor = 0.15  # Adjusted for better balance
         for i, weight in enumerate(weights_array):
             distances[:, i] -= weight_factor * weight
 
@@ -1206,7 +1206,7 @@ class Grid:
         self._update_voronoi_tessellation()
 
         # Run brief optimization to settle
-        self.optimize_cell_positions(iterations=2)
+        self.optimize_cell_positions(iterations=5)
 
 
 
