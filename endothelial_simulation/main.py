@@ -284,7 +284,7 @@ Examples:
     # === INPUT TYPE SELECTION (mutually exclusive) ===
     input_group = parser.add_mutually_exclusive_group()
 
-    input_group.add_argument('--single-step', action='store_true', default=True,
+    input_group.add_argument('--single-step', action='store_true',
                             help='Use single step input (default)')
 
     input_group.add_argument('--constant-value', type=float,
@@ -298,7 +298,7 @@ Examples:
                                    'stress_recovery', 'oscillatory_low', 'high_stress_brief'],
                             help='Use predefined protocol')
 
-    input_group.add_argument('--mpc-control', action='store_true',
+    input_group.add_argument('--mpc-control', action='store_true', default=True,
                              help='Use MPC controller for autonomous control')
 
     # === SINGLE-STEP INPUT PARAMETERS ===
