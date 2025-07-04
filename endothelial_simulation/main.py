@@ -180,6 +180,51 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
     )
     simulator._config_results = config_results
 
+    # ✅ ADD THIS: Set up cell recording for animations (with FIXED wrapper)
+    plotter = Plotter(config)  # Plotter is already imported in main.py
+
+    # Create frame data container
+    frame_data = []
+
+    # Store original step method
+    original_step = simulator.step
+
+    # Define FIXED wrapper that accepts same parameters as original
+    def step_with_recording(*args, **kwargs):
+        # Call original step method with all parameters
+        result = original_step(*args, **kwargs)
+
+        # Record frame at specified intervals
+        if simulator.step_count % 10 == 0:  # Every 10 steps
+            # Collect cell data for this frame
+            cells_data = []
+
+            for cell_id, cell in simulator.grid.cells.items():
+                cells_data.append({
+                    'cell_id': cell_id,
+                    'position': cell.position,
+                    'orientation': cell.orientation,
+                    'aspect_ratio': cell.aspect_ratio,
+                    'area': cell.area,
+                    'is_senescent': cell.is_senescent,
+                    'senescence_cause': cell.senescence_cause
+                })
+
+            # Store frame data
+            frame_data.append({
+                'time': simulator.time,
+                'input_value': simulator.input_pattern['value'],
+                'cell_count': len(simulator.grid.cells),
+                'cells': cells_data
+            })
+
+        return result
+
+    # Replace step method with wrapped version
+    simulator.step = step_with_recording
+    simulator._original_step = original_step
+    simulator.frame_data = frame_data  # Store for later use
+
     # Create MPC controller
     mpc = EndothelialMPCController(simulator, config)
     targets = {
@@ -203,7 +248,7 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
                 optimal_shear = 0.0
 
             simulator.set_constant_input(optimal_shear)
-            simulator.step(dt=1.0)
+            simulator.step(dt=1.0)  # This now records frames thanks to the wrapper!
 
             if minute % 30 == 0:
                 print(f"T={minute:3d}min: Shear={optimal_shear:.2f}Pa, Cells={len(simulator.grid.cells):2d}")
@@ -212,6 +257,31 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
             print(f"⚠️ Error at t={minute}min: {e}")
             simulator.set_constant_input(0.5)
             simulator.step(dt=1.0)
+
+    # ✅ ADD THIS: Restore original step method
+    if hasattr(simulator, '_original_step'):
+        simulator.step = simulator._original_step
+
+    # ✅ OPTIONAL: Force animation creation (alternative to using --create-animations flag)
+    if hasattr(simulator, 'frame_data') and simulator.frame_data:
+        print("🎬 Creating MPC animations...")
+        try:
+            from endothelial_simulation.visualization.animations import create_detailed_cell_animation
+            import os  # Import here since we need os.path.join
+            import time  # Import here since we need time.strftime
+            timestamp = time.strftime("%Y%m%d-%H%M%S")
+            animation_path = os.path.join(config.plot_directory, f"mpc_animation_{timestamp}.mp4")
+
+            ani = create_detailed_cell_animation(
+                plotter, simulator.frame_data, simulator,
+                save_path=animation_path,
+                fps=10, dpi=100
+            )
+
+            if ani:
+                print(f"✅ MPC cell animation saved to: {animation_path}")
+        except Exception as e:
+            print(f"⚠️ Animation creation failed: {e}")
 
     return simulator
 
