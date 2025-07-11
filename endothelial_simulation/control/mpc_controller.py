@@ -5,6 +5,8 @@ import numpy as np
 from typing import Dict, Tuple, Optional, List
 from scipy.optimize import minimize
 import warnings
+from ..models.temporal_dynamics import TemporalDynamicsModel
+from ..models.population_dynamics import PopulationDynamicsModel
 
 warnings.filterwarnings('ignore')
 
@@ -46,6 +48,7 @@ class EndothelialMPCController:
             'rate_limit': 200.0,  # Rate limit violation penalty
             'control_effort': 0.1,  # Control effort penalty
             'hole_prediction': 500.0,  # Predictive hole prevention
+            'flow_alignment': 25.0,  # NEW: Flow alignment penalty
         }
 
         # Spatial parameters
@@ -71,7 +74,7 @@ class EndothelialMPCController:
         self.targets = targets
 
     def get_current_state(self) -> Dict:
-        """Get comprehensive current state."""
+        """Get comprehensive current state including orientations."""
         cells = self.simulator.grid.cells
         if not cells:
             return {}
@@ -81,27 +84,37 @@ class EndothelialMPCController:
         senescent_count = sum(1 for cell in cells.values() if cell.is_senescent)
         senescence_fraction = senescent_count / len(cells)
 
-        # Hole information
+        # NEW: Add orientation data
+        orientations = [cell.orientation for cell in cells.values()]
+        target_orientation = self.targets.get('orientation', 0.0)
+
+        # Calculate alignment metrics
+        alignment_errors = []
+        for orientation in orientations:
+            aligned_angle = self.simulator.grid.to_alignment_angle(orientation)
+            target_aligned = self.simulator.grid.to_alignment_angle(target_orientation)
+            alignment_errors.append(abs(aligned_angle - target_aligned))
+
+        # Hole information (keep existing)
         hole_manager = getattr(self.simulator.grid, 'hole_manager', None)
         hole_count = len(hole_manager.holes) if hole_manager else 0
 
-        # Calculate hole area fraction
+        # Calculate hole area fraction (keep existing)
         total_area = self.simulator.grid.comp_width * self.simulator.grid.comp_height
         hole_area = sum(hole.get_area() for hole in hole_manager.holes.values()) if hole_manager else 0
         hole_area_fraction = hole_area / total_area if total_area > 0 else 0
 
-        # Cell density constraints
+        # Cell density constraints (keep existing)
         available_area = total_area - hole_area
         minimum_cells = available_area / (self.average_cell_area * self.average_expansion_factor)
         maximum_cells = 1.5 * minimum_cells
 
-        # Current shear stress
+        # Current shear stress (keep existing)
         current_shear = self.simulator.input_pattern.get('value', 0.0)
 
-        # Calculate biological status for hole prediction
+        # Calculate biological status for hole prediction (keep existing)
         unfillable_area = 0
         if hole_manager:
-            # Use existing biological logic
             biological_status = hole_manager.get_biological_status()
             unfillable_area = biological_status.get('unfillable_area', 0)
 
@@ -117,50 +130,202 @@ class EndothelialMPCController:
             'total_area': total_area,
             'available_area': available_area,
             'unfillable_area': unfillable_area,
-            'time': getattr(self.simulator, 'time', 0.0)
+            'time': getattr(self.simulator, 'time', 0.0),
+            # NEW: Add orientation data
+            'orientations': np.array(orientations),
+            'mean_alignment_error': np.mean(alignment_errors) if alignment_errors else 0.0,
+            'alignment_variance': np.var(alignment_errors) if alignment_errors else 0.0,
         }
 
-        # Update state history
+        # Update state history (keep existing)
         self.state_history.append(state)
         if len(self.state_history) > self.max_history_length:
             self.state_history.pop(0)
 
         return state
 
+    def _extract_senescence_rate(self, current_state: Dict, shear_stress: float) -> float:
+        """Extract actual senescence rate from PopulationDynamicsModel."""
+        try:
+            # Initialize population model
+            pop_model = PopulationDynamicsModel(self.config)
+
+            # Set current state from cells
+            current_cells = self.simulator.grid.cells
+            if not current_cells:
+                return 0.0
+
+            # Get current population state
+            pop_model.update_from_cells(current_cells, dt=0, tau=shear_stress)
+            initial_state = pop_model.state.copy()
+
+            # Predict one time step forward
+            dt_hours = self.dt / 60.0  # Convert minutes to hours
+            predicted_state = pop_model.update(dt_hours, tau=shear_stress)
+
+            # Calculate senescence rate
+            initial_senescent = initial_state['S_tel'] + initial_state['S_stress']
+            initial_total = sum(initial_state['E']) + initial_senescent
+
+            predicted_senescent = predicted_state['S_tel'] + predicted_state['S_stress']
+            predicted_total = sum(predicted_state['E']) + predicted_senescent
+
+            if initial_total > 0 and predicted_total > 0:
+                initial_fraction = initial_senescent / initial_total
+                predicted_fraction = predicted_senescent / predicted_total
+                senescence_rate = (predicted_fraction - initial_fraction) / self.dt
+            else:
+                senescence_rate = 0.0
+
+            return max(0.0, senescence_rate)  # Ensure non-negative
+
+        except Exception as e:
+            print(f"⚠️ Senescence rate extraction failed: {e}")
+            # Fallback to simple model
+            return 0.001 * max(0, shear_stress - 2.0)
+
+    def _extract_hole_dynamics(self, current_state: Dict, senescence_fraction: float) -> Dict:
+        """Extract hole formation probability from BiologicalHoleManager."""
+        try:
+            hole_manager = self.simulator.grid.hole_manager
+            if not hole_manager:
+                return {'creation_prob': 0.0, 'filling_prob': 0.0}
+
+            # Use actual biological decision logic
+            unfillable_area = hole_manager._calculate_unfillable_area()
+
+            # Deterministic hole creation
+            if unfillable_area > 0:
+                creation_probability = 1.0
+            elif senescence_fraction >= hole_manager.senescence_threshold:
+                # Use actual probabilistic model
+                base_prob = hole_manager.hole_creation_probability_base
+                creation_probability = base_prob * (1.0 + 2.0 * senescence_fraction)
+                creation_probability = min(0.8, creation_probability)
+            else:
+                creation_probability = 0.0
+
+            # Hole filling probability
+            if unfillable_area <= 0 and senescence_fraction < hole_manager.senescence_threshold:
+                filling_probability = 0.3
+            else:
+                filling_probability = 0.0
+
+            return {
+                'creation_prob': creation_probability,
+                'filling_prob': filling_probability,
+                'unfillable_area': unfillable_area
+            }
+        except Exception as e:
+            print(f"⚠️ Hole dynamics extraction failed: {e}")
+            # Fallback to simple model
+            hole_risk = max(0, senescence_fraction - self.senescence_threshold) * 0.1
+            return {'creation_prob': hole_risk, 'filling_prob': 0.0, 'unfillable_area': 0}
+
+    def _extract_orientation_dynamics(self, current_state: Dict, shear_stress: float) -> np.array:
+        """Extract orientation dynamics from TemporalDynamicsModel."""
+        try:
+            current_orientations = current_state.get('orientations', [])
+            if len(current_orientations) == 0:
+                return np.array([])
+
+            # Initialize temporal model
+            temporal_model = TemporalDynamicsModel(self.config)
+
+            # Get time constant for orientation
+            tau_orient, A_max = temporal_model.get_scaled_tau_and_amax(shear_stress, 'orientation')
+
+            # Target orientation
+            target_orientation = self.targets.get('orientation', 0.0)
+
+            # Apply first-order dynamics
+            predicted_orientations = []
+            for current_orientation in current_orientations:
+                # Calculate orientation difference (handle angle wrapping)
+                orientation_diff = target_orientation - current_orientation
+                while orientation_diff > np.pi:
+                    orientation_diff -= 2 * np.pi
+                while orientation_diff < -np.pi:
+                    orientation_diff += 2 * np.pi
+
+                # Apply dy/dt = (target - current) / tau
+                decay_factor = np.exp(-self.dt / tau_orient)
+                new_orientation = target_orientation - orientation_diff * decay_factor
+                predicted_orientations.append(new_orientation)
+
+            return np.array(predicted_orientations)
+
+        except Exception as e:
+            print(f"⚠️ Orientation dynamics extraction failed: {e}")
+            # Fallback: no change
+            return current_state.get('orientations', np.array([]))
+
     def predict_future_state(self, current_state: Dict, control_sequence: List[float]) -> List[Dict]:
-        """
-        Predict future states based on control sequence.
-        Simplified prediction model - can be enhanced with more sophisticated dynamics.
-        """
+        """Enhanced prediction using extracted dynamics from existing models."""
         predictions = []
         state = current_state.copy()
 
         for i, u in enumerate(control_sequence):
-            # Simple prediction model
-            # Response dynamics (simplified)
-            target_response = self.targets.get('response', 2.0)
-            response_error = target_response - np.mean(state['responses']) if len(state['responses']) > 0 else 0
-
-            # Senescence dynamics (increases with high stress)
-            senescence_rate = 0.001 * max(0, u - 2.0)  # Increases above 2 Pa
+            # 1. EXTRACT ACTUAL SENESCENCE DYNAMICS
+            senescence_rate = self._extract_senescence_rate(state, u)
             new_senescence = min(1.0, state['senescence_fraction'] + senescence_rate * self.dt)
 
-            # Hole area dynamics (depends on senescence and stress)
-            hole_risk = max(0, new_senescence - self.senescence_threshold) * 0.1
-            hole_area_change = hole_risk * self.dt
-            new_hole_area = min(0.2, state['hole_area_fraction'] + hole_area_change)
+            # 2. EXTRACT ACTUAL HOLE FORMATION DYNAMICS
+            hole_dynamics = self._extract_hole_dynamics(state, new_senescence)
 
-            # Cell count dynamics (simplified)
-            new_cell_count = state['cell_count']
+            # Predict hole changes
+            current_hole_count = state['hole_count']
+            expected_new_holes = hole_dynamics['creation_prob'] * self.dt
+            expected_filled_holes = hole_dynamics['filling_prob'] * current_hole_count * self.dt
 
-            # Update predicted state
+            new_hole_count = max(0, current_hole_count + expected_new_holes - expected_filled_holes)
+            new_hole_count = min(new_hole_count, getattr(self.simulator.grid.hole_manager, 'max_holes', 5))
+
+            # Estimate hole area
+            avg_hole_area = state['hole_area_fraction'] / current_hole_count if current_hole_count > 0 else 0.01
+            new_hole_area = new_hole_count * avg_hole_area
+
+            # 3. EXTRACT ACTUAL FLOW ALIGNMENT DYNAMICS
+            predicted_orientations = self._extract_orientation_dynamics(state, u)
+
+            # 4. EXTRACT RESPONSE DYNAMICS (existing temporal model)
+            temporal_model = TemporalDynamicsModel(self.config)
+            current_responses = state.get('responses', [])
+
+            if len(current_responses) > 0:
+                A_max = temporal_model.calculate_A_max(u)
+                tau = temporal_model.calculate_tau(A_max)
+
+                # Apply dy/dt = (A_max - y) / tau for each cell
+                new_responses = []
+                for response in current_responses:
+                    # Analytical solution
+                    decay_factor = np.exp(-self.dt / tau)
+                    new_response = A_max - (A_max - response) * decay_factor
+                    new_responses.append(new_response)
+            else:
+                new_responses = []
+
+            # Calculate alignment metrics for predicted orientations
+            target_orientation = self.targets.get('orientation', 0.0)
+            alignment_errors = []
+            if len(predicted_orientations) > 0:
+                for orientation in predicted_orientations:
+                    aligned_angle = self.simulator.grid.to_alignment_angle(orientation)
+                    target_aligned = self.simulator.grid.to_alignment_angle(target_orientation)
+                    alignment_errors.append(abs(aligned_angle - target_aligned))
+
+            # 5. UPDATE PREDICTED STATE
             predicted_state = state.copy()
             predicted_state.update({
                 'senescence_fraction': new_senescence,
+                'hole_count': new_hole_count,
                 'hole_area_fraction': new_hole_area,
-                'cell_count': new_cell_count,
+                'orientations': predicted_orientations,
+                'mean_alignment_error': np.mean(alignment_errors) if alignment_errors else 0.0,
+                'responses': np.array(new_responses),
                 'current_shear': u,
-                'time': state['time'] + (i + 1) * self.dt
+                'time': state['time'] + (i + 1) * self.dt,
             })
 
             predictions.append(predicted_state)
@@ -183,6 +348,12 @@ class EndothelialMPCController:
             if len(predicted_state['responses']) > 0:
                 response_error = target_response - np.mean(predicted_state['responses'])
                 step_cost += self.weights['tracking'] * response_error ** 2
+
+            # FLOW ALIGNMENT COST
+            target_orientation = self.targets.get('orientation', 0.0)
+            if 'mean_alignment_error' in predicted_state:
+                alignment_error = predicted_state['mean_alignment_error']
+                step_cost += self.weights['flow_alignment'] * alignment_error ** 2
 
             # 2. SENESCENCE SOFT CONSTRAINT
             senescence_violation = max(0, predicted_state['senescence_fraction'] - self.senescence_threshold)
