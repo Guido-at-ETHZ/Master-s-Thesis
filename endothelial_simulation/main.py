@@ -243,12 +243,19 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
         try:
             optimal_shear, control_info = mpc.control_step()
 
-            if control_info.get('emergency', False):
-                print(f"🛑 EMERGENCY at t={minute}min: {control_info['reason']}")
-                optimal_shear = 0.0
+            # Optional: Add simple monitoring (no control override)
+            if minute % 10 == 0:  # Every 10 minutes
+                print(f"t={minute:3d}min: shear={optimal_shear:.3f}Pa, cost={control_info.get('cost', 'N/A'):.2f}")
+                if 'constraints' in control_info:
+                    c = control_info['constraints']
+                    print(f"         senescence={c['senescence_fraction']:.1%}, holes={c['hole_area_fraction']:.1%}")
 
             simulator.set_constant_input(optimal_shear)
-            simulator.step(dt=1.0)  # This now records frames thanks to the wrapper!
+            simulator.step(dt=1.0)
+
+        except Exception as e:
+            print(f"❌ Step failed at t={minute}min: {e}")
+            break
 
             if minute % 30 == 0:
                 print(f"T={minute:3d}min: Shear={optimal_shear:.2f}Pa, Cells={len(simulator.grid.cells):2d}")

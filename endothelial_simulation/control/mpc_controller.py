@@ -42,13 +42,13 @@ class EndothelialMPCController:
         # Soft constraint weights (penalty scaling)
         self.weights = {
             'tracking': 1.0,  # Response tracking
-            'senescence': 100.0,  # Senescence penalty
-            'holes': 1000.0,  # Hole area penalty
-            'cell_density': 50.0,  # Cell density violation penalty
-            'rate_limit': 200.0,  # Rate limit violation penalty
+            'senescence': 20.0,  # Soft senescence penalty (was 100.0)
+            'holes': 80.0,  # Soft hole penalty (was 1000.0)
+            'cell_density': 15.0,  # Cell density penalty (was 50.0)
+            'rate_limit': 25.0,  # Rate limit penalty (was 200.0)
             'control_effort': 0.1,  # Control effort penalty
-            'hole_prediction': 500.0,  # Predictive hole prevention
-            'flow_alignment': 25.0,  # NEW: Flow alignment penalty
+            'hole_prediction': 40.0,  # Predictive hole prevention (was 500.0)
+            'flow_alignment': 8.0,  # Flow alignment penalty (was 25.0)
         }
 
         # Spatial parameters
@@ -85,7 +85,7 @@ class EndothelialMPCController:
         senescence_fraction = senescent_count / len(cells)
 
         # NEW: Add orientation data
-        orientations = [cell.orientation for cell in cells.values()]
+        orientations = [cell.actual_orientation for cell in cells.values()]
         target_orientation = self.targets.get('orientation', 0.0)
 
         # Calculate alignment metrics
@@ -403,35 +403,10 @@ class EndothelialMPCController:
 
         return total_cost
 
-    def emergency_check(self, current_state: Dict) -> Tuple[bool, str]:
-        """Check for emergency conditions requiring immediate intervention."""
-
-        # Critical hole area (reactive stopping - fallback)
-        if current_state['hole_area_fraction'] > 0.1:  # 10% - critical threshold
-            return True, f"Critical hole area: {current_state['hole_area_fraction']:.1%}"
-
-        # Critical senescence
-        if current_state['senescence_fraction'] > 0.5:  # 50% - critical threshold
-            return True, f"Critical senescence: {current_state['senescence_fraction']:.1%}"
-
-        # Cell density crisis
-        if current_state['cell_count'] < current_state['minimum_cells'] * 0.5:
-            return True, f"Critical cell loss: {current_state['cell_count']:.0f} < {current_state['minimum_cells'] * 0.5:.0f}"
-
-        return False, ""
-
     def optimize_control(self, current_state: Dict) -> Tuple[float, Dict]:
-        """Optimize control action using MPC approach."""
+        """Optimize control action using pure MPC approach."""
 
-        # Emergency check
-        is_emergency, emergency_reason = self.emergency_check(current_state)
-        if is_emergency:
-            return 0.0, {
-                'emergency': True,
-                'reason': emergency_reason,
-                'optimal_shear': 0.0,
-                'cost': float('inf')
-            }
+        # REMOVED: All emergency-related code
 
         # Set up optimization problem
         def objective(control_sequence):
@@ -471,10 +446,9 @@ class EndothelialMPCController:
             )
 
             if result.success:
-                optimal_control = result.x[0]  # Use first control action
+                optimal_control = result.x[0]
                 cost = result.fun
             else:
-                # Fallback to simple control
                 optimal_control = self._fallback_control(current_state)
                 cost = float('inf')
 
@@ -483,10 +457,10 @@ class EndothelialMPCController:
             optimal_control = self._fallback_control(current_state)
             cost = float('inf')
 
+        # CLEAN RETURN - No emergency fields
         return optimal_control, {
             'optimal_shear': optimal_control,
             'cost': cost,
-            'emergency': False,
             'current_state': current_state
         }
 
