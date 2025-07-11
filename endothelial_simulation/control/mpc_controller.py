@@ -27,8 +27,8 @@ class EndothelialMPCController:
         self.config = config
 
         # Control parameters
-        self.prediction_horizon = 5  # steps
-        self.control_horizon = 3  # steps
+        self.prediction_horizon = 30  # steps
+        self.control_horizon = 10  # steps
         self.dt = 1.0  # minute
 
         # Constraint parameters
