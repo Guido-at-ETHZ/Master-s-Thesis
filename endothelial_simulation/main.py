@@ -168,127 +168,132 @@ def run_protocol_simulation(config, protocol_name, duration=None, **protocol_kwa
 
 
 def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, duration=None):
-    """Run a simulation with MPC controller."""
+    """Run a simulation with MPC controller - FIXED VERSION."""
     print(f"🚀 Setting up MPC-controlled simulation...")
 
     simulator = Simulator(config)
 
-    config_results = simulator.initialize_with_multiple_configurations(
-        cell_count=config.initial_cell_count,
-        num_configurations=getattr(config, 'multi_config_count', 10),
-        optimization_iterations=getattr(config, 'multi_config_optimization_steps', 3)
-    )
-    simulator._config_results = config_results
+    # Initialize with multiple configurations
+    try:
+        config_results = simulator.initialize_with_multiple_configurations(
+            cell_count=config.initial_cell_count,
+            num_configurations=getattr(config, 'multi_config_count', 10),
+            optimization_iterations=getattr(config, 'multi_config_optimization_steps', 3)
+        )
+        simulator._config_results = config_results
+    except Exception as e:
+        print(f"⚠️ Multi-config initialization failed, using standard initialization: {e}")
+        simulator.initialize(cell_count=config.initial_cell_count)
 
-    # ✅ ADD THIS: Set up cell recording for animations (with FIXED wrapper)
-    plotter = Plotter(config)  # Plotter is already imported in main.py
-
-    # Create frame data container
-    frame_data = []
-
-    # Store original step method
-    original_step = simulator.step
-
-    # Define FIXED wrapper that accepts same parameters as original
-    def step_with_recording(*args, **kwargs):
-        # Call original step method with all parameters
-        result = original_step(*args, **kwargs)
-
-        # Record frame at specified intervals
-        if simulator.step_count % 10 == 0:  # Every 10 steps
-            # Collect cell data for this frame
-            cells_data = []
-
-            for cell_id, cell in simulator.grid.cells.items():
-                cells_data.append({
-                    'cell_id': cell_id,
-                    'position': cell.position,
-                    'orientation': cell.orientation,
-                    'aspect_ratio': cell.aspect_ratio,
-                    'area': cell.area,
-                    'is_senescent': cell.is_senescent,
-                    'senescence_cause': cell.senescence_cause
-                })
-
-            # Store frame data
-            frame_data.append({
-                'time': simulator.time,
-                'input_value': simulator.input_pattern['value'],
-                'cell_count': len(simulator.grid.cells),
-                'cells': cells_data
-            })
-
-        return result
-
-    # Replace step method with wrapped version
-    simulator.step = step_with_recording
-    simulator._original_step = original_step
-    simulator.frame_data = frame_data  # Store for later use
-
-    # Create MPC controller
-    mpc = EndothelialMPCController(simulator, config)
-    targets = {
-        'response': mpc_response_target,
-        'orientation': np.radians(mpc_orientation_target)
-    }
-    mpc.set_targets(targets)
+    # Create MPC controller with improved error handling
+    try:
+        mpc = EndothelialMPCController(simulator, config)
+        targets = {
+            'response': mpc_response_target,
+            'orientation': np.radians(mpc_orientation_target)
+        }
+        mpc.set_targets(targets)
+    except Exception as e:
+        print(f"❌ Failed to create MPC controller: {e}")
+        return None
 
     print(f"📊 Running MPC-controlled simulation:")
     print(f"   Response target: {mpc_response_target}")
     print(f"   Orientation target: {mpc_orientation_target}°")
 
-    # MPC simulation loop
+    # Simulation parameters
     sim_duration = duration if duration else config.simulation_duration
-    for minute in range(int(sim_duration)):
-        try:
-            optimal_shear, control_info = mpc.control_step()
+    max_iterations = int(sim_duration)
 
-            # Optional: Add simple monitoring (no control override)
+    # Track consecutive failures for stability
+    consecutive_failures = 0
+    max_failures = 5
+
+    # Main MPC simulation loop - IMPROVED
+    for minute in range(max_iterations):
+        try:
+            # Add timeout protection for MPC control step
+            import signal
+
+            def timeout_handler(signum, frame):
+                raise TimeoutError("MPC optimization timeout")
+
+            # Set timeout for optimization (5 seconds max)
+            signal.signal(signal.SIGALRM, timeout_handler)
+            signal.alarm(5)
+
+            try:
+                optimal_shear, control_info = mpc.control_step()
+                signal.alarm(0)  # Cancel timeout
+                consecutive_failures = 0  # Reset failure counter
+
+            except TimeoutError:
+                print(f"⚠️ MPC optimization timeout at t={minute}min, using fallback")
+                optimal_shear = mpc._fallback_control(mpc.get_current_state())
+                control_info = {'cost': float('inf'), 'timeout': True}
+                consecutive_failures += 1
+
+            except Exception as optimization_error:
+                print(f"⚠️ MPC optimization failed at t={minute}min: {optimization_error}")
+                current_state = mpc.get_current_state()
+                optimal_shear = mpc._fallback_control(current_state) if current_state else 1.0
+                control_info = {'cost': float('inf'), 'error': str(optimization_error)}
+                consecutive_failures += 1
+
+            # Check for stability - abort if too many failures
+            if consecutive_failures >= max_failures:
+                print(f"❌ Too many consecutive MPC failures ({max_failures}), aborting simulation")
+                break
+
+            # Progress monitoring
             if minute % 10 == 0:  # Every 10 minutes
-                print(f"t={minute:3d}min: shear={optimal_shear:.3f}Pa, cost={control_info.get('cost', 'N/A'):.2f}")
+                cost_str = f"{control_info.get('cost', 'N/A'):.2f}" if control_info.get('cost') != float(
+                    'inf') else "INF"
+                print(f"t={minute:3d}min: shear={optimal_shear:.3f}Pa, cost={cost_str}")
+
                 if 'constraints' in control_info:
                     c = control_info['constraints']
                     print(f"         senescence={c['senescence_fraction']:.1%}, holes={c['hole_area_fraction']:.1%}")
 
+            # Apply optimal control to simulator
             simulator.set_constant_input(optimal_shear)
-            simulator.step(dt=1.0)
 
-        except Exception as e:
-            print(f"❌ Step failed at t={minute}min: {e}")
+            # Step simulation with error handling
+            try:
+                simulator.step(dt=1.0)
+            except Exception as step_error:
+                print(f"⚠️ Simulation step failed at t={minute}min: {step_error}")
+                # Try to continue with a safe input
+                simulator.set_constant_input(0.5)
+                simulator.step(dt=1.0)
+
+        except KeyboardInterrupt:
+            print(f"\n⏹️ Simulation interrupted by user at t={minute}min")
             break
 
-            if minute % 30 == 0:
-                print(f"T={minute:3d}min: Shear={optimal_shear:.2f}Pa, Cells={len(simulator.grid.cells):2d}")
-
         except Exception as e:
-            print(f"⚠️ Error at t={minute}min: {e}")
-            simulator.set_constant_input(0.5)
-            simulator.step(dt=1.0)
+            print(f"❌ Critical error at t={minute}min: {e}")
+            consecutive_failures += 1
 
-    # ✅ ADD THIS: Restore original step method
-    if hasattr(simulator, '_original_step'):
-        simulator.step = simulator._original_step
+            if consecutive_failures >= max_failures:
+                print(f"❌ Too many consecutive failures, aborting simulation")
+                break
 
-    # ✅ OPTIONAL: Force animation creation (alternative to using --create-animations flag)
-    if hasattr(simulator, 'frame_data') and simulator.frame_data:
-        print("🎬 Creating MPC animations...")
-        try:
-            from endothelial_simulation.visualization.animations import create_detailed_cell_animation
-            import os  # Import here since we need os.path.join
-            import time  # Import here since we need time.strftime
-            timestamp = time.strftime("%Y%m%d-%H%M%S")
-            animation_path = os.path.join(config.plot_directory, f"mpc_animation_{timestamp}.mp4")
+            # Try to continue with safe defaults
+            try:
+                simulator.set_constant_input(0.5)
+                simulator.step(dt=1.0)
+            except:
+                print(f"❌ Cannot recover, stopping simulation")
+                break
 
-            ani = create_detailed_cell_animation(
-                plotter, simulator.frame_data, simulator,
-                save_path=animation_path,
-                fps=10, dpi=100
-            )
+    print(f"\n✅ MPC simulation completed ({minute + 1}/{max_iterations} steps)")
 
-            if ani:
-                print(f"✅ MPC cell animation saved to: {animation_path}")
-        except Exception as e:
-            print(f"⚠️ Animation creation failed: {e}")
+    # Clean up any remaining signal handlers
+    try:
+        signal.alarm(0)
+    except:
+        pass
 
     return simulator
 
@@ -352,16 +357,16 @@ Examples:
                         help='Simulation mode (default: full)')
 
     # === BASIC PARAMETERS ===
-    parser.add_argument('--duration', type=float, default=90,
+    parser.add_argument('--duration', type=float, default=360,
                         help='Simulation duration in minutes (default: 360 = 6 hours)')
 
-    parser.add_argument('--cells', type=int, default=20,
+    parser.add_argument('--cells', type=int, default=200,
                         help='Initial cell count (default: 50)')
 
     # === INPUT TYPE SELECTION (mutually exclusive) ===
     input_group = parser.add_mutually_exclusive_group()
 
-    input_group.add_argument('--single-step', action='store_true',
+    input_group.add_argument('--single-step', action='store_true', default=True,
                             help='Use single step input (default)')
 
     input_group.add_argument('--constant-value', type=float,
