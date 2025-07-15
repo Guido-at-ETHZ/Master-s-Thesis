@@ -29,19 +29,19 @@ class EndothelialMPCController:
         self.config = config
 
         # Control parameters
-        self.prediction_horizon = 30  # steps
-        self.control_horizon = 10  # steps
+
+        self.control_horizon = 120  # steps
         self.dt = 1.0  # minute
 
         # Constraint parameters
         self.senescence_threshold = 0.30  # 30% senescent fraction limit
         self.hole_area_threshold = 0.05  # 5% hole area limit
-        self.rate_limit = 0.7  # Pa/min
+        self.rate_limit = 1.4 / 60 # Pa/min
         self.shear_stress_limits = (0.0, 4.0)  # Pa
 
         # Soft constraint weights (penalty scaling)
         self.weights = {
-            'tracking': 1.0,  # Response tracking
+            'tracking': 1000.0,  # Response tracking
             'senescence': 20.0,  # Soft senescence penalty (was 100.0)
             'holes': 80.0,  # Soft hole penalty (was 1000.0)
             'cell_density': 15.0,  # Cell density penalty (was 50.0)
@@ -67,7 +67,7 @@ class EndothelialMPCController:
         print(f"   Senescence threshold: {self.senescence_threshold:.1%}")
         print(f"   Hole area threshold: {self.hole_area_threshold:.1%}")
         print(f"   Rate limit: {self.rate_limit} Pa/min")
-        print(f"   Prediction horizon: {self.prediction_horizon} steps")
+
 
     def set_targets(self, targets: Dict):
         """Set control targets."""
