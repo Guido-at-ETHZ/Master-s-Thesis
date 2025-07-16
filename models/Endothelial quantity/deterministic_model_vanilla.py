@@ -1,3 +1,7 @@
+import matplotlib
+
+matplotlib.use('TkAgg')  # or 'Qt5Agg' if you prefer
+
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.integrate import solve_ivp
@@ -96,13 +100,13 @@ def endothelial_cell_dynamics(t, y, params):
             # Middle groups
             division_in = 2 * r * E[i - 1] * density_factor * (1.0 if i - 1 < max_divisions * 0.7 else
                                                                1.0 - 0.5 * ((i - 1 - max_divisions * 0.7) / (
-                                                                           max_divisions * 0.3)))
+                                                                       max_divisions * 0.3)))
             division_out = r * E[i] * density_factor * division_capacity
         else:
             # Last group - at maximum division count
             division_in = 2 * r * E[i - 1] * density_factor * (1.0 if i - 1 < max_divisions * 0.7 else
                                                                1.0 - 0.5 * ((i - 1 - max_divisions * 0.7) / (
-                                                                           max_divisions * 0.3)))
+                                                                       max_divisions * 0.3)))
             division_out = r * E[i] * density_factor * division_capacity  # These cells enter senescence
 
         # Cell loss due to death
@@ -238,7 +242,7 @@ def run_multiple_simulations(tau_values, max_divisions=15):
 
 
 # Plot the simulation results
-def plot_results(results, max_divisions=15):
+def plot_results(results, max_divisions=15, save_plots=False):
     """
     Plot comprehensive results from multiple simulations.
     """
@@ -366,19 +370,15 @@ def plot_results(results, max_divisions=15):
     plt.suptitle('Endothelial Cell Dynamics with Different Shear Stress Levels', fontsize=16)
     plt.tight_layout(rect=[0, 0.03, 1, 0.97])
 
+    if save_plots:
+        plt.savefig('endothelial_cell_dynamics.png', dpi=300, bbox_inches='tight')
+        print("Plot saved as 'endothelial_cell_dynamics.png'")
+
     return fig
 
 
-# Run simulations and plot results
-max_divisions = 15
-tau_values = [0, 5, 10, 15, 20]
-results = run_multiple_simulations(tau_values, max_divisions)
-fig = plot_results(results, max_divisions)
-plt.show()
-
-
 # Plot just cell populations to focus on growth-decline pattern
-def plot_cell_populations(results):
+def plot_cell_populations(results, save_plots=False):
     """
     Focus on plotting cell population dynamics.
     """
@@ -403,9 +403,37 @@ def plot_cell_populations(results):
     plt.legend()
     plt.grid(True)
 
+    if save_plots:
+        plt.savefig('cell_populations.png', dpi=300, bbox_inches='tight')
+        print("Plot saved as 'cell_populations.png'")
+
     plt.tight_layout()
-    plt.show()
 
 
-# Plot cell populations
-plot_cell_populations(results)
+if __name__ == "__main__":
+    # Run simulations and plot results
+    max_divisions = 15
+    tau_values = [0, 5, 10, 15, 20]
+
+    print("Running simulations...")
+    results = run_multiple_simulations(tau_values, max_divisions)
+
+    print("Creating plots...")
+
+    # Always save plots AND try to display them
+    print("Saving plots to files...")
+    fig = plot_results(results, max_divisions, save_plots=True)
+    plot_cell_populations(results, save_plots=True)
+
+    # Also try to display them
+    try:
+        plt.show()
+        print("Plots displayed successfully!")
+
+    except Exception as e:
+        print(f"Could not display plots: {e}")
+        print("But plots have been saved to files.")
+
+    print("Check your working directory for the saved plot files:")
+    print("- endothelial_cell_dynamics.png")
+    print("- cell_populations.png")
