@@ -360,7 +360,7 @@ Examples:
     parser.add_argument('--duration', type=float, default=360,
                         help='Simulation duration in minutes (default: 360 = 6 hours)')
 
-    parser.add_argument('--cells', type=int, default=20,
+    parser.add_argument('--cells', type=int, default=305,
                         help='Initial cell count (default: 50)')
 
     # === INPUT TYPE SELECTION (mutually exclusive) ===
