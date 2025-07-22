@@ -29,8 +29,8 @@ class SpatialPropertiesModel:
         # Control cell parameters at different pressures (in pixels)
         self.control_params = {
             'area': {
-                0.0: 11712,    # 2155 μm² static
-                1.4: 11712     # Assume same area under flow (not measured separately)
+                0.0: 3216,    # 2155 μm² static
+                1.4: 3216     # Assume same area under flow (not measured separately)
             },
             'aspect_ratio': {
                 0.0: 1.9,      # Static control
@@ -44,9 +44,8 @@ class SpatialPropertiesModel:
 
         # Senescent cell parameters (in pixels)
         self.senescent_params = {
-            'area_small': 11995,     # 2207 μm² (< 5000 μm²)
-            'area_large': 46869,     # 8626 μm² (≥ 5000 μm²)
-            'area_threshold': 27174, # 5000 μm² threshold in pixels
+            'area_small': 3216,     # 2207 μm² (< 5000 μm²)
+            'area_large': 12864,     # 8626 μm² (≥ 5000 μm²)
             'aspect_ratio': {
                 0.0: 1.9,            # Static senescent
                 1.4: 2.0             # Flow senescent (no significant change)

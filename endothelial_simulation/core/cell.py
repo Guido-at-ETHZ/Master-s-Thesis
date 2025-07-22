@@ -69,7 +69,7 @@ class Cell:
         # Senescent growth
         # Probabilistic senescent growth properties
         self.senescent_growth_factor = 1.0  # Current size multiplier (starts at 1.0)
-        self.max_senescent_growth = 3.0  # Maximum size (3x normal)
+        self.max_senescent_growth = 4.0  # Maximum size (4x normal)
         self.growth_probability_base = 0.15  # 15% chance per hour to grow
         self.growth_increment = 0.05  # 5% size increase when growth occurs
 
@@ -193,7 +193,7 @@ class Cell:
         # Calculate base target area (without senescent growth factor)
         if self.is_senescent:
             base_target_area = self.target_area / max(1.0, self.senescent_growth_factor)
-            max_allowed_area = base_target_area * 3.0  # 300% expansion limit
+            max_allowed_area = base_target_area * 4.0  # 400% expansion limit
         else:
             base_target_area = self.target_area
             max_allowed_area = base_target_area * 1.2  # 120% expansion limit
@@ -253,7 +253,7 @@ class Cell:
 
         # Check expansion limits BEFORE growth factor limits
         base_target_area = self.target_area / max(1.0, self.senescent_growth_factor)
-        max_allowed_area = base_target_area * 3.0  # 300% expansion limit
+        max_allowed_area = base_target_area * 4.0  # 300% expansion limit
 
         # If actual area already exceeds expansion limit, prevent further growth
         if self.actual_area >= max_allowed_area:
@@ -322,7 +322,7 @@ class Cell:
         """
         if self.is_senescent:
             base_target_area = self.target_area / max(1.0, self.senescent_growth_factor)
-            max_allowed_area = base_target_area * 3.0  # 300% limit
+            max_allowed_area = base_target_area * 4.0  # 400% limit
             expansion_type = "senescent"
             limit_multiplier = 3.0
         else:
