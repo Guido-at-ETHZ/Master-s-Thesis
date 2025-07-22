@@ -161,7 +161,10 @@ class Grid:
 
     def _update_voronoi_tessellation(self):
         """
-        Update Voronoi tessellation with area-based weighting.
+        MODIFIED: Enhanced Weighted Voronoi Tessellation with Hole-Based Pressure Relief
+
+        This replaces your existing _update_voronoi_tessellation method with the enhanced version
+        that follows your mathematical formulation from Step 4.
         """
 
         if not self.cells:
@@ -169,63 +172,198 @@ class Grid:
             self.territory_map.clear()
             return
 
+        # Control parameters from mathematical formulation
+        alpha = 0.2  # Area control strength
+        beta = 0.1  # Orientation influence strength
+        tau_hole = 15.0  # Hole creation threshold
+
         seed_points = []
         cell_ids = []
-        cell_weights = []
+        cell_objects = []
 
-        # UPDATE PIXEL COORDINATES TO EXCLUDE HOLES
+        # Handle existing holes
         if self.holes_enabled and self.hole_manager:
-            self.pixel_coords = self._create_pixel_coordinate_grid_with_holes()
+            if hasattr(self, '_create_pixel_coordinate_grid_with_holes'):
+                self.pixel_coords = self._create_pixel_coordinate_grid_with_holes()
+            else:
+                # Fallback: use regular pixel coordinate grid
+                if not hasattr(self, 'pixel_coords') or self.pixel_coords is None:
+                    self.pixel_coords = self._create_pixel_coordinate_grid()
 
-            # Mark hole pixels in ownership map
             hole_pixels = self.hole_manager.get_hole_pixels()
             for x, y in hole_pixels:
                 if 0 <= x < self.comp_width and 0 <= y < self.comp_height:
-                    self.pixel_ownership[y, x] = -999  # Special value for holes
+                    self.pixel_ownership[y, x] = -999
+        else:
+            # Ensure pixel_coords exists
+            if not hasattr(self, 'pixel_coords') or self.pixel_coords is None:
+                self.pixel_coords = self._create_pixel_coordinate_grid()
 
+        # Collect cell data
         for cell_id, display_pos in self.cell_seeds.items():
-            comp_pos = self._display_to_comp_coords(display_pos[0], display_pos[1])
+            if hasattr(self, '_display_to_comp_coords'):
+                comp_pos = self._display_to_comp_coords(display_pos[0], display_pos[1])
+            else:
+                # Fallback: assume simple scaling
+                comp_pos = (display_pos[0] / self.computation_scale, display_pos[1] / self.computation_scale)
+
             seed_points.append(comp_pos)
             cell_ids.append(cell_id)
+            cell_objects.append(self.cells[cell_id])
 
-            # Weight based on target area (evolving via temporal dynamics)
-            cell = self.cells[cell_id]
-            if hasattr(cell, 'target_area') and cell.target_area > 0:
-                weight = np.sqrt(cell.target_area)
-            else:
-                weight = 10.0
-            cell_weights.append(weight)
+        if len(seed_points) < 1:
+            return
 
-        if len(seed_points) < 2:
-            if len(seed_points) == 1:
-                cell_id = cell_ids[0]
-                all_pixels = [(x, y) for x in range(self.comp_width) for y in range(self.comp_height)]
-                self._assign_territory_to_cell(cell_id, all_pixels)
+        if len(seed_points) == 1:
+            # Single cell gets all non-hole pixels
+            cell_id = cell_ids[0]
+            all_pixels = [(x, y) for x in range(self.comp_width)
+                          for y in range(self.comp_height)
+                          if not (self.holes_enabled and self.hole_manager and
+                                  self.hole_manager.is_point_in_hole(x, y))]
+            self._assign_territory_to_cell(cell_id, all_pixels)
             return
 
         seed_array = np.array(seed_points)
-        weights_array = np.array(cell_weights)
 
-        # Weighted Voronoi: d_weighted = distance - weight_factor
-        distances = cdist(self.pixel_coords, seed_array)
+        # Step 1: Calculate standard Euclidean distances
+        euclidean_distances = cdist(self.pixel_coords, seed_array)
 
-        # Apply weights
-        weight_factor = 0.15  # Adjusted for better balance
-        for i, weight in enumerate(weights_array):
-            distances[:, i] -= weight_factor * weight
+        # Step 2: Get current actual areas for area adjustment
+        current_actual_areas = []
+        for cell_obj in cell_objects:
+            if hasattr(cell_obj, 'actual_area') and cell_obj.actual_area > 0:
+                current_actual_areas.append(cell_obj.actual_area)
+            else:
+                current_territory_size = len(getattr(cell_obj, 'territory_pixels', []))
+                current_actual_areas.append(max(1, current_territory_size))
 
-        nearest_seed_indices = np.argmin(distances, axis=1)
+        # Step 3: Calculate enhanced distances using mathematical formulation
+        enhanced_distances = np.copy(euclidean_distances)
 
+        for i, (cell_obj, seed_pos, actual_area) in enumerate(zip(cell_objects, seed_points, current_actual_areas)):
+            # Get target properties
+            target_area = getattr(cell_obj, 'target_area', actual_area)
+            target_orientation = getattr(cell_obj, 'target_orientation', 0.0)
+            target_area = max(10.0, target_area)
+
+            # Step 3a: Area Control Adjustment (Equation 16)
+            area_ratio = actual_area / target_area
+            area_adjustment = (area_ratio - 1.0) * np.sqrt(target_area) * 0.5
+
+            # Step 3b: Orientation Influence Adjustment (Equation 17)
+            pixel_vectors = self.pixel_coords - seed_pos
+            pixel_angles = np.arctan2(pixel_vectors[:, 1], pixel_vectors[:, 0])
+            angle_diffs = np.abs(pixel_angles - target_orientation)
+            # Handle angle wrapping for flow direction
+            angle_diffs = np.minimum(angle_diffs, np.abs(angle_diffs - np.pi))
+            normalized_angle_diffs = np.minimum(angle_diffs / (np.pi / 2), 1.0)
+            pixel_distances = np.linalg.norm(pixel_vectors, axis=1)
+            orientation_adjustments = normalized_angle_diffs * pixel_distances * 0.3
+
+            # Step 3c: Apply enhanced distance formula (Equation 14)
+            enhanced_distances[:, i] = (euclidean_distances[:, i] +
+                                        alpha * area_adjustment +
+                                        beta * orientation_adjustments)
+
+        # Step 4: Find minimum distances and implement hole creation (Equations 18-19)
+        min_distances = np.min(enhanced_distances, axis=1)
+        nearest_cell_indices = np.argmin(enhanced_distances, axis=1)
+        hole_mask = min_distances > tau_hole
+
+        # Step 5: Territory assignment with hole preservation
         self.territory_map.clear()
         self.pixel_ownership.fill(-1)
 
+        newly_created_holes = []
+
+        # Assign territories
         for i, cell_id in enumerate(cell_ids):
-            pixel_indices = np.where(nearest_seed_indices == i)[0]
+            cell_pixel_mask = (nearest_cell_indices == i) & ~hole_mask
+            cell_pixel_indices = np.where(cell_pixel_mask)[0]
             pixels = [(int(self.pixel_coords[idx][0]), int(self.pixel_coords[idx][1]))
-                     for idx in pixel_indices]
+                      for idx in cell_pixel_indices]
             self._assign_territory_to_cell(cell_id, pixels)
 
-        self.enforce_biological_limits()
+        # Handle newly created holes - mark pixels but let existing hole manager handle creation
+        if self.holes_enabled and self.hole_manager:
+            hole_pixel_indices = np.where(hole_mask)[0]
+            for idx in hole_pixel_indices:
+                x, y = int(self.pixel_coords[idx][0]), int(self.pixel_coords[idx][1])
+                if 0 <= x < self.comp_width and 0 <= y < self.comp_height:
+                    self.pixel_ownership[y, x] = -999
+                    newly_created_holes.append((x, y))
+
+            # Let the existing biological hole management system handle hole creation
+            # The pressure relief pixels are marked, and the hole manager will create holes as needed
+            if newly_created_holes:
+                print(f"🕳️  Marked {len(newly_created_holes)} pixels for pressure relief")
+
+        # Step 6: Enforce biological limits and update cell properties
+        if hasattr(self, 'enforce_biological_limits'):
+            self.enforce_biological_limits()
+
+        # Update actual cell properties from territories (Step 7 from formulation)
+        if hasattr(self, '_update_actual_properties_from_territories'):
+            self._update_actual_properties_from_territories()
+        else:
+            # Fallback: update properties manually if helper method not yet added
+            for cell_id, cell in self.cells.items():
+                if cell_id in self.territory_map and self.territory_map[cell_id]:
+                    cell.actual_area = len(self.territory_map[cell_id])
+
+    def _update_actual_properties_from_territories(self):
+        """
+        ADDED: Update actual cell properties based on territories.
+        This implements Step 7 from your mathematical formulation.
+        """
+        for cell_id, cell in self.cells.items():
+            if cell_id not in self.territory_map:
+                continue
+
+            territory_pixels = self.territory_map[cell_id]
+            if not territory_pixels:
+                continue
+
+            # Calculate actual area (Equation 25)
+            cell.actual_area = len(territory_pixels)
+
+            # Calculate actual aspect ratio and orientation using PCA (Equations 26-27)
+            pixels_array = np.array(territory_pixels)
+
+            if len(pixels_array) > 1:
+                centroid = np.mean(pixels_array, axis=0)
+                centered = pixels_array - centroid
+
+                if len(centered) > 1:
+                    try:
+                        cov_matrix = np.cov(centered, rowvar=False)
+                        eigenvals, eigenvecs = np.linalg.eigh(cov_matrix)
+
+                        # Sort by eigenvalue (largest first)
+                        idx = np.argsort(eigenvals)[::-1]
+                        eigenvals = eigenvals[idx]
+                        eigenvecs = eigenvecs[:, idx]
+
+                        # Principal axis gives orientation
+                        principal_axis = eigenvecs[:, 0]
+                        cell.actual_orientation = np.arctan2(principal_axis[1], principal_axis[0])
+
+                        # Aspect ratio from eigenvalues
+                        if eigenvals[1] > 0:
+                            cell.actual_aspect_ratio = np.sqrt(max(eigenvals[0] / eigenvals[1], 1.0))
+                        else:
+                            cell.actual_aspect_ratio = 1.0
+                    except:
+                        # Fallback to target values
+                        cell.actual_aspect_ratio = getattr(cell, 'target_aspect_ratio', 1.0)
+                        cell.actual_orientation = getattr(cell, 'target_orientation', 0.0)
+                else:
+                    cell.actual_aspect_ratio = getattr(cell, 'target_aspect_ratio', 1.0)
+                    cell.actual_orientation = getattr(cell, 'target_orientation', 0.0)
+            else:
+                cell.actual_aspect_ratio = getattr(cell, 'target_aspect_ratio', 1.0)
+                cell.actual_orientation = getattr(cell, 'target_orientation', 0.0)
 
     # Include all the other necessary methods from the previous response
     def _angle_difference(self, target, actual):
@@ -324,47 +462,198 @@ class Grid:
         average_deviation = total_deviation / len(self.cells)
         return max(0, 1.0 - average_deviation)
 
-    def optimize_cell_positions(self, iterations=2):
+    def optimize_cell_positions(self, iterations=3):
         """
-        Clean Lloyd algorithm for event-driven system.
-        Moves cell seeds toward their territory centroids.
+        MODIFIED: Enhanced position optimization following Step 5 from your formulation.
+
+        This replaces your existing optimize_cell_positions method with the enhanced version
+        that implements biological energy minimization (Equations 20-23).
         """
+
+        # Energy function weights from mathematical formulation
+        w_area = 1.0
+        w_AR = 1.0
+        w_orient = 1.0
+
         for iteration in range(iterations):
             position_updates = {}
 
             for cell_id, cell in self.cells.items():
-                if cell.territory_pixels and cell.centroid is not None:
-                    # Lloyd algorithm: move toward centroid
-                    display_centroid = self._comp_to_display_coords(cell.centroid[0], cell.centroid[1])
-                    current_pos = self.cell_seeds[cell_id]
+                if cell_id not in self.cell_seeds:
+                    continue
 
-                    # Calculate movement toward centroid
-                    centroid_movement = np.array(display_centroid) - np.array(current_pos)
+                current_pos = np.array(self.cell_seeds[cell_id])
 
-                    # Apply smoothing
-                    smoothing_factor = 0.3
-                    new_pos = (
-                        current_pos[0] * (1 - smoothing_factor) + (
-                                    current_pos[0] + centroid_movement[0]) * smoothing_factor,
-                        current_pos[1] * (1 - smoothing_factor) + (
-                                    current_pos[1] + centroid_movement[1]) * smoothing_factor
-                    )
+                # Step 5a: Lloyd's algorithm component (Equation 21)
+                if cell_id in self.territory_map and self.territory_map[cell_id]:
+                    territory_pixels = np.array(self.territory_map[cell_id])
+                    centroid = np.mean(territory_pixels, axis=0)
 
-                    # Constrain to grid bounds
-                    new_pos = (
-                        max(0, min(self.width - 1, new_pos[0])),
-                        max(0, min(self.height - 1, new_pos[1]))
-                    )
+                    # Convert to display coordinates (with fallback)
+                    if hasattr(self, '_comp_to_display_coords'):
+                        centroid_display = self._comp_to_display_coords(centroid[0], centroid[1])
+                    else:
+                        # Fallback: assume 1:1 scaling
+                        centroid_display = (centroid[0] * self.computation_scale, centroid[1] * self.computation_scale)
 
-                    position_updates[cell_id] = new_pos
+                    # Lloyd's update with smoothing factor α = 0.3
+                    lloyd_pos = 0.7 * current_pos + 0.3 * np.array(centroid_display)
+                else:
+                    lloyd_pos = current_pos
+
+                # Step 5b: Energy minimization component (Equation 22)
+                delta = 2.0  # Small perturbation for gradient estimation
+
+                # Calculate current biological energy
+                if hasattr(self, '_calculate_biological_energy_for_cell'):
+                    current_energy = self._calculate_biological_energy_for_cell(cell)
+                else:
+                    # Fallback to simple energy calculation
+                    current_energy = self._simple_energy_calculation(cell)
+
+                # Test small movements and find energy-minimizing direction
+                best_pos = lloyd_pos
+                best_energy = current_energy
+
+                for dx, dy in [(delta, 0), (-delta, 0), (0, delta), (0, -delta)]:
+                    test_pos = lloyd_pos + np.array([dx, dy])
+
+                    # Check bounds
+                    if (test_pos[0] < 20 or test_pos[0] > self.width - 20 or
+                            test_pos[1] < 20 or test_pos[1] > self.height - 20):
+                        continue
+
+                    # Temporarily update position and estimate energy change
+                    old_pos = self.cell_seeds[cell_id]
+                    self.cell_seeds[cell_id] = tuple(test_pos)
+
+                    # Quick energy estimation (without full tessellation)
+                    if hasattr(self, '_estimate_energy_after_position_change'):
+                        test_energy = self._estimate_energy_after_position_change(cell_id, test_pos)
+                    else:
+                        # Fallback energy calculation
+                        test_energy = self._simple_energy_calculation(cell)
+
+                    if test_energy < best_energy:
+                        best_energy = test_energy
+                        best_pos = test_pos
+
+                    # Restore position
+                    self.cell_seeds[cell_id] = old_pos
+
+                position_updates[cell_id] = best_pos
 
             # Apply position updates
+            movement_applied = False
             for cell_id, new_pos in position_updates.items():
-                self.cell_seeds[cell_id] = new_pos
-                self.cells[cell_id].update_position(new_pos)
+                old_pos = np.array(self.cell_seeds[cell_id])
+                movement = np.linalg.norm(new_pos - old_pos)
 
-            # Update tessellation
-            self._update_voronoi_tessellation()
+                if movement > 0.5:  # Apply if movement is significant
+                    self.cell_seeds[cell_id] = tuple(new_pos)
+                    self.cells[cell_id].update_position(tuple(new_pos))
+                    movement_applied = True
+
+            if movement_applied:
+                # Update tessellation after position changes
+                self._update_voronoi_tessellation()
+            else:
+                break  # Converged
+
+    def _estimate_energy_after_position_change(self, cell_id, new_pos):
+        """
+        ADDED: Quick energy estimation without full tessellation.
+        Used during position optimization for efficiency.
+        """
+
+        cell = self.cells[cell_id]
+
+        # Simple distance-based territory estimation
+        if cell_id not in self.territory_map or not self.territory_map[cell_id]:
+            return self._calculate_biological_energy_for_cell(cell)
+
+        # Estimate how territory would change with new position
+        current_territory = self.territory_map[cell_id]
+        comp_pos = self._display_to_comp_coords(new_pos[0], new_pos[1])
+
+        # Rough estimation: keep pixels that are still closest to this cell
+        estimated_territory = []
+        for pixel in current_territory:
+            pixel_pos = np.array(pixel)
+            dist_to_new_pos = np.linalg.norm(pixel_pos - comp_pos)
+
+            # Check if still closest (simplified)
+            is_still_closest = True
+            for other_cell_id, other_display_pos in self.cell_seeds.items():
+                if other_cell_id == cell_id:
+                    continue
+                other_comp_pos = self._display_to_comp_coords(other_display_pos[0], other_display_pos[1])
+                dist_to_other = np.linalg.norm(pixel_pos - other_comp_pos)
+
+                if dist_to_other < dist_to_new_pos:
+                    is_still_closest = False
+                    break
+
+            if is_still_closest:
+                estimated_territory.append(pixel)
+
+        # Update cell's estimated properties
+        estimated_area = len(estimated_territory)
+
+        # Calculate energy with estimated area
+        target_area = getattr(cell, 'target_area', estimated_area)
+        target_AR = getattr(cell, 'target_aspect_ratio', 1.0)
+        target_orient = getattr(cell, 'target_orientation', 0.0)
+
+        # Use current AR and orientation (position change doesn't immediately affect these)
+        actual_AR = getattr(cell, 'actual_aspect_ratio', target_AR)
+        actual_orient = getattr(cell, 'actual_orientation', target_orient)
+
+        # Calculate energy
+        area_error = (estimated_area / max(1.0, target_area) - 1.0) ** 2
+        AR_error = (actual_AR / max(1.0, target_AR) - 1.0) ** 2
+
+        orient_diff = np.abs(actual_orient - target_orient)
+        orient_diff = min(orient_diff, np.abs(orient_diff - np.pi))
+        orient_error = (orient_diff / (np.pi / 2)) ** 2
+
+        return area_error + AR_error + orient_error
+
+    def _calculate_biological_energy_for_cell(self, cell):
+        """
+        ADDED: Calculate biological energy for a single cell.
+        Implements Equation (23) from your mathematical formulation.
+        """
+
+        # Get target and actual properties
+        target_area = getattr(cell, 'target_area', getattr(cell, 'actual_area', 100))
+        target_AR = getattr(cell, 'target_aspect_ratio', 1.0)
+        target_orient = getattr(cell, 'target_orientation', 0.0)
+
+        actual_area = getattr(cell, 'actual_area', target_area)
+        actual_AR = getattr(cell, 'actual_aspect_ratio', target_AR)
+        actual_orient = getattr(cell, 'actual_orientation', target_orient)
+
+        # Ensure no division by zero
+        target_area = max(1.0, target_area)
+        target_AR = max(1.0, target_AR)
+
+        # Calculate energy components (Equation 23)
+        area_error = (actual_area / target_area - 1.0) ** 2
+        AR_error = (actual_AR / target_AR - 1.0) ** 2
+
+        # Orientation error (considering 0°/180° equivalence)
+        orient_diff = np.abs(actual_orient - target_orient)
+        orient_diff = min(orient_diff, np.abs(orient_diff - np.pi))
+        orient_error = (orient_diff / (np.pi / 2)) ** 2
+
+        # Weights from mathematical formulation
+        w_area = 1.0
+        w_AR = 1.0
+        w_orient = 1.0
+
+        total_energy = w_area * area_error + w_AR * AR_error + w_orient * orient_error
+        return total_energy
 
     def get_biological_fitness(self):
         """Get current biological fitness (0-1, where 1 is perfect)."""

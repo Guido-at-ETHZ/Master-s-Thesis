@@ -357,10 +357,10 @@ Examples:
                         help='Simulation mode (default: full)')
 
     # === BASIC PARAMETERS ===
-    parser.add_argument('--duration', type=float, default=360,
+    parser.add_argument('--duration', type=float, default=30,
                         help='Simulation duration in minutes (default: 360 = 6 hours)')
 
-    parser.add_argument('--cells', type=int, default=305,
+    parser.add_argument('--cells', type=int, default=300,
                         help='Initial cell count (default: 50)')
 
     # === INPUT TYPE SELECTION (mutually exclusive) ===
@@ -380,7 +380,7 @@ Examples:
                                    'stress_recovery', 'oscillatory_low', 'high_stress_brief'],
                             help='Use predefined protocol')
 
-    input_group.add_argument('--mpc-control', action='store_true', default=True,
+    input_group.add_argument('--mpc-control', action='store_true',
                              help='Use MPC controller for autonomous control')
 
     # === SINGLE-STEP INPUT PARAMETERS ===
@@ -390,7 +390,7 @@ Examples:
     parser.add_argument('--final-value', type=float, default=1.4,
                         help='Final shear stress value in Pa (default: 1.4)')
 
-    parser.add_argument('--step-time', type=float, default=60,
+    parser.add_argument('--step-time', type=float, default=10,
                         help='Time for step change in minutes (default: 60)')
 
     # === MULTI-STEP INPUT PARAMETERS ===
