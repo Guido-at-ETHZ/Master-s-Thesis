@@ -175,6 +175,7 @@ class Grid:
         # Control parameters from mathematical formulation
         alpha = 0.2  # Area control strength
         beta = 0.1  # Orientation influence strength
+        gamma = 0.4  # Aspect ratio control strength
         tau_hole = 15.0  # Hole creation threshold
 
         seed_points = []
@@ -261,10 +262,38 @@ class Grid:
             pixel_distances = np.linalg.norm(pixel_vectors, axis=1)
             orientation_adjustments = normalized_angle_diffs * pixel_distances * 0.3
 
-            # Step 3c: Apply enhanced distance formula (Equation 14)
+            # Step 3c: Aspect Ratio Influence Adjustment
+            target_aspect_ratio = getattr(cell_obj, 'target_aspect_ratio', 1.0)
+            if target_aspect_ratio > 1.0:
+                # Calculate pixel positions relative to seed
+                pixel_vectors = self.pixel_coords - seed_pos
+
+                # Rotate vectors to align with target orientation
+                cos_theta = np.cos(-target_orientation)
+                sin_theta = np.sin(-target_orientation)
+
+                # Rotate pixel vectors to cell's coordinate system
+                rotated_x = pixel_vectors[:, 0] * cos_theta - pixel_vectors[:, 1] * sin_theta
+                rotated_y = pixel_vectors[:, 0] * sin_theta + pixel_vectors[:, 1] * cos_theta
+
+                # Apply aspect ratio scaling
+                compression_factor = 1.0 / target_aspect_ratio
+                scaled_y = rotated_y * compression_factor
+
+                # Calculate modified distance in scaled space
+                scaled_distances = np.sqrt(rotated_x ** 2 + scaled_y ** 2)
+                original_distances = np.linalg.norm(pixel_vectors, axis=1)
+
+                # Aspect ratio adjustment
+                aspect_ratio_adjustments = (scaled_distances - original_distances) * 0.5
+            else:
+                aspect_ratio_adjustments = np.zeros(len(self.pixel_coords))
+
+            # Step 3d: Apply complete enhanced distance formula (MODIFIED)
             enhanced_distances[:, i] = (euclidean_distances[:, i] +
                                         alpha * area_adjustment +
-                                        beta * orientation_adjustments)
+                                        beta * orientation_adjustments +
+                                        gamma * aspect_ratio_adjustments)
 
         # Step 4: Find minimum distances and implement hole creation (Equations 18-19)
         min_distances = np.min(enhanced_distances, axis=1)
