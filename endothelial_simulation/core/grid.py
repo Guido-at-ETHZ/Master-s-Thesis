@@ -286,7 +286,7 @@ class Grid:
                 original_distances = np.linalg.norm(pixel_vectors, axis=1)
 
                 # Aspect ratio adjustment: difference between scaled and original distance
-                aspect_ratio_adjustments = (scaled_distances - original_distances) * 0.5
+                aspect_ratio_adjustments = (scaled_distances - original_distances) * 2.0
             else:
                 aspect_ratio_adjustments = np.zeros(len(pixel_vectors))
 

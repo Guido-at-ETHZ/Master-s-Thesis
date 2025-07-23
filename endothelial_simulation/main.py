@@ -79,6 +79,22 @@ def run_single_step_simulation(config, initial_value, final_value, step_time, du
     # Set step input pattern
     simulator.set_step_input(initial_value, final_value, step_time)
 
+    # ADD THESE DEBUG CALLS HERE:
+    print(f"\n🔍 DEBUG: Checking aspect ratios after initialization...")
+    simulator.debug_quick_aspect_ratio_check()
+
+    # Optional: Detailed trace for first cell
+    if simulator.grid.cells:
+        first_cell_id = list(simulator.grid.cells.keys())[0]
+        first_cell = simulator.grid.cells[first_cell_id]
+        current_pressure = simulator.input_pattern.get('value', 0.0)
+
+        if 'spatial' in simulator.models:
+            print(f"🔍 DEBUG: Detailed trace for cell {first_cell_id}:")
+            simulator.models['spatial'].debug_aspect_ratio_complete_trace(
+                current_pressure, first_cell_id, first_cell
+            )
+
     print(f"📊 Running single-step simulation:")
     print(f"   Initial pressure: {initial_value} Pa")
     print(f"   Final pressure: {final_value} Pa")
@@ -650,6 +666,7 @@ Examples:
     print(f"🔄 Event-driven system: {config.use_event_driven_system}")
 
     return simulator
+
 
 
 if __name__ == "__main__":

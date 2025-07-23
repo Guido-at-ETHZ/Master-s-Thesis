@@ -38,7 +38,7 @@ class SpatialPropertiesModel:
             },
             'orientation_mean': {
                 0.0: 49.0,     # Random orientation (degrees) - MEAN ONLY
-                1.4: 20.0      # Aligned with flow (degrees) - MEAN ONLY
+                1.4: 22.0      # Aligned with flow (degrees) - MEAN ONLY
             }
         }
 
@@ -58,6 +58,76 @@ class SpatialPropertiesModel:
 
         # Probability that a senescent cell will be large (adjustable parameter)
         self.large_senescent_probability = 0.3  # 30% of senescent cells become large
+
+    # Add this method inside the SpatialPropertiesModel class, after the existing methods
+    def debug_aspect_ratio_complete_trace(self, pressure, cell_id, cell, dt=None):
+        """
+        Complete trace of aspect ratio calculation and assignment process.
+        """
+        print(f"\n{'=' * 60}")
+        print(f"🔍 COMPLETE ASPECT RATIO TRACE - Cell {cell_id}")
+        print(f"{'=' * 60}")
+
+        # Step 1: Check input parameters
+        print(f"📊 INPUT PARAMETERS:")
+        print(f"   Pressure: {pressure}")
+        print(f"   Is senescent: {cell.is_senescent}")
+        print(f"   Cell ID: {cell_id}")
+
+        # Step 2: Check parameter dictionaries
+        print(f"\n📋 PARAMETER DICTIONARIES:")
+        print(f"   Control params: {self.control_params['aspect_ratio']}")
+        print(f"   Senescent params: {self.senescent_params['aspect_ratio']}")
+
+        # Step 3: Test interpolation step by step
+        print(f"\n🔢 INTERPOLATION PROCESS:")
+        if cell.is_senescent:
+            param_dict = self.senescent_params['aspect_ratio']
+            cell_type = "senescent"
+        else:
+            param_dict = self.control_params['aspect_ratio']
+            cell_type = "control"
+
+        print(f"   Cell type: {cell_type}")
+        print(f"   Using param_dict: {param_dict}")
+
+        # Manual interpolation with debug
+        p0, p1 = 0.0, 1.4
+        v0, v1 = param_dict[p0], param_dict[p1]
+        print(f"   Interpolation points: p0={p0}, p1={p1}")
+        print(f"   Values at points: v0={v0}, v1={v1}")
+
+        if pressure <= p0:
+            raw_result = v0
+            print(f"   Pressure <= {p0}, using v0 = {raw_result}")
+        elif pressure >= p1:
+            raw_result = v1
+            print(f"   Pressure >= {p1}, using v1 = {raw_result}")
+        else:
+            raw_result = v0 + (v1 - v0) * (pressure - p0) / (p1 - p0)
+            print(f"   Interpolating: {v0} + ({v1} - {v0}) * ({pressure} - {p0}) / ({p1} - {p0})")
+            print(f"   Raw interpolation result: {raw_result}")
+
+        # Step 4: Apply constraints
+        constrained_result = max(1.0, raw_result)
+        print(f"\n🚫 CONSTRAINT APPLICATION:")
+        print(f"   Before constraint: {raw_result}")
+        print(f"   After max(1.0, value): {constrained_result}")
+        print(f"   Constraint active: {raw_result < 1.0}")
+
+        # Step 5: Check current cell properties
+        print(f"\n📱 CURRENT CELL PROPERTIES:")
+        print(f"   target_aspect_ratio: {getattr(cell, 'target_aspect_ratio', 'NOT SET')}")
+        print(f"   actual_aspect_ratio: {getattr(cell, 'actual_aspect_ratio', 'NOT SET')}")
+
+        # Step 6: Call the actual function and compare
+        print(f"\n✅ ACTUAL FUNCTION CALL:")
+        actual_result = self.calculate_target_aspect_ratio(pressure, cell.is_senescent)
+        print(f"   Function returned: {actual_result}")
+        print(f"   Matches manual calc: {abs(actual_result - constrained_result) < 1e-6}")
+
+        print(f"{'=' * 60}\n")
+        return actual_result
 
     def interpolate_pressure_effect(self, param_dict, pressure):
         """

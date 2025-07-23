@@ -325,6 +325,40 @@ class Simulator:
             'params': {'value': value}
         }
 
+    # Add this method inside the Simulator class, after the existing methods
+    def debug_quick_aspect_ratio_check(self):
+        """
+        Quick diagnostic of current aspect ratio state.
+        """
+        current_pressure = self.input_pattern.get('value', 0.0)
+
+        print(f"\n🚀 QUICK ASPECT RATIO DIAGNOSIS")
+        print(f"Current pressure: {current_pressure}")
+
+        # Check first few cells
+        for i, (cell_id, cell) in enumerate(list(self.grid.cells.items())[:3]):
+            print(f"\nCell {cell_id}:")
+            print(f"  Is senescent: {cell.is_senescent}")
+            print(f"  Target AR: {getattr(cell, 'target_aspect_ratio', 'NOT SET')}")
+            print(f"  Actual AR: {getattr(cell, 'actual_aspect_ratio', 'NOT SET')}")
+
+            # What SHOULD it be?
+            if 'spatial' in self.models:
+                expected = self.models['spatial'].calculate_target_aspect_ratio(
+                    current_pressure, cell.is_senescent
+                )
+                print(f"  Expected AR: {expected}")
+
+                if hasattr(cell, 'target_aspect_ratio'):
+                    match_target = abs(cell.target_aspect_ratio - expected) < 0.001
+                    print(f"  Match target: {match_target}")
+                else:
+                    print(f"  Match target: NO TARGET SET")
+
+            if i >= 2:  # Only show first 3 cells
+                break
+        print()
+
     def set_step_input(self, initial_value, final_value, step_time):
         """Set step input pattern."""
         self.input_pattern = {
