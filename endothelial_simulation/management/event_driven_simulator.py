@@ -85,7 +85,7 @@ class EventDrivenSimulator:
         self.pending_events = []
         self.event_history = []
         self.last_reconfiguration_time = 0.0
-        self.min_reconfiguration_interval = 30.0  # Minimum 30 minutes between reconfigurations
+        self.min_reconfiguration_interval = 5.0  # Minimum 30 minutes between reconfigurations
         
         # Configuration tracking
         self.configuration_history = []
@@ -157,9 +157,9 @@ class EventDrivenSimulator:
         self.grid.update_holes(dt)
         
         # 7. Minimal tessellation maintenance (no force-based optimization)
-        if self.step_count % 10 == 0:  # Every 10 steps
-            self.grid._update_voronoi_tessellation()
-        
+        #if self.step_count % 10 == 0:  # Every 10 steps
+        #    self.grid._update_voronoi_tessellation()
+        self.grid._update_voronoi_tessellation()
         # Update time and step count
         self.time += dt
         self.step_count += 1

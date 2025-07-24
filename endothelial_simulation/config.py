@@ -26,7 +26,7 @@ class SimulationConfig:
         self.senescence_threshold_change = 0.05  # 5%
 
         # Reconfiguration timing
-        self.min_reconfiguration_interval = 20.0  # minutes
+        self.min_reconfiguration_interval = 5.0  # minutes
 
         # Transition parameters
         self.max_compression_ratio = 0.7  # cells can compress to 70%
@@ -65,7 +65,7 @@ class SimulationConfig:
 
         # === TEMPORAL DYNAMICS ===
         self.tau_area_minutes = 45.0
-        self.tau_orientation_minutes = 60.0
+        self.tau_orientation_minutes = 1.0
         self.tau_aspect_ratio_minutes = 50.0
 
         # === TELOMERE SENESCENCE PARAMETERS ===

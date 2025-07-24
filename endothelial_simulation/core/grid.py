@@ -243,10 +243,13 @@ class Grid:
         enhanced_distances = np.copy(euclidean_distances)
 
         for i, (cell_obj, seed_pos, actual_area) in enumerate(zip(cell_objects, seed_points, current_actual_areas)):
-            # Get target properties
+            # Get target properties from the cell object
             target_area = getattr(cell_obj, 'target_area', actual_area)
             target_orientation = getattr(cell_obj, 'target_orientation', 0.0)
-            target_area = max(10.0, target_area)
+            target_aspect_ratio = getattr(cell_obj, 'target_aspect_ratio', 1.0)
+
+            # Ensure target_area is not zero to prevent division by zero
+            target_area = max(1.0, target_area)
 
             # Step 3a: Area Control Adjustment (Equation 16)
             area_ratio = actual_area / target_area

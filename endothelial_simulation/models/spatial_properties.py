@@ -37,7 +37,7 @@ class SpatialPropertiesModel:
                 1.4: 2.3       # Flow control (increased elongation)
             },
             'orientation_mean': {
-                0.0: 49.0,     # Random orientation (degrees) - MEAN ONLY
+                0.0: 45.0,     # 9 Random orientation (degrees) - MEAN ONLY
                 1.4: 22.0      # Aligned with flow (degrees) - MEAN ONLY
             }
         }
@@ -221,103 +221,71 @@ class SpatialPropertiesModel:
 
     def update_cell_properties(self, cell, pressure, dt, cells_dict=None):
         """
-        Updated for event-driven system - only update during transitions or initial setup.
+        Updated to ensure continuous dynamics for both target and actual properties.
         """
-        # Check if we're in a transition or during initial setup
+        # Determine current state
         in_transition = hasattr(self, '_in_transition_mode') and self._in_transition_mode
         is_initial_setup = not hasattr(cell, 'target_area') or cell.target_area is None
 
-        if not in_transition and not is_initial_setup:
-            # In steady state - targets don't change, just return current values
-            return {
-                'target_orientation': getattr(cell, 'target_orientation', cell.actual_orientation),
-                'target_area': getattr(cell, 'target_area', cell.actual_area),
-                'target_aspect_ratio': getattr(cell, 'target_aspect_ratio', cell.actual_aspect_ratio),
-                'actual_orientation': cell.actual_orientation,
-                'actual_area': cell.actual_area,
-                'actual_aspect_ratio': cell.actual_aspect_ratio,
-                'dynamics_info': {'event_driven_mode': True, 'steady_state': True}
-            }
-
-        # During transitions or initial setup - use temporal dynamics to evolve toward targets
         dynamics_info = {
             'event_driven_mode': True,
             'transitioning': in_transition,
             'initial_setup': is_initial_setup
         }
-        dt_minutes = dt  # dt is already in minutes
+        dt_minutes = dt
 
-        # Calculate what targets should be for current pressure (instant response)
+        # Calculate instantaneous targets based on current pressure
         instant_target_area = self.calculate_target_area(pressure, cell.is_senescent, cell.senescence_cause)
         instant_target_orientation = self.calculate_target_orientation(pressure, cell.is_senescent)
         instant_target_aspect_ratio = self.calculate_target_aspect_ratio(pressure, cell.is_senescent)
 
-        # Get time constants from temporal model
+        # Get time constants from the temporal model or use defaults
         if self.temporal_model:
-            # Use current pressure to get scaled time constants
-            # Default to 1.0 Pa if pressure not available
-            current_pressure = getattr(self, '_current_pressure', pressure) if hasattr(self,
-                                                                                       '_current_pressure') else pressure
-            # Get time constants for different biological properties
+            current_pressure = getattr(self, '_current_pressure', pressure)
             tau_area, _ = self.temporal_model.get_scaled_tau_and_amax(current_pressure, 'area')
             tau_orient, _ = self.temporal_model.get_scaled_tau_and_amax(current_pressure, 'orientation')
             tau_ar, _ = self.temporal_model.get_scaled_tau_and_amax(current_pressure, 'aspect_ratio')
         else:
-            # Default time constants if no temporal model
-            tau_area = 30.0  # 30 minutes
-            tau_orient = 20.0  # 20 minutes
-            tau_ar = 25.0  # 25 minutes
+            tau_area, tau_orient, tau_ar = 30.0, 20.0, 25.0
 
-        # Apply first-order dynamics to evolve targets
-        if hasattr(cell, 'target_area') and cell.target_area is not None and not is_initial_setup:
-            # Area evolution
-            area_diff = instant_target_area - cell.target_area
-            if abs(area_diff) > 10:  # Only if significant difference
-                decay_factor = np.exp(-dt_minutes / tau_area)
-                cell.target_area = instant_target_area + (cell.target_area - instant_target_area) * decay_factor
-                dynamics_info['area_change'] = area_diff
-
-            # Orientation evolution
-            orientation_diff = instant_target_orientation - cell.target_orientation
-            # Handle angle wrapping
-            while orientation_diff > np.pi:
-                orientation_diff -= 2 * np.pi
-            while orientation_diff < -np.pi:
-                orientation_diff += 2 * np.pi
-
-            if abs(orientation_diff) > 0.02:  # >1 degree difference
-                decay_factor = np.exp(-dt_minutes / tau_orient)
-                cell.target_orientation = instant_target_orientation + (
-                            cell.target_orientation - instant_target_orientation) * decay_factor
-                dynamics_info['orientation_change'] = np.degrees(orientation_diff)
-
-            # Aspect ratio evolution
-            ar_diff = instant_target_aspect_ratio - cell.target_aspect_ratio
-            if abs(ar_diff) > 0.02:  # Significant difference
-                decay_factor = np.exp(-dt_minutes / tau_ar)
-                cell.target_aspect_ratio = instant_target_aspect_ratio + (
-                            cell.target_aspect_ratio - instant_target_aspect_ratio) * decay_factor
-                cell.target_aspect_ratio = max(1.0, cell.target_aspect_ratio)  # Ensure >= 1.0
-                dynamics_info['ar_change'] = ar_diff
-        else:
-            # Initial setup or first time - set initial targets directly
+        # Evolve target properties toward instantaneous targets
+        if is_initial_setup:
             cell.target_area = instant_target_area
             cell.target_orientation = instant_target_orientation
             cell.target_aspect_ratio = instant_target_aspect_ratio
             dynamics_info['initial_target_set'] = True
-
-        # Update the cell's target properties using the existing method
-        if hasattr(cell, 'update_target_properties'):
-            cell.update_target_properties(
-                cell.target_orientation,
-                cell.target_aspect_ratio,
-                cell.target_area
-            )
         else:
-            # Fallback: set properties directly
-            cell.target_orientation = cell.target_orientation
-            cell.target_aspect_ratio = cell.target_aspect_ratio
-            cell.target_area = cell.target_area
+            # Evolve target area
+            decay_factor = np.exp(-dt_minutes / tau_area)
+            cell.target_area = instant_target_area + (cell.target_area - instant_target_area) * decay_factor
+
+            # Evolve target orientation
+            orientation_diff = instant_target_orientation - cell.target_orientation
+            orientation_diff = (orientation_diff + np.pi) % (2 * np.pi) - np.pi
+            decay_factor = np.exp(-dt_minutes / tau_orient)
+            cell.target_orientation += (1 - decay_factor) * orientation_diff
+
+            # Evolve target aspect ratio
+            decay_factor = np.exp(-dt_minutes / tau_ar)
+            cell.target_aspect_ratio = instant_target_aspect_ratio + (cell.target_aspect_ratio - instant_target_aspect_ratio) * decay_factor
+            cell.target_aspect_ratio = max(1.0, cell.target_aspect_ratio)
+
+        # Evolve actual properties toward the (evolving) target properties
+        # Evolve actual area
+        decay_factor = np.exp(-dt_minutes / tau_area)
+        cell.actual_area = cell.target_area + (cell.actual_area - cell.target_area) * decay_factor
+
+        # Evolve actual orientation
+        orientation_diff = cell.target_orientation - cell.actual_orientation
+        orientation_diff = (orientation_diff + np.pi) % (2 * np.pi) - np.pi
+        decay_factor = np.exp(-dt_minutes / tau_orient)
+        cell.actual_orientation += (1 - decay_factor) * orientation_diff
+
+
+        # Evolve actual aspect ratio
+        decay_factor = np.exp(-dt_minutes / tau_ar)
+        cell.actual_aspect_ratio = cell.target_aspect_ratio + (cell.actual_aspect_ratio - cell.target_aspect_ratio) * decay_factor
+        cell.actual_aspect_ratio = max(1.0, cell.actual_aspect_ratio)
 
         return {
             'target_orientation': cell.target_orientation,
