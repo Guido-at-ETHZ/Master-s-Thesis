@@ -1406,6 +1406,24 @@ class Simulator:
                 'events_count': 0
             }
 
+    def get_average_orientation_by_type(self):
+        """
+        Calculate the average orientation for healthy and senescent cells.
+        """
+        healthy_orientations = []
+        senescent_orientations = []
+
+        for cell in self.grid.cells.values():
+            if cell.is_senescent:
+                senescent_orientations.append(cell.actual_orientation)
+            else:
+                healthy_orientations.append(cell.actual_orientation)
+
+        return {
+            'healthy': np.mean(healthy_orientations) if healthy_orientations else 0.0,
+            'senescent': np.mean(senescent_orientations) if senescent_orientations else 0.0
+        }
+
     def get_best_config_parameters(self, save_excel=False, excel_path=None):
         """
         Show parameters for the best configuration.

@@ -24,6 +24,7 @@ class SimulationConfig:
         self.pressure_change_threshold = 0.1  # Pa
         self.cell_count_change_threshold = 5  # cells
         self.senescence_threshold_change = 0.05  # 5%
+        self.orientation_change_threshold_degrees = 10.0  # degrees
 
         # Reconfiguration timing
         self.min_reconfiguration_interval = 5.0  # minutes

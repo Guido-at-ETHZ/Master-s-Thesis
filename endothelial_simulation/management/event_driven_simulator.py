@@ -209,7 +209,11 @@ class EventDrivenSimulator:
         if time_since_last < self.min_reconfiguration_interval:
             print(f"   Too soon since last reconfiguration ({time_since_last:.1f} < {self.min_reconfiguration_interval:.1f} min)")
             return False
-        
+
+        # Time-based reconfiguration
+        if time_since_last >= 10.0:  # Every 10 minutes
+            return True
+
         # Event-specific criteria
         if event.event_type.value == 'pressure_change':
             pressure_change = abs(event.data['pressure_change'])
