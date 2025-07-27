@@ -52,40 +52,34 @@ class CompressionSpring:
     def calculate_current_properties(self, t: float, space_pressure: float = 1.0) -> Dict:
         """
         Calculate current cell properties during transition.
-        
+
         Parameters:
             t: Time since transition start (minutes)
-            space_pressure: Global space pressure (>1 means crowded)
-            
+            space_pressure: Global space pressure (>1 means crowded) - NO LONGER USED FOR COMPRESSION
+
         Returns:
             Dictionary with current target properties
         """
         # Standard exponential approach to target (temporal dynamics)
         progress = 1.0 - np.exp(-t / self.tau)
-        
-        # Apply compression if space is contested
-        if space_pressure > 1.0:
-            compression_factor = min(self.max_compression, 1.0 / space_pressure)
-            self.current_compression_factor = compression_factor
-        else:
-            # Gradually release compression as space becomes available
-            release_rate = 0.1  # 10% release per time step
-            self.current_compression_factor = min(1.0, 
-                self.current_compression_factor + release_rate * (1.0 - self.current_compression_factor))
-        
+
+        # Set compression factor to 1.0 to disable area compression
+        self.current_compression_factor = 1.0
+
         # Calculate intermediate properties
+        # Area is no longer compressed and evolves directly towards the target.
         current_area = self._interpolate_property(
             self.start_area, self.target_area, progress
         ) * self.current_compression_factor
-        
+
         current_aspect_ratio = self._interpolate_property(
             self.start_aspect_ratio, self.target_aspect_ratio, progress
         )
-        
+
         current_orientation = self._interpolate_angle(
             self.start_orientation, self.target_orientation, progress
         )
-        
+
         return {
             'area': current_area,
             'aspect_ratio': current_aspect_ratio,

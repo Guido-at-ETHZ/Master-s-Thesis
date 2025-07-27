@@ -406,7 +406,7 @@ Examples:
     parser.add_argument('--final-value', type=float, default=1.4,
                         help='Final shear stress value in Pa (default: 1.4)')
 
-    parser.add_argument('--step-time', type=float, default=20,
+    parser.add_argument('--step-time', type=float, default=50,
                         help='Time for step change in minutes (default: 60)')
 
     # === MULTI-STEP INPUT PARAMETERS ===

@@ -28,7 +28,7 @@ class SpatialPropertiesModel:
 
         # NEW: Add a perpendicular offset to correct for PCA measurement anomalies
         # This is a temporary solution to a deeper issue where PCA might be returning the minor axis
-        self.PERPENDICULAR_OFFSET = 90.0  # degrees
+
 
         # NEW: Add a maximum compression factor to prevent cells from shrinking too much
         self.max_compression_factor = 0.8  # e.g., cell can only shrink to 80% of its target area
@@ -185,6 +185,7 @@ class SpatialPropertiesModel:
         """
         Calculate target cell orientation using deterministic experimental means.
         The target is now a normalized angle in degrees [-180, 180).
+        FIXED: Removed the erroneous PERPENDICULAR_OFFSET.
         """
         if is_senescent:
             # Senescent cells: remain randomly oriented regardless of flow
@@ -193,12 +194,9 @@ class SpatialPropertiesModel:
             # Normal cells: use MEAN orientation only
             mean_deg = self.interpolate_pressure_effect(self.control_params['orientation_mean'], pressure)
 
-        # The target orientation is the mean value, normalized to the standard range.
-        # The biological alignment (e.g., 22 degrees from flow) is achieved because the
-        # target itself is set to that value. The system will evolve the cell's actual angle
-        # towards this target.
-        final_orientation = mean_deg + self.PERPENDICULAR_OFFSET
-        return normalize_angle_deg(final_orientation)
+        # FIXED: Remove the perpendicular offset that was causing the 90° error
+        # The target orientation should directly match the experimental measurement
+        return normalize_angle_deg(mean_deg)
 
     def calculate_target_area(self, pressure, is_senescent, senescence_cause=None):
         """
