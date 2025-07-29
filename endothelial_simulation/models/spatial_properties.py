@@ -37,7 +37,7 @@ class SpatialPropertiesModel:
                 1.4: 2.3       # Flow control (increased elongation)
             },
             'orientation_mean': {
-                0.0: 45.0,     # 9 Random orientation (degrees) - MEAN ONLY
+                0.0: 180.0,     # 9 Random orientation (degrees) - MEAN ONLY
                 1.4: 590.0      # Aligned with flow (degrees) - MEAN ONLY
             }
         }
