@@ -48,7 +48,7 @@ class SimulationConfig:
         self.enable_stem_cells = False
 
         # Hole system
-        self.enable_holes = True
+        self.enable_holes = False # True
         self.max_holes = 5
         self.hole_creation_probability_base = 0.02
         self.hole_creation_threshold_senescence = 0.30

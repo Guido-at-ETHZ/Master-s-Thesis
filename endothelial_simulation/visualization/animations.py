@@ -332,9 +332,9 @@ def create_combined_animation(plotter, simulator, save_path=None, fps=10, dpi=10
             cell_template = current_cells[i % num_current_cells]
 
             # Get cell properties from template
-            orientation = cell_template.orientation
-            aspect_ratio = cell_template.aspect_ratio
-            area = cell_template.area
+            orientation = cell_template.actual_orientation
+            aspect_ratio = cell_template.actual_aspect_ratio
+            area = cell_template.actual_area
 
             # Determine cell type based on counts
             if 'healthy_cells' in state:
@@ -465,9 +465,9 @@ def record_cell_states(plotter, simulator, record_interval=10):
                 cells_data.append({
                     'cell_id': cell_id,
                     'position': cell.position,
-                    'orientation': cell.orientation,
-                    'aspect_ratio': cell.aspect_ratio,
-                    'area': cell.area,
+                    'orientation': cell.actual_orientation,
+                    'aspect_ratio': cell.actual_aspect_ratio,
+                    'area': cell.actual_area,
                     'is_senescent': cell.is_senescent,
                     'senescence_cause': cell.senescence_cause
                 })

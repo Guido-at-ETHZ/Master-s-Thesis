@@ -540,7 +540,18 @@ class Simulator:
 
         # Convert the cell (same ID, just change state)
         old_biological_id = getattr(target_cell, 'biological_id', 'unknown')
-        target_cell.induce_senescence(cause)
+
+        # --- CRITICAL FIX ---
+        # We must provide the spatial_model and current pressure to immediately update the cell's orientation.
+        spatial_model = self.models.get('spatial')
+        current_pressure = self.update_input_value() # Get the most up-to-date pressure
+
+        target_cell.induce_senescence(
+            cause,
+            spatial_model=spatial_model,
+            pressure=current_pressure
+        )
+        # --- END FIX ---
 
         print(f"🔄 Converted cell {old_biological_id} from healthy to senescent ({cause})")
 
@@ -569,8 +580,11 @@ class Simulator:
 
         # SINGLE DETERMINISTIC SENESCENCE CHECK
         senescent_count = 0
+        spatial_model = self.models.get('spatial')
+        current_pressure = self.update_input_value()
+
         for grid_cell_id, cell in self.grid.cells.items():
-            if cell.update_and_check_all_senescence(dt, self.config):
+            if cell.update_and_check_all_senescence(dt, self.config, spatial_model=spatial_model, pressure=current_pressure):
                 senescent_count += 1
 
         if senescent_count > 0:
@@ -734,6 +748,10 @@ class Simulator:
                       f"Cells: {step_info['cell_count']}, "
                       f"Packing: {packing_eff:.2f}, "
                       f"Transitioning: {step_info['transitioning']}")
+
+            # Record frames for animation
+            if self.record_frames and self.step_count % self.record_interval == 0:
+                self._record_frame()
 
         end_time = time.time()
         total_time = end_time - start_time

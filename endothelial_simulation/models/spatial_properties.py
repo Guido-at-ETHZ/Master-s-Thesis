@@ -51,8 +51,12 @@ class SpatialPropertiesModel:
                 1.4: 2.0             # Flow senescent (no significant change)
             },
             'orientation_mean': {
-                0.0: 42.0,           # Random orientation static - MEAN ONLY
-                1.4: 45.0            # Random orientation flow (no alignment) - MEAN ONLY
+                0.0: 42.0,           # Random orientation static - MEAN
+                1.4: 45.0            # Random orientation flow (no alignment) - MEAN
+            },
+            'orientation_std_dev': {
+                0.0: 25.0,           # High variability for random orientation
+                1.4: 25.0            # High variability for random orientation
             }
         }
 
@@ -178,14 +182,14 @@ class SpatialPropertiesModel:
         """
         if is_senescent:
             # Senescent cells: remain randomly oriented regardless of flow
-            # Use MEAN orientation only (no std sampling)
             mean_deg = self.interpolate_pressure_effect(self.senescent_params['orientation_mean'], pressure)
+            std_dev_deg = self.interpolate_pressure_effect(self.senescent_params['orientation_std_dev'], pressure)
 
-            # Convert to radians - USE MEAN DIRECTLY
-            mean_rad = np.radians(mean_deg)
+            # Sample from a normal distribution for random orientation
+            orientation_deg = np.random.normal(mean_deg, std_dev_deg)
 
-            #print(f"Senescent orientation: pressure={pressure}, deterministic mean={mean_deg:.1f}°")
-            return mean_rad
+            # Convert to radians
+            return np.radians(orientation_deg)
         else:
             # Normal cells: use MEAN orientation only
             mean_deg = self.interpolate_pressure_effect(self.control_params['orientation_mean'], pressure)

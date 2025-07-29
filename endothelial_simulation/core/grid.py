@@ -263,7 +263,7 @@ class Grid:
             angle_diffs = np.minimum(angle_diffs, np.abs(angle_diffs - np.pi))
             normalized_angle_diffs = np.minimum(angle_diffs / (np.pi / 2), 1.0)
             pixel_distances = np.linalg.norm(pixel_vectors, axis=1)
-            orientation_adjustments = normalized_angle_diffs * pixel_distances * 0.3
+            orientation_adjustments = normalized_angle_diffs * pixel_distances * 2.0
 
             # Step 3c: Aspect Ratio Influence Adjustment
             target_aspect_ratio = getattr(cell_obj, 'target_aspect_ratio', 1.0)

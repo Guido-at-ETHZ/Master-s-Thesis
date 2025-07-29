@@ -147,7 +147,7 @@ class Cell:
             'will_senesce_soon': divisions_left <= 1 or stress_ratio >= 1.0
         }
 
-    def update_stress_and_check_senescence(self, dt_hours, config):
+    def update_stress_and_check_senescence(self, dt_hours, config, spatial_model=None, pressure=None):
         """
         Update stress exposure and check for deterministic senescence.
         Call this method each time step.
@@ -155,6 +155,8 @@ class Cell:
         Args:
             dt_hours: Time step in hours
             config: Simulation configuration
+            spatial_model (SpatialPropertiesModel, optional): The spatial model for property updates.
+            pressure (float, optional): The current pressure for property updates.
 
         Returns:
             bool: True if senescence was triggered
@@ -171,7 +173,12 @@ class Cell:
 
             # Deterministic senescence check
             if final_stress > self.cellular_resistance:
-                self.induce_senescence("stress_threshold_exceeded")
+                # CRITICAL FIX: Pass along spatial_model and pressure
+                self.induce_senescence(
+                    "stress_threshold_exceeded",
+                    spatial_model=spatial_model,
+                    pressure=pressure
+                )
                 print(f"🔴 Deterministic senescence triggered!")
                 print(f"   Final stress: {final_stress:.6f}")
                 print(f"   Cellular resistance: {self.cellular_resistance:.6f}")
@@ -599,13 +606,15 @@ class Cell:
 
         return None
 
-    def update_and_check_all_senescence(self, dt_hours, config):
+    def update_and_check_all_senescence(self, dt_hours, config, spatial_model=None, pressure=None):
         """
         Update stress exposure and check all senescence mechanisms.
 
         Args:
             dt_hours: Time step in hours
             config: Simulation configuration
+            spatial_model (SpatialPropertiesModel, optional): The spatial model, needed for property updates.
+            pressure (float, optional): The current pressure, needed for property updates.
 
         Returns:
             bool: True if senescence was triggered
@@ -621,37 +630,56 @@ class Cell:
         senescence_cause = self.check_deterministic_senescence(config)
 
         if senescence_cause:
-            self.induce_senescence(senescence_cause)
+            # CRITICAL FIX: Pass spatial_model and pressure to induce_senescence
+            self.induce_senescence(senescence_cause, spatial_model=spatial_model, pressure=pressure)
             print(f"🔴 {senescence_cause}: Telomere={self.telomere_length:.1f}, Divisions={self.divisions}")
             return True
 
         return False
 
-    # Add this to your Cell's induce_senescence method:
-    def induce_senescence(self, cause):
+    def induce_senescence(self, cause, spatial_model=None, pressure=None):
         """
-        Induce senescence while preserving cell identity.
-        FIXED: Ensure biological_id is preserved during conversion.
+        Induce senescence and immediately update orientation to reflect the new state.
+        This is a critical fix to ensure senescent cells behave correctly right after conversion.
+
+        Args:
+            cause (str): The reason for senescence (e.g., 'stress', 'telomere_exhaustion').
+            spatial_model (SpatialPropertiesModel, optional): The spatial model needed to recalculate orientation.
+            pressure (float, optional): The current pressure, required for recalculation.
         """
         if self.is_senescent:
             return  # Already senescent
 
-        # Preserve the biological ID before conversion
-        original_biological_id = getattr(self, 'biological_id', None)
+        original_biological_id = getattr(self, 'biological_id', 'unknown')
+        print(f"🔄 Converting cell {original_biological_id} to senescent state (cause: {cause})...")
 
-        # Mark as senescent
+        # --- CORE STATE CHANGE ---
         self.is_senescent = True
         self.senescence_cause = cause
 
-        # Restore biological ID if it was set
-        if original_biological_id:
-            self.biological_id = original_biological_id
+        # --- IMMEDIATE PROPERTY UPDATE (CRITICAL FIX) ---
+        if spatial_model and pressure is not None:
+            print(f"   recalculating target orientation for new senescent cell at pressure={pressure:.2f} Pa.")
+            
+            # Recalculate the target orientation using senescent parameters
+            self.target_orientation = spatial_model.calculate_target_orientation(
+                pressure=pressure,
+                is_senescent=True  # Now it's senescent
+            )
+            
+            # To ensure the change takes effect immediately, we can also set the actual_orientation.
+            # This avoids any delay or gradual adaptation period.
+            self.actual_orientation = self.target_orientation
+            
+            print(f"  New target orientation: {np.degrees(self.target_orientation):.1f}° (randomized for senescence)")
+        else:
+            print("  ⚠️ spatial_model or pressure not provided. Orientation will update on the next cycle.")
 
         # Optional: Stop proliferation
         if hasattr(self, 'max_divisions'):
             self.divisions = self.max_divisions
 
-        print(f"✅ Cell {original_biological_id or 'unknown'} converted to senescent state ({cause})")
+        print(f"✅ Cell {original_biological_id} is now senescent.")
 
 
     def apply_shear_stress(self, shear_stress):
