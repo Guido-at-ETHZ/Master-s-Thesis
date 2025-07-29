@@ -1,12 +1,9 @@
-
 """
 Updated spatial properties model using real experimental data.
 Modified to use deterministic targets based on experimental measurements.
 Variability comes from tessellation process, not artificial randomness.
 """
 import numpy as np
-
-from endothelial_simulation.core.angle_utils import alignment_angle_deg, normalize_angle_deg, angle_difference_deg
 
 
 class SpatialPropertiesModel:
@@ -26,13 +23,6 @@ class SpatialPropertiesModel:
         self.config = config
         self.temporal_model = temporal_model
 
-        # NEW: Add a perpendicular offset to correct for PCA measurement anomalies
-        # This is a temporary solution to a deeper issue where PCA might be returning the minor axis
-
-
-        # NEW: Add a maximum compression factor to prevent cells from shrinking too much
-        self.max_compression_factor = 0.8  # e.g., cell can only shrink to 80% of its target area
-
         # Real experimental data converted to pixels
         # Pixel spacing: 0.429 μm/pixel, so 1 pixel² = 0.184041 μm²
 
@@ -47,7 +37,7 @@ class SpatialPropertiesModel:
                 1.4: 2.3       # Flow control (increased elongation)
             },
             'orientation_mean': {
-                0.0: 49.0,     # 9 Random orientation (degrees) - MEAN ONLY
+                0.0: 45.0,     # 9 Random orientation (degrees) - MEAN ONLY
                 1.4: 22.0      # Aligned with flow (degrees) - MEAN ONLY
             }
         }
@@ -79,7 +69,7 @@ class SpatialPropertiesModel:
         print(f"{'=' * 60}")
 
         # Step 1: Check input parameters
-        print(f"\n📊 INPUT PARAMETERS:")
+        print(f"📊 INPUT PARAMETERS:")
         print(f"   Pressure: {pressure}")
         print(f"   Is senescent: {cell.is_senescent}")
         print(f"   Cell ID: {cell_id}")
@@ -184,19 +174,27 @@ class SpatialPropertiesModel:
     def calculate_target_orientation(self, pressure, is_senescent):
         """
         Calculate target cell orientation using deterministic experimental means.
-        The target is now a normalized angle in degrees [-180, 180).
-        FIXED: Removed the erroneous PERPENDICULAR_OFFSET.
+        NO artificial variability - let tessellation provide natural variation.
         """
         if is_senescent:
             # Senescent cells: remain randomly oriented regardless of flow
+            # Use MEAN orientation only (no std sampling)
             mean_deg = self.interpolate_pressure_effect(self.senescent_params['orientation_mean'], pressure)
+
+            # Convert to radians - USE MEAN DIRECTLY
+            mean_rad = np.radians(mean_deg)
+
+            #print(f"Senescent orientation: pressure={pressure}, deterministic mean={mean_deg:.1f}°")
+            return mean_rad
         else:
             # Normal cells: use MEAN orientation only
             mean_deg = self.interpolate_pressure_effect(self.control_params['orientation_mean'], pressure)
 
-        # FIXED: Remove the perpendicular offset that was causing the 90° error
-        # The target orientation should directly match the experimental measurement
-        return normalize_angle_deg(mean_deg)
+            # Convert to radians - USE MEAN DIRECTLY
+            mean_rad = np.radians(mean_deg)
+
+            #print(f"Control orientation: pressure={pressure}, deterministic mean={mean_deg:.1f}°")
+            return mean_rad
 
     def calculate_target_area(self, pressure, is_senescent, senescence_cause=None):
         """
@@ -261,11 +259,11 @@ class SpatialPropertiesModel:
             decay_factor = np.exp(-dt_minutes / tau_area)
             cell.target_area = instant_target_area + (cell.target_area - instant_target_area) * decay_factor
 
-            # Evolve target orientation using angle_difference_deg for correctness
-            orientation_diff = angle_difference_deg(instant_target_orientation, cell.target_orientation)
+            # Evolve target orientation
+            orientation_diff = instant_target_orientation - cell.target_orientation
+            orientation_diff = (orientation_diff + np.pi) % (2 * np.pi) - np.pi
             decay_factor = np.exp(-dt_minutes / tau_orient)
             cell.target_orientation += (1 - decay_factor) * orientation_diff
-            cell.target_orientation = normalize_angle_deg(cell.target_orientation)
 
             # Evolve target aspect ratio
             decay_factor = np.exp(-dt_minutes / tau_ar)
@@ -276,13 +274,12 @@ class SpatialPropertiesModel:
         # Evolve actual area
         decay_factor = np.exp(-dt_minutes / tau_area)
         cell.actual_area = cell.target_area + (cell.actual_area - cell.target_area) * decay_factor
-        cell.actual_area = max(cell.actual_area, cell.target_area * self.max_compression_factor)
 
-        # Evolve actual orientation using angle_difference_deg for correctness
-        orientation_diff = angle_difference_deg(cell.target_orientation, cell.actual_orientation)
+        # Evolve actual orientation
+        orientation_diff = cell.target_orientation - cell.actual_orientation
+        orientation_diff = (orientation_diff + np.pi) % (2 * np.pi) - np.pi
         decay_factor = np.exp(-dt_minutes / tau_orient)
         cell.actual_orientation += (1 - decay_factor) * orientation_diff
-        cell.actual_orientation = normalize_angle_deg(cell.actual_orientation)
 
 
         # Evolve actual aspect ratio
@@ -319,21 +316,39 @@ class SpatialPropertiesModel:
             }
 
         # Collect real measured properties
-        actual_orientations_deg = [cell.actual_orientation for cell in cells_dict.values()]
-        target_orientations_deg = [getattr(cell, 'target_orientation', cell.actual_orientation) for cell in cells_dict.values()]
-        actual_areas = [cell.actual_area for cell in cells_dict.values()]
-        target_areas = [getattr(cell, 'target_area', cell.actual_area) for cell in cells_dict.values()]
-        actual_aspect_ratios = [cell.actual_aspect_ratio for cell in cells_dict.values()]
-        target_aspect_ratios = [getattr(cell, 'target_aspect_ratio', cell.actual_aspect_ratio) for cell in cells_dict.values()]
+        actual_orientations = []
+        target_orientations = []
+        actual_areas = []
+        target_areas = []
+        actual_aspect_ratios = []
+        target_aspect_ratios = []
 
-        # Calculate alignment index using the new alignment_angle_deg function
-        # This gives the mean angle relative to the flow axis [0, 90]
-        mean_alignment_angle = np.mean([alignment_angle_deg(o) for o in actual_orientations_deg])
+        for cell in cells_dict.values():
+            actual_orientations.append(cell.actual_orientation)
+            target_orientations.append(getattr(cell, 'target_orientation', cell.actual_orientation))
+            actual_areas.append(cell.actual_area)
+            target_areas.append(getattr(cell, 'target_area', cell.actual_area))
+            actual_aspect_ratios.append(cell.actual_aspect_ratio)
+            target_aspect_ratios.append(getattr(cell, 'target_aspect_ratio', cell.actual_aspect_ratio))
 
-        # Calculate adaptation quality using the new angle_difference_deg for correctness
+        # Calculate alignment index (how well oriented toward flow direction)
+        # Flow direction is 0 degrees (horizontal)
+        flow_direction = 0.0
+        alignment_scores = []
+        for orientation in actual_orientations:
+            # Calculate how close the orientation is to flow direction
+            angle_diff = abs(orientation - flow_direction)
+            # Handle angle wrapping
+            if angle_diff > np.pi:
+                angle_diff = 2 * np.pi - angle_diff
+            # Convert to alignment score (1 = perfectly aligned, 0 = perpendicular)
+            alignment = np.cos(angle_diff)
+            alignment_scores.append(alignment)
+
+        # Calculate adaptation quality
         orientation_adaptation = np.mean([
-            1.0 - min(1.0, abs(angle_difference_deg(a, t)) / 180.0)
-            for a, t in zip(actual_orientations_deg, target_orientations_deg)
+            1.0 - min(1.0, abs(a - t) / np.pi)
+            for a, t in zip(actual_orientations, target_orientations)
         ])
 
         # Handle zero areas properly
@@ -349,9 +364,9 @@ class SpatialPropertiesModel:
         ])
 
         return {
-            'mean_actual_alignment': mean_alignment_angle,  # Mean alignment angle [0, 90]
-            'std_actual_orientation': np.std(actual_orientations_deg),
-            'mean_target_alignment': np.mean([alignment_angle_deg(o) for o in target_orientations_deg]),
+            'mean_actual_orientation': np.degrees(np.mean(actual_orientations)),  # Convert to degrees for display
+            'std_actual_orientation': np.degrees(np.std(actual_orientations)),
+            'mean_target_orientation': np.degrees(np.mean(target_orientations)),
 
             'mean_actual_area': np.mean(actual_areas),
             'mean_target_area': np.mean(target_areas),
@@ -359,7 +374,7 @@ class SpatialPropertiesModel:
             'mean_actual_aspect_ratio': np.mean(actual_aspect_ratios),
             'mean_target_aspect_ratio': np.mean(target_aspect_ratios),
 
-            'orientation_adaptation': orientation_adaptation,  # How close actual is to target
+            'orientation_alignment': np.mean(alignment_scores),  # How aligned with flow
             'area_adaptation': area_adaptation,
             'aspect_ratio_adaptation': aspect_ratio_adaptation,
 
@@ -369,30 +384,39 @@ class SpatialPropertiesModel:
                 cells_dict),
             'pressure': pressure,
 
-            # NEW: Target consistency metrics
-            'target_orientation_std': np.std(target_orientations_deg),
+            # NEW: Target consistency metrics (should be very consistent now)
+            'target_orientation_std': np.degrees(np.std(target_orientations)),
             'target_area_std': np.std(target_areas),
             'target_aspect_ratio_std': np.std(target_aspect_ratios)
         }
 
     def calculate_alignment_index(self, cells, flow_direction=0):
         """
-        Calculate the alignment index for a collection of cells based on the cosine similarity.
-        Uses the alignment_angle_deg to ensure consistency.
+        Calculate the alignment index for a collection of cells.
         """
         if not cells:
             return 0
 
-        cell_list = list(cells.values()) if isinstance(cells, dict) else cells
+        if isinstance(cells, dict):
+            cell_list = list(cells.values())
+        else:
+            cell_list = cells
 
-        if not cell_list:
-            return 0
+        alignment_sum = 0
+        cell_count = 0
 
-        # The alignment index is the average of the cosine of the alignment angles.
-        # alignment_angle_deg gives the angle in [0, 90], so cos will be in [0, 1].
-        # cos(0) = 1 (perfectly aligned), cos(90) = 0 (perpendicular).
-        alignment_scores = [np.cos(np.radians(alignment_angle_deg(cell.actual_orientation))) for cell in cell_list]
-        return np.mean(alignment_scores)
+        for cell in cell_list:
+            # Convert to alignment angle (0-90°)
+            orientation_rad = cell.actual_orientation
+            alignment_angle = np.abs(orientation_rad) % (np.pi / 2)  # 0 to π/2 radians
+
+            # Convert to alignment score (1 = perfectly aligned, 0 = perpendicular)
+            alignment_score = np.cos(alignment_angle)  # cos(0) = 1, cos(π/2) = 0
+
+            alignment_sum += alignment_score
+            cell_count += 1
+
+        return alignment_sum / cell_count if cell_count > 0 else 0
 
     def calculate_shape_index(self, cells):
         """

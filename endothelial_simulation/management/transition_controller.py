@@ -52,34 +52,40 @@ class CompressionSpring:
     def calculate_current_properties(self, t: float, space_pressure: float = 1.0) -> Dict:
         """
         Calculate current cell properties during transition.
-
+        
         Parameters:
             t: Time since transition start (minutes)
-            space_pressure: Global space pressure (>1 means crowded) - NO LONGER USED FOR COMPRESSION
-
+            space_pressure: Global space pressure (>1 means crowded)
+            
         Returns:
             Dictionary with current target properties
         """
         # Standard exponential approach to target (temporal dynamics)
         progress = 1.0 - np.exp(-t / self.tau)
-
-        # Set compression factor to 1.0 to disable area compression
-        self.current_compression_factor = 1.0
-
+        
+        # Apply compression if space is contested
+        if space_pressure > 1.0:
+            compression_factor = min(self.max_compression, 1.0 / space_pressure)
+            self.current_compression_factor = compression_factor
+        else:
+            # Gradually release compression as space becomes available
+            release_rate = 0.1  # 10% release per time step
+            self.current_compression_factor = min(1.0, 
+                self.current_compression_factor + release_rate * (1.0 - self.current_compression_factor))
+        
         # Calculate intermediate properties
-        # Area is no longer compressed and evolves directly towards the target.
         current_area = self._interpolate_property(
             self.start_area, self.target_area, progress
         ) * self.current_compression_factor
-
+        
         current_aspect_ratio = self._interpolate_property(
             self.start_aspect_ratio, self.target_aspect_ratio, progress
         )
-
+        
         current_orientation = self._interpolate_angle(
             self.start_orientation, self.target_orientation, progress
         )
-
+        
         return {
             'area': current_area,
             'aspect_ratio': current_aspect_ratio,
@@ -133,13 +139,13 @@ class TransitionController:
         self.current_transition.progress = 0.0
         self.current_transition.trajectory_checkpoints = []
         self.current_transition.last_checkpoint_time = current_time
-
+        
         # Create compression springs for each cell
         self._create_compression_springs(reconfiguration_result)
-
+        
         # Apply target configuration to grid (this sets the target state)
-        # self._apply_target_configuration()
-
+        self._apply_target_configuration()
+        
         print(f"   Energy improvement expected: {reconfiguration_result['energy_improvement']:.4f}")
         print(f"   Transition will use temporal dynamics with compression")
     
@@ -200,9 +206,9 @@ class TransitionController:
         """Create compression springs for the transition."""
         current_config = reconfiguration_result['current_configuration']
         target_config = reconfiguration_result['target_configuration']
-
+        
         self.springs.clear()
-
+        
         # Get time constant from temporal model
         if self.temporal_model:
             # Use current pressure for time constant calculation
@@ -210,22 +216,22 @@ class TransitionController:
             tau, _ = self.temporal_model.get_scaled_tau_and_amax(current_pressure, 'biochemical')
         else:
             tau = 30.0  # Default 30 minutes
-
+        
         # Create springs for each cell
-        for cell_id, cell in self.grid.cells.items():
+        for cell_id in current_config.cell_data:
             if cell_id in target_config.cell_data:
                 start_props = {
-                    'area': cell.actual_area,
-                    'aspect_ratio': cell.actual_aspect_ratio,
-                    'orientation': cell.actual_orientation
+                    'area': current_config.cell_data[cell_id]['target_area'],
+                    'aspect_ratio': current_config.cell_data[cell_id]['target_aspect_ratio'],
+                    'orientation': current_config.cell_data[cell_id]['target_orientation']
                 }
-
+                
                 target_props = {
                     'area': target_config.cell_data[cell_id]['target_area'],
                     'aspect_ratio': target_config.cell_data[cell_id]['target_aspect_ratio'],
                     'orientation': target_config.cell_data[cell_id]['target_orientation']
                 }
-
+                
                 spring = CompressionSpring(cell_id, start_props, target_props, tau)
                 self.springs[cell_id] = spring
     
@@ -255,7 +261,7 @@ class TransitionController:
             cell.target_aspect_ratio = cell_data['target_aspect_ratio']
         
         # Update tessellation
-        # self.grid._update_voronoi_tessellation()
+        self.grid._update_voronoi_tessellation()
     
     def _calculate_space_pressure(self) -> float:
         """Calculate global space pressure for compression calculation."""

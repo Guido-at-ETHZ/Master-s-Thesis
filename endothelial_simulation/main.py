@@ -373,10 +373,10 @@ Examples:
                         help='Simulation mode (default: full)')
 
     # === BASIC PARAMETERS ===
-    parser.add_argument('--duration', type=float, default=60,
+    parser.add_argument('--duration', type=float, default=90,
                         help='Simulation duration in minutes (default: 360 = 6 hours)')
 
-    parser.add_argument('--cells', type=int, default=30,
+    parser.add_argument('--cells', type=int, default=10,
                         help='Initial cell count (default: 50)')
 
     # === INPUT TYPE SELECTION (mutually exclusive) ===
@@ -406,7 +406,7 @@ Examples:
     parser.add_argument('--final-value', type=float, default=1.4,
                         help='Final shear stress value in Pa (default: 1.4)')
 
-    parser.add_argument('--step-time', type=float, default=50,
+    parser.add_argument('--step-time', type=float, default=10,
                         help='Time for step change in minutes (default: 60)')
 
     # === MULTI-STEP INPUT PARAMETERS ===

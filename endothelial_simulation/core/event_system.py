@@ -15,7 +15,6 @@ class EventType(Enum):
     DIVISION_EVENT = "division_event"
     DEATH_EVENT = "death_event"
     THRESHOLD_REACHED = "threshold_reached"
-    ORIENTATION_SHIFT = "orientation_shift"
 
 
 class ConfigurationEvent:
@@ -39,11 +38,6 @@ class EventDetector:
         self.last_hole_count = 0
         self.last_senescent_count = 0
         self.last_cell_count = 0
-
-        # Orientation tracking
-        self.last_healthy_orientation = 0.0
-        self.last_senescent_orientation = 0.0
-        self.orientation_change_threshold = np.radians(self.config.orientation_change_threshold_degrees)
         
         # Thresholds for triggering events
         self.pressure_change_threshold = 0.1  # Pa
@@ -128,28 +122,5 @@ class EventDetector:
                 }
             ))
         self.last_cell_count = current_total
-
-        # 5. Orientation shift event
-        if hasattr(simulator, 'get_average_orientation_by_type'):
-            avg_orientations = simulator.get_average_orientation_by_type()
-            healthy_orientation = avg_orientations.get('healthy', self.last_healthy_orientation)
-            senescent_orientation = avg_orientations.get('senescent', self.last_senescent_orientation)
-
-            healthy_shift = abs(healthy_orientation - self.last_healthy_orientation)
-            senescent_shift = abs(senescent_orientation - self.last_senescent_orientation)
-
-            if healthy_shift > self.orientation_change_threshold or senescent_shift > self.orientation_change_threshold:
-                events.append(ConfigurationEvent(
-                    EventType.ORIENTATION_SHIFT,
-                    current_time,
-                    {
-                        'healthy_orientation': np.degrees(healthy_orientation),
-                        'senescent_orientation': np.degrees(senescent_orientation),
-                        'healthy_shift': np.degrees(healthy_shift),
-                        'senescent_shift': np.degrees(senescent_shift)
-                    }
-                ))
-                self.last_healthy_orientation = healthy_orientation
-                self.last_senescent_orientation = senescent_orientation
         
         return events

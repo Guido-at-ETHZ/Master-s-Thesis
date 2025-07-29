@@ -181,42 +181,19 @@ class EventDrivenSimulator:
     def _process_event(self, event: 'ConfigurationEvent'):
         """
         Process an event and decide whether to trigger reconfiguration.
-        MODIFIED: Reconfiguration is now disabled. Instead, we directly update cell targets.
         """
         print(f"📅 Processing event: {event}")
-
+        
         # Add to event history
         self.event_history.append(event)
-
-        # --- RECONFIGURATION DISABLED ---
-        # Instead of reconfiguring, we will now force a continuous adaptation by
-        # updating the target properties of each cell based on the new conditions.
-        # The existing temporal dynamics will handle the smooth transition.
-
-        print("   Reconfiguration disabled. Forcing continuous adaptation.")
-
-        # Get the current pressure from the input pattern
-        current_pressure = self.input_pattern['value']
-
-        # Get the spatial model
-        if 'spatial' not in self.models:
-            return
-
-        spatial_model = self.models['spatial']
-
-        # Update the target properties for each cell
-        for cell_id, cell in self.grid.cells.items():
-            cell.target_area = spatial_model.calculate_target_area(
-                current_pressure, cell.is_senescent, cell.senescence_cause
-            )
-            cell.target_aspect_ratio = spatial_model.calculate_target_aspect_ratio(
-                current_pressure, cell.is_senescent
-            )
-            cell.target_orientation = spatial_model.calculate_target_orientation(
-                current_pressure, cell.is_senescent
-            )
-
-        # The main simulation loop will now evolve the cells smoothly towards these new targets.
+        
+        # Check if we should trigger reconfiguration
+        should_reconfigure = self._should_trigger_reconfiguration(event)
+        
+        if should_reconfigure:
+            self._trigger_reconfiguration(event)
+        else:
+            print(f"   Event not significant enough for reconfiguration")
     
     def _should_trigger_reconfiguration(self, event: 'ConfigurationEvent') -> bool:
         """
@@ -232,11 +209,7 @@ class EventDrivenSimulator:
         if time_since_last < self.min_reconfiguration_interval:
             print(f"   Too soon since last reconfiguration ({time_since_last:.1f} < {self.min_reconfiguration_interval:.1f} min)")
             return False
-
-        # Time-based reconfiguration
-        if time_since_last >= 10.0:  # Every 10 minutes
-            return True
-
+        
         # Event-specific criteria
         if event.event_type.value == 'pressure_change':
             pressure_change = abs(event.data['pressure_change'])
