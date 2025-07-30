@@ -615,6 +615,17 @@ class Simulator:
         if hasattr(self.grid, 'update_holes'):
             self.grid.update_holes(dt)
 
+        """ 
+        # --- FIX: Periodically update adaptation, tessellation, and positions ---
+        if self.step_count % self.tessellation_update_interval == 0:
+            self.grid.adapt_cell_properties()
+            self.grid._update_voronoi_tessellation()
+            
+        if self.step_count % self.position_optimization_interval == 0:
+            self.grid.optimize_cell_positions(iterations=1)
+        # --- END FIX ---
+        """
+
         # Record frames for animation
         if self.record_frames and self.step_count % self.record_interval == 0:
             self._record_frame()
