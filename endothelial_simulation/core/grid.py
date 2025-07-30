@@ -174,7 +174,7 @@ class Grid:
 
         # Control parameters from mathematical formulation
         alpha = 0.2  # Area control strength
-        beta = 0.1  # Orientation influence strength
+        beta = 1.0  # Orientation influence strength (increased for stronger visual impact)
         gamma = 0.4  # Aspect ratio control strength
         tau_hole = 15.0  # Hole creation threshold
 
@@ -252,10 +252,17 @@ class Grid:
         enhanced_distances = np.copy(euclidean_distances)
 
         for i, (cell_obj, seed_pos, actual_area) in enumerate(zip(cell_objects, seed_points, current_actual_areas)):
-            # Get target properties from the cell object
+            # MODIFIED: Use actual properties for tessellation if preserving temporal dynamics
+            if preserve_temporal_dynamics:
+                orientation_for_tess = getattr(cell_obj, 'actual_orientation', 0.0)
+                aspect_ratio_for_tess = getattr(cell_obj, 'actual_aspect_ratio', 1.0)
+            else:
+                orientation_for_tess = getattr(cell_obj, 'target_orientation', 0.0)
+                aspect_ratio_for_tess = getattr(cell_obj, 'target_aspect_ratio', 1.0)
+
             target_area = getattr(cell_obj, 'target_area', actual_area)
-            target_orientation = getattr(cell_obj, 'target_orientation', 0.0)
-            target_aspect_ratio = getattr(cell_obj, 'target_aspect_ratio', 1.0)
+            target_orientation = orientation_for_tess
+            target_aspect_ratio = aspect_ratio_for_tess
 
             # Ensure target_area is not zero to prevent division by zero
             target_area = max(1.0, target_area)
@@ -275,8 +282,7 @@ class Grid:
             orientation_adjustments = normalized_angle_diffs * pixel_distances * 2.0
 
             # Step 3c: Aspect Ratio Influence Adjustment
-            target_aspect_ratio = getattr(cell_obj, 'target_aspect_ratio', 1.0)
-            if target_aspect_ratio > 1.0:
+            if aspect_ratio_for_tess > 1.0:
                 # Calculate pixel positions relative to seed in oriented coordinate system
                 pixel_vectors = self.pixel_coords - seed_pos
 
@@ -829,7 +835,7 @@ class Grid:
         """Clamp cell territories to biological limits and create holes."""
 
         for cell in self.cells.values():
-            max_area = cell.target_area * (1.2 if not cell.is_senescent else 3.0)
+            max_area = cell.target_area * (2.0 if not cell.is_senescent else 3.0)
 
             # ADD THIS LINE to see what's happening:
             print(

@@ -264,10 +264,15 @@ class SpatialPropertiesModel:
             cell.target_area = instant_target_area + (cell.target_area - instant_target_area) * decay_factor
 
             # Evolve target orientation
+            old_target_orientation = cell.target_orientation
             orientation_diff = instant_target_orientation - cell.target_orientation
             orientation_diff = (orientation_diff + np.pi) % (2 * np.pi) - np.pi
             decay_factor = np.exp(-dt_minutes / tau_orient)
             cell.target_orientation += (1 - decay_factor) * orientation_diff
+
+            dynamics_info['instant_target_orientation'] = instant_target_orientation
+            dynamics_info['old_target_orientation'] = old_target_orientation
+            dynamics_info['new_target_orientation'] = cell.target_orientation
 
             # Evolve target aspect ratio
             decay_factor = np.exp(-dt_minutes / tau_ar)

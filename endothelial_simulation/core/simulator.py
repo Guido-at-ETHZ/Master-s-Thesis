@@ -601,8 +601,10 @@ class Simulator:
             model = self.models['spatial']
             # Set transition mode if transitioning
             model._in_transition_mode = self.transition_controller.is_transitioning()
+            all_cells_dynamics_info = []
             for cell in self.grid.cells.values():
                 dynamics_result = model.update_cell_properties(cell, current_input, dt, self.grid.cells)
+                all_cells_dynamics_info.append({'cell_id': cell.cell_id, 'dynamics': dynamics_result})
 
         # Update population dynamics
         if 'population' in self.models and self.config.enable_population_dynamics:
@@ -653,7 +655,7 @@ class Simulator:
             # Less frequent tessellation updates
             self.grid._update_voronoi_tessellation(preserve_temporal_dynamics=True)
 
-        if self.step_count % self.position_optimization_interval == 0:
+        if self.step_count % self.position_optimization_interval == 30:
             self.grid.optimize_cell_positions(iterations=1)
 
         # Record frames for animation
@@ -661,7 +663,7 @@ class Simulator:
             self._record_frame()
 
         # Record state
-        self._record_state()
+        self._record_state(all_cells_dynamics_info)
 
         # THIS IS THE IMPORTANT PART - RETURN THE RIGHT KEYS
         return {
@@ -1025,7 +1027,7 @@ class Simulator:
     # STATE RECORDING AND ANALYSIS
     # =============================================================================
 
-    def _record_state(self):
+    def _record_state(self, all_cells_dynamics_info=None):
         """Record current simulation state."""
         # Get cell properties
         cell_properties = self.grid.get_cell_properties()
@@ -1037,7 +1039,8 @@ class Simulator:
             'cell_count': len(self.grid.cells),
             'input_value': self.update_input_value(),
             'biological_energy': self.grid.calculate_biological_energy(),
-            'is_transitioning': self.transition_controller.is_transitioning() if hasattr(self, 'transition_controller') else False
+            'is_transitioning': self.transition_controller.is_transitioning() if hasattr(self, 'transition_controller') else False,
+            'cell_dynamics_info': all_cells_dynamics_info # Add the new dynamics info
         }
 
         # Add cell properties
