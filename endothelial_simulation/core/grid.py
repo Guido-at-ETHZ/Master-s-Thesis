@@ -159,7 +159,7 @@ class Grid:
         """Convert any angle to [0, π/2] flow alignment angle"""
         return np.abs(angle_rad) % (np.pi / 2)
 
-    def _update_voronoi_tessellation(self):
+    def _update_voronoi_tessellation(self, preserve_temporal_dynamics=False):
         """
         MODIFIED: Enhanced Weighted Voronoi Tessellation with Hole-Based Pressure Relief
 
@@ -181,6 +181,15 @@ class Grid:
         seed_points = []
         cell_ids = []
         cell_objects = []
+
+        if preserve_temporal_dynamics:
+            temporal_props = {
+                cell_id: {
+                    'actual_orientation': cell.actual_orientation,
+                    'actual_aspect_ratio': cell.actual_aspect_ratio
+                }
+                for cell_id, cell in self.cells.items()
+            }
 
         # Handle existing holes
         if self.holes_enabled and self.hole_manager:
@@ -344,6 +353,12 @@ class Grid:
             for cell_id, cell in self.cells.items():
                 if cell_id in self.territory_map and self.territory_map[cell_id]:
                     cell.actual_area = len(self.territory_map[cell_id])
+
+        if preserve_temporal_dynamics:
+            for cell_id, props in temporal_props.items():
+                if cell_id in self.cells:
+                    self.cells[cell_id].actual_orientation = props['actual_orientation']
+                    self.cells[cell_id].actual_aspect_ratio = props['actual_aspect_ratio']
 
     def _update_actual_properties_from_territories(self):
         """

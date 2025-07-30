@@ -107,7 +107,8 @@ class Simulator:
         self.record_interval = 10
 
         # Mosaic-specific parameters (kept for compatibility)
-        self.tessellation_update_interval = 5
+        self.tessellation_update_interval = 1
+        self.target_update_interval = 1
         self.position_optimization_interval = 20
         self.last_tessellation_update = 0
         self.last_position_optimization = 0
@@ -625,6 +626,35 @@ class Simulator:
             self.grid.optimize_cell_positions(iterations=1)
         # --- END FIX ---
         """
+        if self.step_count % self.target_update_interval == 0:
+            # Update ONLY targets (no tessellation)
+            if 'spatial' in self.models:
+                current_input = self.input_pattern.get('value', 0.0)
+                spatial_model = self.models['spatial']
+
+                for cell in self.grid.cells.values():
+                    # Use the existing methods to calculate targets
+                    target_area = spatial_model.calculate_target_area(
+                        current_input, cell.is_senescent, cell.senescence_cause
+                    )
+                    target_orientation = spatial_model.calculate_target_orientation(
+                        current_input, cell.is_senescent
+                    )
+                    target_aspect_ratio = spatial_model.calculate_target_aspect_ratio(
+                        current_input, cell.is_senescent
+                    )
+
+                    # Update targets
+                    cell.target_area = target_area
+                    cell.target_orientation = target_orientation
+                    cell.target_aspect_ratio = target_aspect_ratio
+
+        if self.step_count % self.tessellation_update_interval == 0:
+            # Less frequent tessellation updates
+            self.grid._update_voronoi_tessellation(preserve_temporal_dynamics=True)
+
+        if self.step_count % self.position_optimization_interval == 0:
+            self.grid.optimize_cell_positions(iterations=1)
 
         # Record frames for animation
         if self.record_frames and self.step_count % self.record_interval == 0:

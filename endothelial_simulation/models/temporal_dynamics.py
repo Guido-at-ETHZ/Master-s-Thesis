@@ -47,7 +47,7 @@ class TemporalDynamicsModel:
         self.time_scale_factors = {
             'biochemical': 1.0,      # Base - your fitted data
             'area': 1.0,             # Cell volume/area changes
-            'orientation': 1.0,      # Cell orientation/alignment
+            'orientation': 0.1,      # Cell orientation/alignment (reduced for faster adaptation)
             'aspect_ratio': 1.0,     # Cell elongation/shape
         }
 

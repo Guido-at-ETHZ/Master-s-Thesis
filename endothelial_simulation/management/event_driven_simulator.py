@@ -463,7 +463,7 @@ class EventDrivenSimulator:
         
         for cell_id, cell in self.grid.cells.items():
             target_area = spatial_model.calculate_target_area(
-                current_pressure, cell.is_senescent, cell.senescence_cause
+                pressure, cell.is_senescent, cell.senescence_cause
             )
             target_aspect_ratio = spatial_model.calculate_target_aspect_ratio(
                 current_pressure, cell.is_senescent
