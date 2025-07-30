@@ -222,7 +222,7 @@ class Simulator:
         def division_distribution():
             max_div = self.config.max_divisions
             r = np.random.random()
-            return int(max_div * (1 - np.sqrt(r)))
+            return int(max_div * 0.5 * (1 - np.sqrt(r)))
 
         # Generate and test multiple configurations
         config_results = self.grid.generate_multiple_initial_configurations(

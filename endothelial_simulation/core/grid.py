@@ -874,14 +874,11 @@ class Grid:
             is_senescent = False
             senescence_cause = None
 
-            """ To see how it would perform without - exclude at the moment
             if divisions >= self.config.max_divisions:
                 is_senescent = True
                 senescence_cause = 'telomere'
-            elif np.random.random() < 0.05:
-                is_senescent = True
-                senescence_cause = 'stress'
-            """
+
+
             cell = self.add_cell(position, divisions, is_senescent, senescence_cause, target_area)
             created_cells.append(cell)
 
