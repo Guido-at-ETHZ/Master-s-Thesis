@@ -8,6 +8,8 @@ import warnings
 from ..models.temporal_dynamics import TemporalDynamicsModel
 from ..models.population_dynamics import PopulationDynamicsModel
 
+from multiprocessing.pool import ThreadPool, TimeoutError
+
 warnings.filterwarnings('ignore')
 
 
@@ -30,7 +32,7 @@ class EndothelialMPCController:
 
         # Control parameters
 
-        self.control_horizon = 120  # steps
+        self.control_horizon = 20  # steps
         self.dt = 1.0  # minute
 
         # Constraint parameters
@@ -55,9 +57,8 @@ class EndothelialMPCController:
         self.average_cell_area = 30.0  # pixels^2
         self.average_expansion_factor = 1.1
 
-        # Control targets
-        self.targets = {}
-        self.baseline_shear = 1.4
+        self.temporal_model = TemporalDynamicsModel(self.config)
+        self.population_model = PopulationDynamicsModel(self.config)
 
         # State history for prediction
         self.state_history = []
@@ -148,7 +149,7 @@ class EndothelialMPCController:
         """Extract actual senescence rate from PopulationDynamicsModel."""
         try:
             # Initialize population model
-            pop_model = PopulationDynamicsModel(self.config)
+            pop_model = self.population_model
 
             # Set current state from cells
             current_cells = self.simulator.grid.cells
@@ -230,7 +231,7 @@ class EndothelialMPCController:
                 return np.array([])
 
             # Initialize temporal model
-            temporal_model = TemporalDynamicsModel(self.config)
+            temporal_model = self.temporal_model
 
             # Get time constant for orientation
             tau_orient, A_max = temporal_model.get_scaled_tau_and_amax(shear_stress, 'orientation')
@@ -289,7 +290,7 @@ class EndothelialMPCController:
             predicted_orientations = self._extract_orientation_dynamics(state, u)
 
             # 4. EXTRACT RESPONSE DYNAMICS (existing temporal model)
-            temporal_model = TemporalDynamicsModel(self.config)
+            temporal_model = self.temporal_model
             current_responses = state.get('responses', [])
 
             if len(current_responses) > 0:
@@ -358,8 +359,8 @@ class EndothelialMPCController:
             # 2. SENESCENCE SOFT CONSTRAINT
             senescence_violation = max(0, predicted_state['senescence_fraction'] - self.senescence_threshold)
             if senescence_violation > 0:
-                # Exponential penalty for severe violations
-                penalty = np.exp(senescence_violation * 10) - 1
+                # Quadratic penalty for smoother response
+                penalty = (senescence_violation / self.senescence_threshold) ** 2
                 step_cost += self.weights['senescence'] * penalty
 
             # 3. HOLE AREA SOFT CONSTRAINT (5% threshold)
@@ -418,44 +419,69 @@ class EndothelialMPCController:
         # Bounds for control variables
         bounds = [(self.shear_stress_limits[0], self.shear_stress_limits[1])] * self.control_horizon
 
-        # Rate limit constraints
+        # Rate limit constraints (linearized for robustness)
         constraints = []
         for i in range(self.control_horizon):
             if i == 0:
-                # First control action rate limit
-                def rate_constraint(x, i=i):
-                    return self.rate_limit - abs(x[i] - current_state['current_shear'])
+                # Rate limit for the first step
+                def rate_constraint_upper(x, i=i):
+                    return self.rate_limit - (x[i] - current_state['current_shear'])
 
-                constraints.append({'type': 'ineq', 'fun': rate_constraint})
+                def rate_constraint_lower(x, i=i):
+                    return self.rate_limit + (x[i] - current_state['current_shear'])
+
+                constraints.append({'type': 'ineq', 'fun': rate_constraint_upper})
+                constraints.append({'type': 'ineq', 'fun': rate_constraint_lower})
             else:
-                # Subsequent control actions rate limit
-                def rate_constraint(x, i=i):
-                    return self.rate_limit - abs(x[i] - x[i - 1])
+                # Rate limit for subsequent steps
+                def rate_constraint_upper(x, i=i):
+                    return self.rate_limit - (x[i] - x[i - 1])
 
-                constraints.append({'type': 'ineq', 'fun': rate_constraint})
+                def rate_constraint_lower(x, i=i):
+                    return self.rate_limit + (x[i] - x[i - 1])
+
+                constraints.append({'type': 'ineq', 'fun': rate_constraint_upper})
+                constraints.append({'type': 'ineq', 'fun': rate_constraint_lower})
 
         # Solve optimization
+        pool = ThreadPool(processes=1)
         try:
-            result = minimize(
+            # Run the optimization in a separate thread
+            async_result = pool.apply_async(minimize, (
                 objective,
                 x0,
-                method='SLSQP',
-                bounds=bounds,
-                constraints=constraints,
-                options={'maxiter': 100, 'ftol': 1e-6}
-            )
+            ), {
+                'method': 'SLSQP',
+                'bounds': bounds,
+                'constraints': constraints,
+                'options': {'maxiter': 100, 'ftol': 1e-6, 'disp': False}
+            })
+
+            # Wait for the result with a timeout
+            result = async_result.get(timeout=10.0)  # 10-second timeout
 
             if result.success:
                 optimal_control = result.x[0]
                 cost = result.fun
+                print(f"✅ Optimization successful. Cost: {cost:.2f}")
             else:
+                print(f"⚠️ Optimization failed: {result.message}")
                 optimal_control = self._fallback_control(current_state)
                 cost = float('inf')
 
-        except Exception as e:
-            print(f"⚠️ Optimization failed: {e}")
+        except TimeoutError:
+            print("⌛️ Optimization timed out after 4 seconds. Using fallback control.")
             optimal_control = self._fallback_control(current_state)
             cost = float('inf')
+
+        except Exception as e:
+            print(f"⚠️ Optimization failed unexpectedly: {e}")
+            optimal_control = self._fallback_control(current_state)
+            cost = float('inf')
+
+        finally:
+            pool.close()
+            pool.terminate()
 
         # CLEAN RETURN - No emergency fields
         return optimal_control, {
