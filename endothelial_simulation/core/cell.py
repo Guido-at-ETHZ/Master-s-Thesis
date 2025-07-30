@@ -741,9 +741,9 @@ class Cell:
         """Calculate stress factor based on shear stress magnitude."""
         tau = self.local_shear_stress
         if tau <= 0:
-            return 0.0186
+            return (0.00278 / 13.5)
         else:
-            return 0.0186 + tau * 0.0045
+            return ((0.00278 + tau * 0.00992) / 13.5)
 
     def update_stress_exposure(self, dt_hours):
         """Update stress exposure time for any stress above 0 Pa."""
