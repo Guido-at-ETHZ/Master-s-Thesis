@@ -118,6 +118,8 @@ class Simulator:
         self.biological_id_map = {}  # Maps grid_cell_id -> biological_id
         self.cell_properties_map = {}  # Maps biological_id -> persistent properties
 
+        self.mpc_controller = None
+
     # =============================================================================
     # INITIALIZATION METHODS
     # =============================================================================
@@ -768,6 +770,13 @@ class Simulator:
         print(f"🚀 Running event-driven simulation for {duration} minutes ({num_steps} steps)...")
         start_time = time.time()
 
+        # --- FRAME RECORDING FIX ---
+        # Record initial state if animation is enabled
+        if self.record_frames and not self.frame_data:
+            print("🔴 Recording initial frame for animation.")
+            self._record_frame()
+        # --- END FIX ---
+
         # Run steps
         for i in range(num_steps):
             if self.time >= target_time:
@@ -792,19 +801,17 @@ class Simulator:
                       f"Packing: {packing_eff:.2f}, "
                       f"Transitioning: {step_info['transitioning']}")
 
-            # Record frames for animation
-            if self.record_frames and self.step_count % self.record_interval == 0:
-                self._record_frame()
+        # --- FRAME RECORDING FIX ---
+        # Record final state if animation is enabled
+        if self.record_frames:
+            print("🔴 Recording final frame for animation.")
+            self._record_frame()
+        # --- END FIX ---
 
         end_time = time.time()
         total_time = end_time - start_time
 
         print(f"✅ Event-driven simulation completed in {total_time:.1f} seconds")
-
-        # Create animations if enabled
-        if self.record_frames and self.frame_data:
-            print("🎬 Creating animations...")
-            self._create_animations()
 
         # Return results
         return {

@@ -36,26 +36,27 @@ class EndothelialMPCController:
         self.dt = 1.0  # minute
 
         # Constraint parameters
-        self.senescence_threshold = 0.30  # 30% senescent fraction limit
+        self.senescence_threshold = 0.30  # 30% senescent fraction hard limit
+        self.constraint_tolerance = 0.01  # Tolerance for constraints
         self.hole_area_threshold = 0.05  # 5% hole area limit
-        self.rate_limit = 1.4 / 60 # Pa/min
+        self.rate_limit = 1.4 / 60  # Pa/min
         self.shear_stress_limits = (0.0, 4.0)  # Pa
 
         # Soft constraint weights (penalty scaling)
         self.weights = {
             'tracking': 1000.0,  # Response tracking
-            'senescence': 20.0,  # Soft senescence penalty (was 100.0)
-            'holes': 80.0,  # Soft hole penalty (was 1000.0)
-            'cell_density': 15.0,  # Cell density penalty (was 50.0)
-            'rate_limit': 25.0,  # Rate limit penalty (was 200.0)
+            'holes': 80.0,  # Soft hole penalty
+            'cell_density': 15.0,  # Cell density penalty
+            'rate_limit': 25.0,  # Rate limit penalty
             'control_effort': 0.1,  # Control effort penalty
-            'hole_prediction': 40.0,  # Predictive hole prevention (was 500.0)
-            'flow_alignment': 8.0,  # Flow alignment penalty (was 25.0)
+            'hole_prediction': 40.0,  # Predictive hole prevention
+            'flow_alignment': 8.0,  # Flow alignment penalty
         }
 
         # Spatial parameters
         self.average_cell_area = 30.0  # pixels^2
         self.average_expansion_factor = 1.1
+        self.baseline_shear = 1.0
 
         self.temporal_model = TemporalDynamicsModel(self.config)
         self.population_model = PopulationDynamicsModel(self.config)
@@ -356,27 +357,20 @@ class EndothelialMPCController:
                 alignment_error = predicted_state['mean_alignment_error']
                 step_cost += self.weights['flow_alignment'] * alignment_error ** 2
 
-            # 2. SENESCENCE SOFT CONSTRAINT
-            senescence_violation = max(0, predicted_state['senescence_fraction'] - self.senescence_threshold)
-            if senescence_violation > 0:
-                # Quadratic penalty for smoother response
-                penalty = (senescence_violation / self.senescence_threshold) ** 2
-                step_cost += self.weights['senescence'] * penalty
-
-            # 3. HOLE AREA SOFT CONSTRAINT (5% threshold)
+            # 2. HOLE AREA SOFT CONSTRAINT (5% threshold)
             hole_violation = max(0, predicted_state['hole_area_fraction'] - self.hole_area_threshold)
             if hole_violation > 0:
                 # Quadratic penalty with scaling
                 penalty = (hole_violation / self.hole_area_threshold) ** 2
                 step_cost += self.weights['holes'] * penalty
 
-            # 4. PREDICTIVE HOLE PREVENTION
+            # 3. PREDICTIVE HOLE PREVENTION
             if predicted_state['unfillable_area'] > 0:
                 # Penalize conditions that lead to unfillable area
                 penalty = predicted_state['unfillable_area'] / predicted_state['total_area']
                 step_cost += self.weights['hole_prediction'] * penalty ** 2
 
-            # 5. CELL DENSITY CONSTRAINTS
+            # 4. CELL DENSITY CONSTRAINTS
             cell_count = predicted_state['cell_count']
             min_cells = predicted_state['minimum_cells']
             max_cells = predicted_state['maximum_cells']
@@ -388,10 +382,10 @@ class EndothelialMPCController:
                 violation = (cell_count - max_cells) / max_cells
                 step_cost += self.weights['cell_density'] * violation ** 2
 
-            # 6. CONTROL EFFORT
+            # 5. CONTROL EFFORT
             step_cost += self.weights['control_effort'] * u ** 2
 
-            # 7. RATE LIMIT CONSTRAINT
+            # 6. RATE LIMIT CONSTRAINT
             if i == 0:  # Only check first control action
                 rate_change = abs(u - current_state['current_shear'])
                 if rate_change > self.rate_limit:
@@ -405,9 +399,7 @@ class EndothelialMPCController:
         return total_cost
 
     def optimize_control(self, current_state: Dict) -> Tuple[float, Dict]:
-        """Optimize control action using pure MPC approach."""
-
-        # REMOVED: All emergency-related code
+        """Optimize control action using pure MPC approach with hard constraints for senescence."""
 
         # Set up optimization problem
         def objective(control_sequence):
@@ -419,34 +411,45 @@ class EndothelialMPCController:
         # Bounds for control variables
         bounds = [(self.shear_stress_limits[0], self.shear_stress_limits[1])] * self.control_horizon
 
-        # Rate limit constraints (linearized for robustness)
+        # --- CONSTRAINTS ---
         constraints = []
+
+        # 1. Senescence Inequality Constraint (Hard Constraint)
+        def senescence_constraint(control_sequence, step):
+            """Constraint to keep senescence below the threshold."""
+            predictions = self.predict_future_state(current_state, control_sequence)
+            if step < len(predictions):
+                predicted_senescence = predictions[step]['senescence_fraction']
+                return self.senescence_threshold - predicted_senescence + self.constraint_tolerance
+            return 0
+
+        for i in range(self.control_horizon):
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda x, i=i: senescence_constraint(x, i)
+            })
+
+        # 2. Rate Limit Constraints (Linearized)
         for i in range(self.control_horizon):
             if i == 0:
-                # Rate limit for the first step
                 def rate_constraint_upper(x, i=i):
                     return self.rate_limit - (x[i] - current_state['current_shear'])
-
                 def rate_constraint_lower(x, i=i):
                     return self.rate_limit + (x[i] - current_state['current_shear'])
-
                 constraints.append({'type': 'ineq', 'fun': rate_constraint_upper})
                 constraints.append({'type': 'ineq', 'fun': rate_constraint_lower})
             else:
-                # Rate limit for subsequent steps
                 def rate_constraint_upper(x, i=i):
-                    return self.rate_limit - (x[i] - x[i - 1])
-
+                    return self.rate_limit - (x[i] - x[i-1])
                 def rate_constraint_lower(x, i=i):
-                    return self.rate_limit + (x[i] - x[i - 1])
-
+                    return self.rate_limit + (x[i] - x[i-1])
                 constraints.append({'type': 'ineq', 'fun': rate_constraint_upper})
                 constraints.append({'type': 'ineq', 'fun': rate_constraint_lower})
+
 
         # Solve optimization
         pool = ThreadPool(processes=1)
         try:
-            # Run the optimization in a separate thread
             async_result = pool.apply_async(minimize, (
                 objective,
                 x0,
@@ -454,23 +457,25 @@ class EndothelialMPCController:
                 'method': 'SLSQP',
                 'bounds': bounds,
                 'constraints': constraints,
-                'options': {'maxiter': 100, 'ftol': 1e-6, 'disp': False}
+                'options': {'maxiter': 150, 'ftol': 1e-7, 'disp': False} # Increased maxiter
             })
 
-            # Wait for the result with a timeout
-            result = async_result.get(timeout=10.0)  # 10-second timeout
+            result = async_result.get(timeout=10.0)
 
             if result.success:
                 optimal_control = result.x[0]
                 cost = result.fun
                 print(f"✅ Optimization successful. Cost: {cost:.2f}")
             else:
+                # Detailed error logging for infeasible optimization
                 print(f"⚠️ Optimization failed: {result.message}")
+                if 'inequality constraints incompatible' in result.message:
+                    print("   Error: Infeasible solution. The senescence constraint may be too strict.")
                 optimal_control = self._fallback_control(current_state)
                 cost = float('inf')
 
         except TimeoutError:
-            print("⌛️ Optimization timed out after 4 seconds. Using fallback control.")
+            print("⌛️ Optimization timed out after 10 seconds. Using fallback control.")
             optimal_control = self._fallback_control(current_state)
             cost = float('inf')
 
@@ -483,7 +488,6 @@ class EndothelialMPCController:
             pool.close()
             pool.terminate()
 
-        # CLEAN RETURN - No emergency fields
         return optimal_control, {
             'optimal_shear': optimal_control,
             'cost': cost,
@@ -491,44 +495,30 @@ class EndothelialMPCController:
         }
 
     def _fallback_control(self, current_state: Dict) -> float:
-        """Fallback control law when optimization fails."""
+        """Conservative fallback control to minimize stress and prevent constraint violations."""
         current_shear = current_state['current_shear']
-        target_response = self.targets.get('response', 2.0)
 
-        if len(current_state['responses']) > 0:
-            avg_response = np.mean(current_state['responses'])
-            error = target_response - avg_response
+        # Reduce shear stress to a baseline level to minimize senescence
+        fallback_shear = self.baseline_shear * 0.8  # Reduce to 80% of baseline
 
-            # Simple proportional control with constraint awareness
-            kp = 0.3
-            control_adjustment = kp * error
-
-            # Reduce control if approaching soft constraints
-            if current_state['senescence_fraction'] > 0.25:  # 25% - warning level
-                control_adjustment *= 0.5
-
-            if current_state['hole_area_fraction'] > 0.03:  # 3% - warning level
-                control_adjustment *= 0.3
-
-            optimal_shear = current_shear + control_adjustment
-        else:
-            optimal_shear = self.baseline_shear
-
-        # Apply hard constraints
-        optimal_shear = np.clip(optimal_shear, self.shear_stress_limits[0], self.shear_stress_limits[1])
-
-        # Rate limiting
-        rate_change = abs(optimal_shear - current_shear)
-        if rate_change > self.rate_limit:
-            if optimal_shear > current_shear:
+        # Ensure the fallback is within the rate limit
+        rate_change = fallback_shear - current_shear
+        if abs(rate_change) > self.rate_limit:
+            if rate_change > 0:
                 optimal_shear = current_shear + self.rate_limit
             else:
                 optimal_shear = current_shear - self.rate_limit
+        else:
+            optimal_shear = fallback_shear
 
+        # Clip to absolute limits
+        optimal_shear = np.clip(optimal_shear, self.shear_stress_limits[0], self.shear_stress_limits[1])
+
+        print(f"🛡️ Fallback control activated. Setting shear to {optimal_shear:.2f} Pa.")
         return optimal_shear
 
     def control_step(self, targets: Optional[Dict] = None) -> Tuple[float, Dict]:
-        """Main control step function."""
+        """Main control step function with early stopping for senescence."""
         if targets is not None:
             self.set_targets(targets)
 
@@ -536,6 +526,12 @@ class EndothelialMPCController:
         current_state = self.get_current_state()
         if not current_state:
             return self.baseline_shear, {'error': 'No state available'}
+
+        # --- EARLY STOPPING --- #
+        if current_state['senescence_fraction'] > self.senescence_threshold:
+            print("🛑 Early stopping: Senescence exceeds hard limit. Halting simulation.")
+            # Signal to stop the simulation
+            return np.nan, {'status': 'STOP', 'reason': 'Senescence limit exceeded'}
 
         # Optimize control
         optimal_shear, control_info = self.optimize_control(current_state)

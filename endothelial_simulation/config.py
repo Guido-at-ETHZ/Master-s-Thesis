@@ -63,6 +63,15 @@ class SimulationConfig:
         self.debug_events = False
         self.debug_transitions = False
 
+        # === OPTIMAL STOPPING SYSTEM ===
+        self.enable_optimal_stopping = False  # True Master switch
+        self.stopping_criteria = {
+            'max_senescence': 0.25,  # Stop if senescence exceeds 25%
+            'response_stability_window': 15,  # Time steps to evaluate stability
+            'response_stability_threshold': 0.05,  # Max std dev for a stable response
+            'min_simulation_time': 60  # Minimum time before stopping can occur
+        }
+
         # === TEMPORAL DYNAMICS ===
         self.tau_area_minutes = 45.0
         self.tau_orientation_minutes = 1.0

@@ -18,6 +18,8 @@ from endothelial_simulation.config import (
 from endothelial_simulation.core.simulator import Simulator
 from endothelial_simulation.visualization import Plotter
 from endothelial_simulation.control.mpc_controller import EndothelialMPCController
+from endothelial_simulation.management.optimal_stopping import OptimalStopping
+from endothelial_simulation.visualization.animations import create_detailed_cell_animation, create_metrics_animation
 
 def parse_schedule_string(schedule_str):
     """
@@ -209,9 +211,12 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
             'orientation': np.radians(mpc_orientation_target)
         }
         mpc.set_targets(targets)
+        simulator.mpc_controller = mpc
     except Exception as e:
         print(f"❌ Failed to create MPC controller: {e}")
         return None
+
+    optimal_stopper = OptimalStopping(config, simulator, mpc)
 
     print(f"📊 Running MPC-controlled simulation:")
     print(f"   Response target: {mpc_response_target}")
@@ -224,6 +229,13 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
     # Track consecutive failures for stability
     consecutive_failures = 0
     max_failures = 5
+
+    # --- FRAME RECORDING FIX ---
+    # Record initial state for animation
+    if config.create_animations:
+        print("🔴 Recording initial frame for MPC animation.")
+        simulator._record_frame()
+    # --- END FIX ---
 
     # Main MPC simulation loop - IMPROVED
     for minute in range(max_iterations):
@@ -261,6 +273,15 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
                 print(f"❌ Too many consecutive MPC failures ({max_failures}), aborting simulation")
                 break
 
+            # Check for optimal stopping criteria
+            if config.enable_optimal_stopping:
+                current_state = control_info.get('current_state')
+                if current_state:
+                    stop_reason = optimal_stopper.check_criteria(minute, current_state)
+                    if stop_reason:
+                        print(f"\n🛑 OPTIMAL STOPPING TRIGGERED at t={minute}min: {stop_reason}")
+                        break
+
             # Progress monitoring
             if minute % 10 == 0:  # Every 10 minutes
                 cost_str = f"{control_info.get('cost', 'N/A'):.2f}" if control_info.get('cost') != float(
@@ -271,12 +292,16 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
                     c = control_info['constraints']
                     print(f"         senescence={c['senescence_fraction']:.1%}, holes={c['hole_area_fraction']:.1%}")
 
+
+
             # Apply optimal control to simulator
             simulator.set_constant_input(optimal_shear)
 
             # Step simulation with error handling
             try:
                 simulator.step(dt=1.0)
+                if config.create_animations and minute % 10 == 0:
+                    simulator._record_frame()
             except Exception as step_error:
                 print(f"⚠️ Simulation step failed at t={minute}min: {step_error}")
                 # Try to continue with a safe input
@@ -302,6 +327,13 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
             except:
                 print(f"❌ Cannot recover, stopping simulation")
                 break
+
+    # --- FRAME RECORDING FIX ---
+    # Record final state for animation
+    if config.create_animations:
+        print("🔴 Recording final frame for MPC animation.")
+        simulator._record_frame()
+    # --- END FIX ---
 
     print(f"\n✅ MPC simulation completed ({minute + 1}/{max_iterations} steps)")
 
@@ -610,9 +642,13 @@ Examples:
         print(f"   Created {len(figures)} comprehensive plots")
 
         # Create animations if requested and data is available
-        if args.create_animations and hasattr(simulator, 'frame_data') and simulator.frame_data:
+        if config.create_animations and hasattr(simulator, 'frame_data') and simulator.frame_data:
             print("🎬 Creating animations...")
-            simulator._create_animations()
+            try:
+                plotter.create_mosaic_animation(simulator)
+                animations.create_polar_animation(plotter, simulator)
+            except Exception as e:
+                print(f"⚠️ Could not create animations: {e}")
 
     except Exception as e:
         print(f"⚠️  Visualization creation failed: {e}")

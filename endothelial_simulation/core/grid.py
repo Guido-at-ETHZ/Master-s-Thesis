@@ -129,6 +129,8 @@ class Grid:
         self._adaptation_step_counter += 1
         pass
 
+
+
     def is_event_driven_mode(self):
         """Check if grid is in event-driven mode."""
         return (hasattr(self.config, 'use_event_driven_system') and
