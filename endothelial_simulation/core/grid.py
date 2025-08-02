@@ -96,6 +96,9 @@ class Grid:
         total_energy = 0.0
 
         for cell in self.cells.values():
+            if cell.is_senescent:
+                continue
+
             if not hasattr(cell, 'target_area') or cell.target_area is None:
                 continue
 
