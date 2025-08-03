@@ -8,7 +8,7 @@ import warnings
 from ..models.temporal_dynamics import TemporalDynamicsModel
 from ..models.population_dynamics import PopulationDynamicsModel
 
-from multiprocessing.pool import ThreadPool, TimeoutError
+
 
 warnings.filterwarnings('ignore')
 
@@ -32,7 +32,7 @@ class EndothelialMPCController:
 
         # Control parameters
 
-        self.control_horizon = 60  # steps
+        self.control_horizon = 20  # steps
         self.dt = 1.0  # minute
 
         # Constraint parameters
@@ -445,19 +445,15 @@ class EndothelialMPCController:
 
 
         # Solve optimization
-        pool = ThreadPool(processes=1)
         try:
-            async_result = pool.apply_async(minimize, (
+            result = minimize(
                 objective,
                 x0,
-            ), {
-                'method': 'SLSQP',
-                'bounds': bounds,
-                'constraints': constraints,
-                'options': {'maxiter': 200, 'ftol': 1e-7, 'disp': False} # Increased maxiter
-            })
-
-            result = async_result.get(timeout=30.0)
+                method='SLSQP',
+                bounds=bounds,
+                constraints=constraints,
+                options={'maxiter': 200, 'ftol': 1e-6, 'disp': False}
+            )
 
             if result.success:
                 optimal_control = result.x[0]
@@ -471,19 +467,10 @@ class EndothelialMPCController:
                 optimal_control = self._fallback_control(current_state)
                 cost = float('inf')
 
-        except TimeoutError:
-            print("⌛️ Optimization timed out after 10 seconds. Using fallback control.")
-            optimal_control = self._fallback_control(current_state)
-            cost = float('inf')
-
         except Exception as e:
             print(f"⚠️ Optimization failed unexpectedly: {e}")
             optimal_control = self._fallback_control(current_state)
             cost = float('inf')
-
-        finally:
-            pool.close()
-            pool.terminate()
 
         return optimal_control, {
             'optimal_shear': optimal_control,

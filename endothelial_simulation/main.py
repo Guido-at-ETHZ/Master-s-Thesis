@@ -240,26 +240,9 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
     # Main MPC simulation loop - IMPROVED
     for minute in range(max_iterations):
         try:
-            # Add timeout protection for MPC control step
-            import signal
-
-            def timeout_handler(signum, frame):
-                raise TimeoutError("MPC optimization timeout")
-
-            # Set timeout for optimization (5 seconds max)
-            signal.signal(signal.SIGALRM, timeout_handler)
-            signal.alarm(5)
-
             try:
                 optimal_shear, control_info = mpc.control_step()
-                signal.alarm(0)  # Cancel timeout
                 consecutive_failures = 0  # Reset failure counter
-
-            except TimeoutError:
-                print(f"⚠️ MPC optimization timeout at t={minute}min, using fallback")
-                optimal_shear = mpc._fallback_control(mpc.get_current_state())
-                control_info = {'cost': float('inf'), 'timeout': True}
-                consecutive_failures += 1
 
             except Exception as optimization_error:
                 print(f"⚠️ MPC optimization failed at t={minute}min: {optimization_error}")
