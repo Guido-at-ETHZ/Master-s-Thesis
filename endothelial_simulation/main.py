@@ -20,6 +20,8 @@ from endothelial_simulation.visualization import Plotter
 from endothelial_simulation.control.mpc_controller import EndothelialMPCController
 from endothelial_simulation.management.optimal_stopping import OptimalStopping
 from endothelial_simulation.visualization.animations import create_detailed_cell_animation, create_metrics_animation
+from endothelial_simulation.visualization.composite_video import create_composite_video
+
 
 def parse_schedule_string(schedule_str):
     """
@@ -326,7 +328,7 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
     except:
         pass
 
-    return simulator
+    return simulator, mpc.history
 
 def run_constant_simulation(config, constant_value, duration=None):
     """Run a simulation with constant input."""
@@ -388,7 +390,7 @@ Examples:
                         help='Simulation mode (default: full)')
 
     # === BASIC PARAMETERS ===
-    parser.add_argument('--duration', type=float, default=500,
+    parser.add_argument('--duration', type=float, default=10,
                         help='Simulation duration in minutes (default: 360 = 6 hours)')
 
     parser.add_argument('--cells', type=int, default=10,
@@ -580,7 +582,7 @@ Examples:
             print("INPUT TYPE: MPC Control")
             print("-" * 40)
 
-            simulator = run_mpc_simulation(
+            simulator, mpc_history = run_mpc_simulation(
                 config,
                 args.mpc_response_target,
                 args.mpc_orientation_target,
@@ -632,6 +634,18 @@ Examples:
                 animations.create_polar_animation(plotter, simulator)
             except Exception as e:
                 print(f"⚠️ Could not create animations: {e}")
+
+        if simulator.mpc_controller:
+            print("🎬 Preparing to create composite video...")
+            print(f"   - Simulator history length: {len(simulator.history)}")
+            print(f"   - MPC history length: {len(mpc_history)}")
+            if simulator.history and mpc_history:
+                try:
+                    create_composite_video(config.plot_directory, simulator.history, mpc_history)
+                except Exception as e:
+                    print(f"⚠️  Could not create composite video: {e}")
+            else:
+                print("   - Skipping composite video due to empty history data.")
 
     except Exception as e:
         print(f"⚠️  Visualization creation failed: {e}")

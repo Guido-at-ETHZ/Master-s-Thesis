@@ -64,6 +64,7 @@ class EndothelialMPCController:
         # State history for prediction
         self.state_history = []
         self.max_history_length = 10
+        self.history = []
 
         print("🎯 Enhanced MPC Controller initialized with soft constraints")
         print(f"   Senescence threshold: {self.senescence_threshold:.1%}")
@@ -533,6 +534,14 @@ class EndothelialMPCController:
                 'rate_limit_ok': abs(optimal_shear - current_state['current_shear']) <= self.rate_limit
             },
             'targets': self.targets.copy()
+        })
+
+        self.history.append({
+            'time': self.simulator.time,
+            'shear_stress': optimal_shear,
+            'target': self.targets.get('response', 0),
+            'actual': np.mean(current_state.get('responses', [0])),
+            'control_signal': optimal_shear # Or any other relevant control signal
         })
 
         return optimal_shear, control_info

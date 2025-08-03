@@ -11,6 +11,8 @@ from matplotlib.collections import PatchCollection
 import os
 from matplotlib.gridspec import GridSpec
 
+from . import animations
+
 class Plotter:
     """
     Class for creating visualizations of simulation results with mosaic cells.
@@ -1723,31 +1725,14 @@ class Plotter:
             except Exception as e:
                 print(f"⚠️  Configuration visualization skipped: {e}")
 
-        # === MOSAIC ANIMATION ===
-        try:
-            print("🎬 Creating mosaic animation...")
-            mosaic_animation = self.create_mosaic_animation(
-                simulator,
-                save_path=os.path.join(self.config.plot_directory, f"{prefix}_mosaic_animation.mp4"),
-                fps=2,
-                max_frames=30
-            )
-            print("✅ Mosaic animation created")
-        except Exception as e:
-            print(f"⚠️  Mosaic animation skipped: {e}")
-
-        # === POLAR ORIENTATION ANIMATION ===
-        try:
-            print("🎬 Creating polar orientation animation...")
-            polar_animation = self.create_polar_animation(
-                simulator,
-                save_path=os.path.join(self.config.plot_directory, f"{prefix}_polar_animation.mp4"),
-                fps=2,
-                show_comparison=False  # Set to True if you want target vs actual comparison
-            )
-            print("✅ Polar orientation animation created")
-        except Exception as e:
-            print(f"⚠️  Polar animation skipped: {e}")
+        if self.config.create_animations and hasattr(simulator, 'frame_data') and simulator.frame_data:
+            print("🎬 Creating animations...")
+            try:
+                animations.create_detailed_cell_animation(self, simulator.frame_data, simulator)
+                animations.create_mosaic_animation(self, simulator)
+                animations.create_polar_animation(self, simulator)
+            except Exception as e:
+                print(f"⚠️ Could not create animations: {e}")
 
         return figures
 
