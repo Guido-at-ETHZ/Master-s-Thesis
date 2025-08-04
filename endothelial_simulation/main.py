@@ -275,7 +275,8 @@ def run_mpc_simulation(config, mpc_response_target, mpc_orientation_target, dura
 
                 if 'constraints' in control_info:
                     c = control_info['constraints']
-                    print(f"         senescence={c['senescence_fraction']:.1%}, holes={c['hole_area_fraction']:.1%}")
+                    alignment_error = control_info.get('current_state', {}).get('mean_alignment_error', 'N/A')
+                    print(f"         senescence={c['senescence_fraction']:.1%}, holes={c['hole_area_fraction']:.1%}, alignment_error={alignment_error:.3f}")
 
 
 
@@ -432,9 +433,9 @@ Examples:
 
 
     # === MPC CONTROL PARAMETERS ===
-    parser.add_argument('--mpc-response-target', type=float, default=2.0,
+    parser.add_argument('--mpc-response-target', type=float, default=1.6,
                         help='MPC response target (default: 2.0)')
-    parser.add_argument('--mpc-orientation-target', type=float, default=20.0,
+    parser.add_argument('--mpc-orientation-target', type=float, default=0.0,
                         help='MPC orientation target in degrees (default: 20.0)')
 
     # === PROTOCOL SCALING PARAMETERS ===

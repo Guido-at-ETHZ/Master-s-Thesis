@@ -17,7 +17,7 @@ class SimulationConfig:
         self.grid_size = (1024, 1024)  # pixels
 
         # === EVENT-DRIVEN SYSTEM (MAIN FEATURE) ===
-        self.use_event_driven_system = True  # Always enabled
+        self.use_event_driven_system = False  # Always enabled
         self.biological_optimization_enabled = False  # Always disabled
 
         # Event detection sensitivity

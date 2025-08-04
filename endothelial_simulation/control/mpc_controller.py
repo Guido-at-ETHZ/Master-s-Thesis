@@ -44,13 +44,13 @@ class EndothelialMPCController:
 
         # Soft constraint weights (penalty scaling)
         self.weights = {
-            'tracking': 500.0,  # Response tracking
+            'tracking': 500.0,  # 500 Response tracking
             'holes': 80.0,  # Soft hole penalty
             'cell_density': 15.0,  # Cell density penalty
             'rate_limit': 25.0,  # Rate limit penalty
             'control_effort': 0.1,  # Control effort penalty
             'hole_prediction': 40.0,  # Predictive hole prevention
-            'flow_alignment': 100.0,  # Flow alignment penalty
+            'flow_alignment': 2500.0,  # 100.0 Flow alignment penalty
         }
 
         # Spatial parameters
@@ -226,41 +226,37 @@ class EndothelialMPCController:
             return {'creation_prob': hole_risk, 'filling_prob': 0.0, 'unfillable_area': 0}
 
     def _extract_orientation_dynamics(self, current_state: Dict, shear_stress: float) -> np.array:
-        """Extract orientation dynamics from TemporalDynamicsModel."""
+        """Extract orientation dynamics from SpatialPropertiesModel."""
         try:
             current_orientations = current_state.get('orientations', [])
             if len(current_orientations) == 0:
                 return np.array([])
 
-            # Initialize temporal model
-            temporal_model = self.temporal_model
+            # Use the spatial model from the simulator
+            spatial_model = self.simulator.models.get('spatial')
+            if not spatial_model:
+                raise ValueError("SpatialPropertiesModel not found in simulator")
+
+            # Get the target orientation from the spatial model
+            target_orientation = spatial_model.calculate_target_orientation(shear_stress, is_senescent=False)
 
             # Get time constant for orientation
-            tau_orient, A_max = temporal_model.get_scaled_tau_and_amax(shear_stress, 'orientation')
-
-            # Target orientation
-            target_orientation = self.targets.get('orientation', 0.0)
+            tau_orient, _ = self.temporal_model.get_scaled_tau_and_amax(shear_stress, 'orientation')
 
             # Apply first-order dynamics
             predicted_orientations = []
             for current_orientation in current_orientations:
-                # Calculate orientation difference (handle angle wrapping)
                 orientation_diff = target_orientation - current_orientation
-                while orientation_diff > np.pi:
-                    orientation_diff -= 2 * np.pi
-                while orientation_diff < -np.pi:
-                    orientation_diff += 2 * np.pi
+                orientation_diff = (orientation_diff + np.pi) % (2 * np.pi) - np.pi  # Wrap angle
 
-                # Apply dy/dt = (target - current) / tau
                 decay_factor = np.exp(-self.dt / tau_orient)
-                new_orientation = target_orientation - orientation_diff * decay_factor
+                new_orientation = current_orientation + (1 - decay_factor) * orientation_diff
                 predicted_orientations.append(new_orientation)
 
             return np.array(predicted_orientations)
 
         except Exception as e:
             print(f"⚠️ Orientation dynamics extraction failed: {e}")
-            # Fallback: no change
             return current_state.get('orientations', np.array([]))
 
     def predict_future_state(self, current_state: Dict, control_sequence: List[float]) -> List[Dict]:

@@ -37,8 +37,8 @@ class SpatialPropertiesModel:
                 1.4: 2.3       # Flow control (increased elongation)
             },
             'orientation_mean': {
-                0.0: 45.0,     # 180 Random orientation (degrees) - MEAN ONLY
-                1.4: 22.0      # 590 Aligned with flow (degrees) - MEAN ONLY
+                0.0: 45.0,     # Random orientation (degrees)
+                1.4: 22.0       # Aligned with flow (0 degrees)
             }
         }
 
@@ -263,15 +263,13 @@ class SpatialPropertiesModel:
             decay_factor = np.exp(-dt_minutes / tau_area)
             cell.target_area = instant_target_area + (cell.target_area - instant_target_area) * decay_factor
 
-            # Evolve target orientation
-            old_target_orientation = cell.target_orientation
+            # Evolve target orientation (with damping)
             orientation_diff = instant_target_orientation - cell.target_orientation
-            orientation_diff = (orientation_diff + np.pi) % (2 * np.pi) - np.pi
+            orientation_diff = (orientation_diff + np.pi) % (2 * np.pi) - np.pi  # Wrap angle
             decay_factor = np.exp(-dt_minutes / tau_orient)
             cell.target_orientation += (1 - decay_factor) * orientation_diff
 
             dynamics_info['instant_target_orientation'] = instant_target_orientation
-            dynamics_info['old_target_orientation'] = old_target_orientation
             dynamics_info['new_target_orientation'] = cell.target_orientation
 
             # Evolve target aspect ratio
