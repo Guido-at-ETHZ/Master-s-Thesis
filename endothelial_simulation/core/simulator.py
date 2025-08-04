@@ -104,7 +104,7 @@ class Simulator:
         # Animation settings
         self.record_frames = config.create_animations
         self.frame_data = []
-        self.record_interval = 10
+        self.record_interval = 1
 
         # Mosaic-specific parameters (kept for compatibility)
         self.tessellation_update_interval = 1

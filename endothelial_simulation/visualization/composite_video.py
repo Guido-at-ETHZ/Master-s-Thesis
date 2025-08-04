@@ -72,9 +72,13 @@ def create_composite_video(results_dir, simulation_data, mpc_data):
     print(f"🎬 Step 4: Generating {total_frames} frames for dynamic plots...")
     dynamic_frames = []
 
+    # Correctly map video time to simulation time
+    total_sim_time = sim_times[-1]
+    print(f"   Mapping video duration ({duration:.2f}s) to simulation duration ({total_sim_time:.2f} minutes).")
+
     for frame_num in range(total_frames):
-        t_video = frame_num / fps
-        t_sim_minutes = t_video * 60 # Convert video time in seconds to simulation time in minutes
+        # Proportional time mapping
+        t_sim_minutes = (frame_num / total_frames) * total_sim_time
 
         # Find the closest data indices
         sim_idx = np.argmin(np.abs(sim_times - t_sim_minutes))
