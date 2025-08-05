@@ -394,7 +394,7 @@ Examples:
     parser.add_argument('--duration', type=float, default=500,
                         help='Simulation duration in minutes (default: 360 = 6 hours)')
 
-    parser.add_argument('--cells', type=int, default=10,
+    parser.add_argument('--cells', type=int, default=300,
                         help='Initial cell count (default: 50)')
 
     # === INPUT TYPE SELECTION (mutually exclusive) ===

@@ -44,13 +44,14 @@ class EndothelialMPCController:
 
         # Soft constraint weights (penalty scaling)
         self.weights = {
-            'tracking': 500.0,  # 500 Response tracking
-            'holes': 80.0,  # Soft hole penalty
+            'tracking': 100.0,  # Response tracking
+            'holes': 20.0,  # Soft hole penalty
             'cell_density': 15.0,  # Cell density penalty
             'rate_limit': 25.0,  # Rate limit penalty
             'control_effort': 0.1,  # Control effort penalty
-            'hole_prediction': 40.0,  # Predictive hole prevention
-            'flow_alignment': 2500.0,  # 100.0 Flow alignment penalty
+            'hole_prediction': 10.0,  # Predictive hole prevention
+            'flow_alignment': 10000.0,  # Flow alignment penalty
+            'senescence': 50.0, # Senescence penalty
         }
 
         # Spatial parameters
@@ -379,6 +380,13 @@ class EndothelialMPCController:
                 violation = (cell_count - max_cells) / max_cells
                 step_cost += self.weights['cell_density'] * violation ** 2
 
+            # Senescence SOFT CONSTRAINT
+            senescence_violation = max(0, predicted_state['senescence_fraction'] - self.senescence_threshold)
+            if senescence_violation > 0:
+                # Quadratic penalty with scaling
+                penalty = (senescence_violation / self.senescence_threshold) ** 2
+                step_cost += self.weights['senescence'] * penalty
+
             # 5. CONTROL EFFORT
             step_cost += self.weights['control_effort'] * u ** 2
 
@@ -410,18 +418,6 @@ class EndothelialMPCController:
 
         # --- CONSTRAINTS ---
         constraints = []
-
-        # 1. Senescence Inequality Constraint (Hard Constraint) at the end of the horizon
-        def senescence_constraint(control_sequence):
-            """Constraint to keep senescence below the threshold at the final step."""
-            predictions = self.predict_future_state(current_state, control_sequence)
-            final_predicted_senescence = predictions[-1]['senescence_fraction']
-            return self.senescence_threshold - final_predicted_senescence + self.constraint_tolerance
-
-        constraints.append({
-            'type': 'ineq',
-            'fun': senescence_constraint
-        })
 
         # 2. Rate Limit Constraints (Linearized)
         for i in range(self.control_horizon):
@@ -456,6 +452,7 @@ class EndothelialMPCController:
                 optimal_control = result.x[0]
                 cost = result.fun
                 print(f"✅ Optimization successful. Cost: {cost:.2f}")
+                print(f"   Optimal control sequence: {result.x}")
             else:
                 # Detailed error logging for infeasible optimization
                 print(f"⚠️ Optimization failed: {result.message}")

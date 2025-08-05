@@ -30,15 +30,18 @@ class SpatialPropertiesModel:
         self.control_params = {
             'area': {
                 0.0: 3216,    # 2155 μm² static
-                1.4: 3216     # Assume same area under flow (not measured separately)
+                1.4: 3216,    # Assume same area under flow (not measured separately)
+                3.0: 3216     # NEW: Extended range - maintain same area
             },
             'aspect_ratio': {
                 0.0: 1.9,      # Static control
-                1.4: 2.3       # Flow control (increased elongation)
+                1.4: 2.3,      # Flow control (increased elongation)
+                3.0: 2.6       # NEW: Even more elongated at higher pressure
             },
             'orientation_mean': {
                 0.0: 45.0,     # Random orientation (degrees)
-                1.4: 22.0       # Aligned with flow (0 degrees)
+                1.4: 22.0,     # Partial alignment with flow 
+                3.0: 0.0       # NEW: Perfect flow alignment at higher pressure
             }
         }
 
@@ -48,15 +51,18 @@ class SpatialPropertiesModel:
             'area_large': 12864,     # 8626 μm² (≥ 5000 μm²)
             'aspect_ratio': {
                 0.0: 1.9,            # Static senescent
-                1.4: 2.0             # Flow senescent (no significant change)
+                1.4: 2.0,            # Flow senescent (no significant change)
+                3.0: 2.1             # NEW: Minimal response at high pressure
             },
             'orientation_mean': {
                 0.0: 42.0,           # Random orientation static - MEAN
-                1.4: 45.0            # Random orientation flow (no alignment) - MEAN
+                1.4: 45.0,           # Random orientation flow (no alignment) - MEAN
+                3.0: 40.0            # NEW: Still random but slightly different
             },
             'orientation_std_dev': {
                 0.0: 25.0,           # High variability for random orientation
-                1.4: 25.0            # High variability for random orientation
+                1.4: 25.0,           # High variability for random orientation
+                3.0: 25.0            # NEW: Maintain high variability
             }
         }
 
@@ -135,8 +141,8 @@ class SpatialPropertiesModel:
 
     def interpolate_pressure_effect(self, param_dict, pressure):
         """
-        Linearly interpolate parameter value based on pressure.
-
+        Enhanced interpolation to handle multiple pressure points.
+        
         Parameters:
             param_dict: Dictionary with pressure-dependent values
             pressure: Applied pressure in Pa
@@ -144,17 +150,26 @@ class SpatialPropertiesModel:
         Returns:
             Interpolated parameter value
         """
-        # Get values at known pressure points (0.0 and 1.4 Pa)
-        p0, p1 = 0.0, 1.4
-        v0, v1 = param_dict[p0], param_dict[p1]
-
-        # Linear interpolation
-        if pressure <= p0:
-            return v0
-        elif pressure >= p1:
-            return v1
-        else:
-            return v0 + (v1 - v0) * (pressure - p0) / (p1 - p0)
+        # Get all pressure points and sort them
+        pressure_points = sorted(param_dict.keys())
+        values = [param_dict[p] for p in pressure_points]
+        
+        # Handle edge cases
+        if pressure <= pressure_points[0]:
+            return values[0]
+        elif pressure >= pressure_points[-1]:
+            return values[-1]
+        
+        # Find the two pressure points that bracket the current pressure
+        for i in range(len(pressure_points) - 1):
+            p0, p1 = pressure_points[i], pressure_points[i + 1]
+            if p0 <= pressure <= p1:
+                v0, v1 = values[i], values[i + 1]
+                # Linear interpolation between these two points
+                return v0 + (v1 - v0) * (pressure - p0) / (p1 - p0)
+        
+        # This shouldn't happen, but fallback to last value
+        return values[-1]
 
     def calculate_target_aspect_ratio(self, pressure, is_senescent):
         """
