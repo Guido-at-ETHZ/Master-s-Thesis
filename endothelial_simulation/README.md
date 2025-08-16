@@ -1,130 +1,80 @@
-# Endothelial Cell Mechanotransduction Simulation
+# Endothelial Cell Simulation Framework
 
-This repository contains a computational model for simulating endothelial cell mechanotransduction in response to varying mechanical stimuli, with a focus on shear stress. The simulation integrates multiple components including temporal dynamics, population dynamics, and spatial properties to provide a comprehensive framework for studying endothelial cell behavior.
+This repository contains a sophisticated, agent-based computational model for simulating the behavior of endothelial cell monolayers. The framework is designed to study cellular mechanotransduction, population dynamics, and spatial organization in response to various stimuli. It incorporates advanced features like event-driven simulation, model predictive control, and comprehensive analysis tools.
 
-## Features
+## Key Features
 
-- **Temporal Dynamics**: Models how cell responses evolve over time after mechanical stimulation
-- **Population Dynamics**: Tracks cell proliferation, senescence, and death under different conditions
-- **Spatial Properties**: Simulates morphological adaptations such as orientation and aspect ratio
-- **Visualization Tools**: Comprehensive plotting capabilities for analyzing simulation results
-- **Parameter Study**: Tools for exploring parameter space and identifying optimal conditions
+- **Agent-Based Modeling**: Each endothelial cell is an individual agent with its own state and properties.
+- **Event-Driven Architecture**: The simulation progresses based on discrete events, allowing for efficient and flexible modeling of complex biological processes.
+- **Advanced Control Systems**: Includes a Model Predictive Control (MPC) module (`control/mpc_controller.py`) to simulate external interventions and control strategies.
+- **Rich Biophysical Models**: Incorporates detailed models for population dynamics (proliferation, senescence), spatial properties (cell shape, orientation), and temporal dynamics.
+- **Simulation Management**: Features robust configuration management and modules for specialized simulation scenarios like optimal stopping problems.
+- **Comprehensive Visualization**: Extensive tools for generating plots, animations, and composite videos to analyze simulation results, including cell distributions and energy metrics.
 
 ## Project Structure
 
+The project is organized into the following modules:
+
 ```
 endothelial_simulation/
-├── core/                      # Core simulation infrastructure
-│   ├── __init__.py
-│   ├── cell.py                # Cell class for individual cell properties
-│   ├── grid.py                # Spatial grid for cell arrangement
-│   └── simulator.py           # Main simulation engine
-├── models/                    # Model components
-│   ├── __init__.py
-│   ├── temporal_dynamics.py   # Temporal adaptation model
-│   ├── population_dynamics.py # Cell population evolution model
-│   └── spatial_properties.py  # Spatial characteristics model
-├── visualization/             # Visualization tools
-│   ├── __init__.py
-│   └── plotters.py            # Plotting functions
-├── results/                   # Default directory for simulation outputs
-├── config.py                  # Configuration settings
-├── main.py                    # Main script for running simulations
-└── parameter_study.py         # Script for parameter exploration
+├── main.py                    # Main script to run simulations
+├── config.py                  # Global configuration settings
+├── control/                   # Control systems for the simulation
+│   └── mpc_controller.py      # Model Predictive Control (MPC)
+├── core/                      # Core simulation engine and components
+│   ├── cell.py                # Defines the state and behavior of a single cell
+│   ├── event_system.py        # Manages the scheduling and execution of events
+│   ├── grid.py                # Manages the spatial grid and cell neighbors
+│   ├── holes.py               # Logic for detecting and managing gaps in the monolayer
+│   └── simulator.py           # The main simulation loop
+├── management/                # High-level simulation management and logic
+│   ├── configuration_manager.py # Manages loading and saving of simulation configs
+│   ├── event_driven_simulator.py # Implements the event-driven simulation logic
+│   ├── optimal_stopping.py    # Framework for optimal stopping problems
+│   └── transition_controller.py # Manages state transitions
+├── models/                    # Mathematical models for cell behavior
+│   ├── parameters.py          # Defines model parameters
+│   ├── population_dynamics.py # Models cell proliferation, senescence, and death
+│   ├── spatial_properties.py  # Models cell morphology and orientation
+│   └── temporal_dynamics.py   # Models time-dependent cellular responses
+└── visualization/             # Tools for data analysis and visualization
+    ├── analysis.py            # General analysis scripts
+    ├── animations.py          # Creates animations from simulation frames
+    ├── cell_distributions.py  # Plots for cell state distributions
+    ├── composite_video.py     # Tools to combine multiple plots into a single video
+    ├── energy_analysis.py     # Analysis of system-level energy functions
+    └── plotters.py            # Core plotting functions
 ```
 
-## Usage
+## How to Run a Simulation
 
-### Basic Simulation
+1.  **Configure**: Adjust parameters in `config.py` or create a new configuration file.
+2.  **Execute**: Run the main simulation script from the root directory:
+    ```bash
+    python -m endothelial_simulation.main
+    ```
 
-To run a basic simulation with default parameters:
+## Dependencies
+
+This project relies on several scientific computing and visualization libraries. Key dependencies include:
+
+- `numpy`
+- `scipy`
+- `pandas`
+- `matplotlib`
+- `seaborn`
+- `scikit-learn`
+- `scikit-image`
+- `opencv-python`
+- `ffmpeg-python`
+- `moviepy`
+- `h5py`
+- `pyyaml`
+- `plotly`
+- `numba`
+
+Install all required packages using the provided `requirements.txt` file:
 
 ```bash
-python main.py
+pip install -r requirements.txt
 ```
-
-### Customizing Input Parameters
-
-You can customize the simulation parameters through command-line arguments:
-
-```bash
-python main.py --mode full --input-type step --initial-value 0 --final-value 45 --step-time 120 --duration 360
-```
-
-Available input types:
-- `constant`: Constant shear stress
-- `step`: Step change in shear stress
-- `ramp`: Linear ramp in shear stress
-- `oscillatory`: Oscillating shear stress
-
-### Running a Parameter Study
-
-To explore the effects of different parameter combinations:
-
-```bash
-python parameter_study.py
-```
-
-This will run simulations across multiple shear stress values, senolytic concentrations, and stem cell input rates, generating comprehensive analysis plots.
-
-## Configuration
-
-The simulation can be configured to focus on specific aspects:
-
-- **Full Mode**: All components enabled (population dynamics, spatial properties, and temporal dynamics)
-- **Temporal Mode**: Focus only on temporal dynamics
-- **Spatial Mode**: Focus only on spatial properties
-- **Minimal Mode**: Basic population dynamics without senescence
-
-## Models
-
-### Temporal Dynamics Model
-
-The temporal dynamics model implements a first-order differential equation to describe cellular adaptation to mechanical stimuli:
-
-```
-dy/dt = (Amax(P) - y) / τ
-```
-
-Where:
-- `y` is the cellular response
-- `Amax(P)` is the maximum response at pressure P
-- `τ` is the time constant that scales with Amax
-
-### Population Dynamics Model
-
-The population dynamics model tracks cells at different division stages and includes:
-
-- Proliferation with density-dependent inhibition
-- Age-dependent death rates
-- Telomere-induced and stress-induced senescence
-- Senolytic effects for targeted senescent cell removal
-- Stem cell input for tissue renewal
-
-### Spatial Properties Model
-
-The spatial properties model simulates how cell morphology adapts to mechanical forces, including:
-
-- Orientation relative to flow direction
-- Aspect ratio (elongation)
-- Cell area and shape index
-- Alignment and confluency metrics
-
-## Example Results
-
-The simulation produces various visualizations to analyze cellular responses:
-
-- Cell population dynamics over time
-- Spatial metrics (alignment, shape index, confluency)
-- Cell visualization with color-coded cell types
-- Parameter study plots showing relationships between variables
-
-## Requirements
-
-- Python 3.8+
-- NumPy
-- SciPy
-- Matplotlib
-- Pandas
-- Multiprocessing (for parallel parameter studies)
-- ffmpeg-python>=0.2.0
