@@ -45,13 +45,13 @@ class EndothelialMPCController:
         # Soft constraint weights (penalty scaling)
         self.weights = {
             'tracking': 100.0,  # Response tracking
-            'holes': 20.0,  # Soft hole penalty
-            'cell_density': 15.0,  # Cell density penalty
-            'rate_limit': 25.0,  # Rate limit penalty
-            'control_effort': 0.1,  # Control effort penalty
-            'hole_prediction': 10.0,  # Predictive hole prevention
+            'holes': 0.0,  # Soft hole penalty
+            'cell_density': 0.0,  # Cell density penalty
+            'rate_limit': 0.0,  # Rate limit penalty
+            'control_effort': 0.0,  # Control effort penalty
+            'hole_prediction': 0.0,  # Predictive hole prevention
             'flow_alignment': 10000.0,  # Flow alignment penalty
-            'senescence': 50.0, # Senescence penalty
+            'senescence': 0.0, # Senescence penalty
         }
 
         # Spatial parameters
